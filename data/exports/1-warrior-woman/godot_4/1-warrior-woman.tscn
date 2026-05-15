@@ -1,0 +1,8 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="SpriteFrames" path="res://1-warrior-woman_sprite_frames.tres" id="1"]
+
+[node name="1-warrior-woman" type="AnimatedSprite2D"]
+sprite_frames = ExtResource("1")
+animation = "idle_south"
+centered = true

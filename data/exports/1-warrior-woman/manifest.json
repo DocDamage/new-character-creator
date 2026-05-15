@@ -1,0 +1,228 @@
+{
+  "export_version": 1,
+  "created_at": "2026-05-15T07:17:22.648Z",
+  "character_id": "1-warrior-woman",
+  "source_character": "1-warrior-woman",
+  "canvas_size": {
+    "width": 64,
+    "height": 64
+  },
+  "animations": [
+    {
+      "name": "attack",
+      "directions": [
+        {
+          "direction": "south",
+          "frame_count": 6,
+          "frames": [
+            "individual_frames/attack/south/frame_000.png",
+            "individual_frames/attack/south/frame_001.png",
+            "individual_frames/attack/south/frame_002.png",
+            "individual_frames/attack/south/frame_003.png",
+            "individual_frames/attack/south/frame_004.png",
+            "individual_frames/attack/south/frame_005.png"
+          ]
+        },
+        {
+          "direction": "east",
+          "frame_count": 6,
+          "frames": [
+            "individual_frames/attack/east/frame_000.png",
+            "individual_frames/attack/east/frame_001.png",
+            "individual_frames/attack/east/frame_002.png",
+            "individual_frames/attack/east/frame_003.png",
+            "individual_frames/attack/east/frame_004.png",
+            "individual_frames/attack/east/frame_005.png"
+          ]
+        },
+        {
+          "direction": "north",
+          "frame_count": 6,
+          "frames": [
+            "individual_frames/attack/north/frame_000.png",
+            "individual_frames/attack/north/frame_001.png",
+            "individual_frames/attack/north/frame_002.png",
+            "individual_frames/attack/north/frame_003.png",
+            "individual_frames/attack/north/frame_004.png",
+            "individual_frames/attack/north/frame_005.png"
+          ]
+        },
+        {
+          "direction": "west",
+          "frame_count": 6,
+          "frames": [
+            "individual_frames/attack/west/frame_000.png",
+            "individual_frames/attack/west/frame_001.png",
+            "individual_frames/attack/west/frame_002.png",
+            "individual_frames/attack/west/frame_003.png",
+            "individual_frames/attack/west/frame_004.png",
+            "individual_frames/attack/west/frame_005.png"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "idle",
+      "directions": [
+        {
+          "direction": "south",
+          "frame_count": 4,
+          "frames": [
+            "individual_frames/idle/south/frame_000.png",
+            "individual_frames/idle/south/frame_001.png",
+            "individual_frames/idle/south/frame_002.png",
+            "individual_frames/idle/south/frame_003.png"
+          ]
+        },
+        {
+          "direction": "east",
+          "frame_count": 4,
+          "frames": [
+            "individual_frames/idle/east/frame_000.png",
+            "individual_frames/idle/east/frame_001.png",
+            "individual_frames/idle/east/frame_002.png",
+            "individual_frames/idle/east/frame_003.png"
+          ]
+        },
+        {
+          "direction": "north",
+          "frame_count": 4,
+          "frames": [
+            "individual_frames/idle/north/frame_000.png",
+            "individual_frames/idle/north/frame_001.png",
+            "individual_frames/idle/north/frame_002.png",
+            "individual_frames/idle/north/frame_003.png"
+          ]
+        },
+        {
+          "direction": "west",
+          "frame_count": 4,
+          "frames": [
+            "individual_frames/idle/west/frame_000.png",
+            "individual_frames/idle/west/frame_001.png",
+            "individual_frames/idle/west/frame_002.png",
+            "individual_frames/idle/west/frame_003.png"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "running_jump",
+      "directions": [
+        {
+          "direction": "south",
+          "frame_count": 8,
+          "frames": [
+            "individual_frames/running_jump/south/frame_000.png",
+            "individual_frames/running_jump/south/frame_001.png",
+            "individual_frames/running_jump/south/frame_002.png",
+            "individual_frames/running_jump/south/frame_003.png",
+            "individual_frames/running_jump/south/frame_004.png",
+            "individual_frames/running_jump/south/frame_005.png",
+            "individual_frames/running_jump/south/frame_006.png",
+            "individual_frames/running_jump/south/frame_007.png"
+          ]
+        },
+        {
+          "direction": "east",
+          "frame_count": 8,
+          "frames": [
+            "individual_frames/running_jump/east/frame_000.png",
+            "individual_frames/running_jump/east/frame_001.png",
+            "individual_frames/running_jump/east/frame_002.png",
+            "individual_frames/running_jump/east/frame_003.png",
+            "individual_frames/running_jump/east/frame_004.png",
+            "individual_frames/running_jump/east/frame_005.png",
+            "individual_frames/running_jump/east/frame_006.png",
+            "individual_frames/running_jump/east/frame_007.png"
+          ]
+        },
+        {
+          "direction": "north",
+          "frame_count": 8,
+          "frames": [
+            "individual_frames/running_jump/north/frame_000.png",
+            "individual_frames/running_jump/north/frame_001.png",
+            "individual_frames/running_jump/north/frame_002.png",
+            "individual_frames/running_jump/north/frame_003.png",
+            "individual_frames/running_jump/north/frame_004.png",
+            "individual_frames/running_jump/north/frame_005.png",
+            "individual_frames/running_jump/north/frame_006.png",
+            "individual_frames/running_jump/north/frame_007.png"
+          ]
+        },
+        {
+          "direction": "west",
+          "frame_count": 8,
+          "frames": [
+            "individual_frames/running_jump/west/frame_000.png",
+            "individual_frames/running_jump/west/frame_001.png",
+            "individual_frames/running_jump/west/frame_002.png",
+            "individual_frames/running_jump/west/frame_003.png",
+            "individual_frames/running_jump/west/frame_004.png",
+            "individual_frames/running_jump/west/frame_005.png",
+            "individual_frames/running_jump/west/frame_006.png",
+            "individual_frames/running_jump/west/frame_007.png"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "walk",
+      "directions": [
+        {
+          "direction": "south",
+          "frame_count": 4,
+          "frames": [
+            "individual_frames/walk/south/frame_000.png",
+            "individual_frames/walk/south/frame_001.png",
+            "individual_frames/walk/south/frame_002.png",
+            "individual_frames/walk/south/frame_003.png"
+          ]
+        },
+        {
+          "direction": "east",
+          "frame_count": 4,
+          "frames": [
+            "individual_frames/walk/east/frame_000.png",
+            "individual_frames/walk/east/frame_001.png",
+            "individual_frames/walk/east/frame_002.png",
+            "individual_frames/walk/east/frame_003.png"
+          ]
+        },
+        {
+          "direction": "north",
+          "frame_count": 4,
+          "frames": [
+            "individual_frames/walk/north/frame_000.png",
+            "individual_frames/walk/north/frame_001.png",
+            "individual_frames/walk/north/frame_002.png",
+            "individual_frames/walk/north/frame_003.png"
+          ]
+        },
+        {
+          "direction": "west",
+          "frame_count": 4,
+          "frames": [
+            "individual_frames/walk/west/frame_000.png",
+            "individual_frames/walk/west/frame_001.png",
+            "individual_frames/walk/west/frame_002.png",
+            "individual_frames/walk/west/frame_003.png"
+          ]
+        }
+      ]
+    }
+  ],
+  "apes": {
+    "first_class": true,
+    "expected_labels": [
+      "head",
+      "torso",
+      "front_arm",
+      "back_arm",
+      "front_leg",
+      "back_leg"
+    ],
+    "bridge": "tools/apes_bridge"
+  }
+}

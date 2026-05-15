@@ -1,0 +1,6 @@
+[gd_resource type="SpriteFrames" format=3]
+
+[resource]
+metadata/source_character = "1-warrior-woman"
+metadata/extraction_methods = "APES,preset_region,connected_pixel,manual"
+animations = [{\"name\":\"attack_south\",\"speed\":10,\"loop\":false,\"frame_count\":6},{\"name\":\"attack_east\",\"speed\":10,\"loop\":false,\"frame_count\":6},{\"name\":\"attack_north\",\"speed\":10,\"loop\":false,\"frame_count\":6},{\"name\":\"attack_west\",\"speed\":10,\"loop\":false,\"frame_count\":6},{\"name\":\"idle_south\",\"speed\":7,\"loop\":true,\"frame_count\":4},{\"name\":\"idle_east\",\"speed\":7,\"loop\":true,\"frame_count\":4},{\"name\":\"idle_north\",\"speed\":7,\"loop\":true,\"frame_count\":4},{\"name\":\"idle_west\",\"speed\":7,\"loop\":true,\"frame_count\":4},{\"name\":\"running_jump_south\",\"speed\":7,\"loop\":true,\"frame_count\":8},{\"name\":\"running_jump_east\",\"speed\":7,\"loop\":true,\"frame_count\":8},{\"name\":\"running_jump_north\",\"speed\":7,\"loop\":true,\"frame_count\":8},{\"name\":\"running_jump_west\",\"speed\":7,\"loop\":true,\"frame_count\":8},{\"name\":\"walk_south\",\"speed\":7,\"loop\":true,\"frame_count\":4},{\"name\":\"walk_east\",\"speed\":7,\"loop\":true,\"frame_count\":4},{\"name\":\"walk_north\",\"speed\":7,\"loop\":true,\"frame_count\":4},{\"name\":\"walk_west\",\"speed\":7,\"loop\":true,\"frame_count\":4}]

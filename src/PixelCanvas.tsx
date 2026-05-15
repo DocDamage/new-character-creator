@@ -1,0 +1,116 @@
+import { useEffect, useRef } from 'react'
+import type { Rect } from './types'
+
+type PixelCanvasProps = {
+  src: string
+  scale?: number
+  region?: Rect
+  onionSrc?: string
+  label?: string
+  seed?: { x: number; y: number }
+  onPixelClick?: (point: { x: number; y: number }) => void
+}
+
+export function PixelCanvas({ src, scale = 5, region, onionSrc, label, seed, onPixelClick }: PixelCanvasProps) {
+  const canvasRef = useRef<HTMLCanvasElement | null>(null)
+
+  useEffect(() => {
+    const canvas = canvasRef.current
+    if (!canvas) return
+    const context = canvas.getContext('2d')
+    if (!context) return
+
+    let cancelled = false
+    const image = new Image()
+    image.crossOrigin = 'anonymous'
+    image.onload = () => {
+      if (cancelled) return
+      canvas.width = 64 * scale
+      canvas.height = 64 * scale
+      context.imageSmoothingEnabled = false
+      context.clearRect(0, 0, canvas.width, canvas.height)
+      drawChecker(context, canvas.width, canvas.height, scale)
+
+      if (onionSrc) {
+        const onion = new Image()
+        onion.crossOrigin = 'anonymous'
+        onion.onload = () => {
+          if (cancelled) return
+          context.globalAlpha = 0.22
+          context.drawImage(onion, 0, 0, 64 * scale, 64 * scale)
+          context.globalAlpha = 1
+          context.drawImage(image, 0, 0, 64 * scale, 64 * scale)
+          drawRegion(context, scale, region)
+          drawSeed(context, scale, seed)
+        }
+        onion.src = onionSrc
+        return
+      }
+
+      context.drawImage(image, 0, 0, 64 * scale, 64 * scale)
+      drawRegion(context, scale, region)
+      drawSeed(context, scale, seed)
+    }
+    image.src = src
+
+    return () => {
+      cancelled = true
+    }
+  }, [src, scale, region, onionSrc, seed])
+
+  function handleClick(event: React.MouseEvent<HTMLCanvasElement>) {
+    if (!onPixelClick) return
+    const canvas = canvasRef.current
+    if (!canvas) return
+    const rect = canvas.getBoundingClientRect()
+    const x = Math.max(0, Math.min(63, Math.floor(((event.clientX - rect.left) / rect.width) * 64)))
+    const y = Math.max(0, Math.min(63, Math.floor(((event.clientY - rect.top) / rect.height) * 64)))
+    onPixelClick({ x, y })
+  }
+
+  return (
+    <figure className="pixel-stage" aria-label={label}>
+      <canvas ref={canvasRef} onClick={handleClick} className={onPixelClick ? 'clickable' : undefined} />
+      {label ? <figcaption>{label}</figcaption> : null}
+    </figure>
+  )
+}
+
+function drawChecker(context: CanvasRenderingContext2D, width: number, height: number, scale: number) {
+  const size = scale * 2
+  for (let y = 0; y < height; y += size) {
+    for (let x = 0; x < width; x += size) {
+      context.fillStyle = (x / size + y / size) % 2 === 0 ? '#18202a' : '#243140'
+      context.fillRect(x, y, size, size)
+    }
+  }
+}
+
+function drawRegion(context: CanvasRenderingContext2D, scale: number, region?: Rect) {
+  if (!region) return
+  context.save()
+  context.strokeStyle = '#f8d36b'
+  context.lineWidth = 2
+  context.setLineDash([6, 4])
+  context.strokeRect(region.x * scale, region.y * scale, region.w * scale, region.h * scale)
+  context.fillStyle = 'rgba(248, 211, 107, 0.16)'
+  context.fillRect(region.x * scale, region.y * scale, region.w * scale, region.h * scale)
+  context.restore()
+}
+
+function drawSeed(context: CanvasRenderingContext2D, scale: number, seed?: { x: number; y: number }) {
+  if (!seed) return
+  const x = seed.x * scale
+  const y = seed.y * scale
+  context.save()
+  context.strokeStyle = '#7ee787'
+  context.lineWidth = 2
+  context.beginPath()
+  context.moveTo(x - 6, y)
+  context.lineTo(x + scale + 6, y)
+  context.moveTo(x, y - 6)
+  context.lineTo(x, y + scale + 6)
+  context.stroke()
+  context.strokeRect(x, y, scale, scale)
+  context.restore()
+}
