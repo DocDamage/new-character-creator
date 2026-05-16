@@ -26,6 +26,10 @@ test-results/
 tools/apes_bridge/__pycache__/
 public/data/manifests/characters.local.json
 /????????????????????????????????/
+/assets/Animated-Pixel-Pack-Characters-V1/
+/assets/Duelyst-Unit-Animations.unitypackage
+/checkpoints/
+/training data/
 
 # Vendored source is tracked without its original repository metadata.
 vendor/**/.git/
