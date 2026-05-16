@@ -183,7 +183,7 @@ This writes ignored job configs under `data/apes/input/` plus `duelyst_job_batch
 npm run apes:run-duelyst-jobs
 ```
 
-Current Duelyst staged jobs duplicate a single static crop to satisfy APES' two-frame minimum. The APES runtime can now execute that path, but static duplicated crops may produce empty review reports because APES cannot select moving parts from identical frames. Treat those as review signals, not training labels.
+Current Duelyst staged jobs use real staged idle atlas frames when available and only duplicate a representative crop for one-frame sources. The APES runtime can execute that path; the first verified multi-frame Duelyst job produced creator-sized `head`, `torso`, and `front_arm` review masks. Treat those as review signals, not training labels, until manually checked and promoted.
 
 ## Notes For Future Rebuilds
 

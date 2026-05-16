@@ -8,9 +8,9 @@ Local Vite + React + TypeScript app for building a kitbash-oriented pixel charac
 - Browser regression harness passes with `npm run test:browser`.
 - Local dev server has been verified at `http://127.0.0.1:8002/`.
 - APES GPU preflight passes in `apes-gpu-modern` with CUDA PyTorch, PyTorch3D, PyG extensions, OpenCV, checkpoints, and okaysamurai test data available.
-- APES real bridge execution reaches the vendored network/deformer on the RTX 3060. Static duplicated Duelyst crops can complete with empty review reports because APES cannot select moving parts from identical frames.
+- APES real bridge execution reaches the vendored network/deformer on the RTX 3060. Multi-frame Duelyst idle jobs now produce creator-sized review masks; completeness and semantic quality still require manual review.
 - The only APES preflight warning is that upstream APES originally targeted Python 3.7 while the working local environment uses Python 3.10.
-- Duelyst package unpacking, detector labeling, staging, and in-app browsing has been verified against `assets/Duelyst-Unit-Animations.unitypackage`: 7145 assets scanned, 696 sprite sheets labeled/viewable in Asset Audit, and 64 staged candidates openable in the workstation.
+- Duelyst package unpacking, detector labeling, multi-frame atlas staging, and in-app browsing has been verified against `assets/Duelyst-Unit-Animations.unitypackage`: 7145 assets scanned, 696 sprite sheets labeled/viewable in Asset Audit, and 64 staged candidates with idle/run/attack/etc. frames openable in the workstation.
 
 ## Commands
 
@@ -145,7 +145,7 @@ Current local inventory:
 - Okay Samurai supervised APES data: 3000 train pairs, 700 val pairs, 900 test pairs, with split HDF5 files present.
 - Creative Flow supervised corrnet data: 8058 train pairs, 1165 val pairs, 1078 test pairs.
 - Okay Samurai sheet runtime data: 20 character folders for APES inference/preflight.
-- Duelyst private runtime data: 64 staged character folders generated from the private manifest, each with a copied frame, alpha mask, and `label.json`.
+- Duelyst private runtime data: 64 staged character folders generated from the private manifest, each with a copied frame, alpha mask, and `label.json`; the app/private manifest also stages multi-frame atlas animations for workstation/APES review.
 
 The generated `finetune_manifest.json` includes ready-to-run commands for:
 
@@ -154,7 +154,7 @@ The generated `finetune_manifest.json` includes ready-to-run commands for:
 - Okay Samurai fullnet fine-tuning from existing checkpoints
 - Duelyst APES pseudo-label/review preparation
 
-Duelyst staged frames now include detector/metadata labels such as `source_family`, `body_class`, `detector_class`, `combat_role`, `training_role`, `animation_labels`, and detector metrics. In Asset Audit, the default Duelyst filters show staged APES-review candidates and the `Queue APES jobs` action creates persisted APES Lab jobs for the filtered staged set. APES Lab includes `Run Duelyst queue` to run the prepared Duelyst jobs one at a time. Because each staged Duelyst source is a single review crop, the queue duplicates that crop to satisfy the APES bridge's two-frame minimum; review the resulting masks carefully before promotion. These labels still are not ground-truth correspondence labels, so run/review APES outputs and promote accepted masks before mixing them into supervised fine-tuning.
+Duelyst staged frames now include detector/metadata labels such as `source_family`, `body_class`, `detector_class`, `combat_role`, `training_role`, `animation_labels`, and detector metrics. In Asset Audit, the default Duelyst filters show staged APES-review candidates and the `Queue APES jobs` action creates persisted APES Lab jobs for the filtered staged set. APES Lab includes `Run Duelyst queue` to run the prepared Duelyst jobs one at a time. The queue now uses real staged idle atlas frames when available and only falls back to duplication for one-frame sources. These labels still are not ground-truth correspondence labels, so run/review APES outputs and promote accepted masks before mixing them into supervised fine-tuning.
 
 For a repeatable command-line queue, run `npm run apes:prepare-duelyst-jobs`. It writes ignored job configs under `data/apes/input/`. `npm run apes:run-duelyst-jobs` executes that batch through the APES bridge.
 
@@ -174,7 +174,7 @@ data/apes/output/
 
 The Windows APES bridge includes compatibility fixes for the modern `apes-gpu-modern` environment: Vite `/@fs/` path resolution, absolute runtime output paths, 256x256 APES runtime normalization, `torch_batch_svd` fallback via `torch.linalg.svd`, `torch.symeig` replacement with `torch.linalg.eigh`, current scikit-image `slic` arguments, and Windows-safe APES character path handling. `tensorboard` is required because APES imports training utilities during inference startup.
 
-If APES runs but selects no masks, the bridge writes a completed empty review report with warnings instead of treating it as an environment failure. That is expected for duplicated single-crop Duelyst jobs.
+If APES runs but selects no masks, the bridge writes a completed empty review report with warnings instead of treating it as an environment failure. Multi-frame Duelyst idle jobs can produce review masks, but partial output and low-confidence semantic assignments still require manual cleanup.
 
 For a non-GPU Windows machine, the useful workflow is in the app:
 

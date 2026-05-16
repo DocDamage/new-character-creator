@@ -39,39 +39,61 @@ def role_matches(labels: dict[str, Any], role_filter: str) -> bool:
 
 def build_job(character: dict[str, Any], index: int) -> dict[str, Any]:
     character_id = character["character_id"]
+    idle_frames = (
+        character.get("directions", {})
+        .get("south", {})
+        .get("idle", {})
+        .get("frames", [])
+    )
+    selected_frames = idle_frames[:8] if len(idle_frames) >= 2 else []
     frame_path = character["representative_frame"]
     labels = character.get("labels") if isinstance(character.get("labels"), dict) else {}
     job_id = f"apes_{character_id}_{index + 1:03d}"
-    frame = {
-        "animation": "idle",
-        "direction": "south",
-        "frame_index": 0,
-        "path": frame_path,
-    }
-    duplicate_frame = {
-        **frame,
-        "frame_index": 1,
-    }
+    input_frames = [
+        {
+            "animation": "idle",
+            "direction": "south",
+            "frame_index": int(frame.get("index", frame_index)),
+            "path": frame["path"],
+        }
+        for frame_index, frame in enumerate(selected_frames)
+        if frame.get("path")
+    ]
+    if len(input_frames) == 0:
+        frame = {
+            "animation": "idle",
+            "direction": "south",
+            "frame_index": 0,
+            "path": frame_path,
+        }
+        input_frames = [
+            frame,
+            {
+                **frame,
+                "frame_index": 1,
+            },
+        ]
     return {
         "job_id": job_id,
         "character_id": character_id,
         "animations": ["idle"],
         "directions": ["south"],
-        "frame_range": [0, 1],
+        "frame_range": [0, max(1, len(input_frames) - 1)],
         "output_labels": APES_LABELS,
         "status": "prepared",
         "created_at": None,
-        "input_frames": [frame, duplicate_frame],
+        "input_frames": input_frames,
         "output_root": f"data/apes/output/{job_id}",
         "source": {
             "kind": "duelyst_private_staged_crop",
             "display_name": character.get("display_name", character_id),
             "labels": labels,
             "representative_frame": frame_path,
+            "idle_frame_count": len(idle_frames),
         },
         "logs": [
-            "Prepared from private Duelyst staged crop.",
-            "Duplicated the staged source frame so the APES bridge has the minimum two-frame runtime input.",
+            "Prepared from private Duelyst staged atlas frames.",
+            *([] if len(selected_frames) >= 2 else ["Duplicated the staged source frame so the APES bridge has the minimum two-frame runtime input."]),
             "Review output masks carefully before promotion or training.",
         ],
     }
@@ -164,7 +186,7 @@ def main() -> None:
         "jobs": jobs,
         "run_results": run_results,
         "warnings": [
-            "Duelyst jobs duplicate a single staged crop to satisfy the APES bridge two-frame minimum.",
+            "Duelyst jobs use staged idle atlas frames when available; jobs with only one available frame duplicate it to satisfy the APES bridge two-frame minimum.",
             "Treat generated masks as review candidates, not ground-truth labels.",
         ],
     }

@@ -8,6 +8,7 @@ export type FrameRef = {
   file_name: string
   width: number
   height: number
+  source_name?: string
 }
 
 export type AnimationManifest = {
@@ -63,6 +64,7 @@ export type DuelystPackageCandidate = {
   preview_url: string
   staged_frame_url: string
   staged_frame_size: { width: number; height: number }
+  staged_animations?: Record<string, FrameRef[]>
   staged: boolean
   stage_character_id: string
   score: number

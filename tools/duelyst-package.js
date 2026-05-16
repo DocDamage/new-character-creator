@@ -55,10 +55,16 @@ export async function inspectDuelystPackage(appRoot, options = {}) {
 
   const units = buildUnitRecords(entries, packagePath)
   const scoredCandidates = scoreAndStageCandidates(units, stageRoot).sort((left, right) => right.score - left.score || left.display_name.localeCompare(right.display_name))
-  const stagedCandidates = scoredCandidates.filter((candidate) => candidate.staged_frame_url).slice(0, stageTopCount)
+  const stagedCandidates = scoredCandidates
+    .filter((candidate) => candidate.staged_frame_url)
+    .slice(0, stageTopCount)
+    .map((candidate) => ({
+      ...candidate,
+      staged_animations: stageAnimationFrames(candidate, stageRoot),
+    }))
   const stagedIds = new Set(stagedCandidates.map((candidate) => candidate.unit_id))
   const candidateUnits = scoredCandidates.map((candidate) => ({
-    ...candidate,
+    ...stripInternalCandidateFields(candidate),
     staged: stagedIds.has(candidate.unit_id),
     stage_character_id: stagedIds.has(candidate.unit_id) ? `duelyst_${candidate.unit_id}` : '',
   }))
@@ -348,13 +354,23 @@ function scoreAndStageCandidates(units, stageRoot) {
       preview_url: toFsUrl(previewFilePath),
       staged_frame_url: representativeFrame ? toFsUrl(stagedFramePath) : '',
       staged_frame_size: previewSize,
+      staged_animations: {},
       staged: false,
       stage_character_id: '',
+      local_sheet_path: unit.sheet_path,
+      atlas_frames: atlasFrames,
       score,
       reasons,
       warnings,
     }
   })
+}
+
+function stripInternalCandidateFields(candidate) {
+  const { local_sheet_path, atlas_frames, ...publicCandidate } = candidate
+  void local_sheet_path
+  void atlas_frames
+  return publicCandidate
 }
 
 export function duelystLabelSchema() {
@@ -572,16 +588,19 @@ function readPngDimensions(filePath) {
 
 function parsePlistFrames(filePath) {
   const source = fs.readFileSync(filePath, 'utf8')
-  const frameRegex = /<key>([^<]+)<\/key>[\s\S]*?<key>frame<\/key>\s*<string>\{\{(-?\d+),(-?\d+)\},\{(\d+),(\d+)\}\}<\/string>[\s\S]*?(?:<key>rotated<\/key>\s*<(true|false)\/>|<key>offset<\/key>)/g
+  const frameRegex = /<key>([^<]+\.png)<\/key>\s*<dict>([\s\S]*?)<\/dict>/g
   const frames = []
   for (const match of source.matchAll(frameRegex)) {
+    const body = match[2]
+    const frameMatch = body.match(/<key>frame<\/key>\s*<string>\{\{(-?\d+),(-?\d+)\},\{(\d+),(\d+)\}\}<\/string>/)
+    if (!frameMatch) continue
     frames.push({
       name: match[1],
-      x: Number(match[2]),
-      y: Number(match[3]),
-      w: Number(match[4]),
-      h: Number(match[5]),
-      rotated: match[6] === 'true',
+      x: Number(frameMatch[1]),
+      y: Number(frameMatch[2]),
+      w: Number(frameMatch[3]),
+      h: Number(frameMatch[4]),
+      rotated: /<key>rotated<\/key>\s*<true\/>/.test(body),
     })
   }
   return frames
@@ -629,6 +648,67 @@ function writeFrameCrop(sheetPath, frame, outputPath) {
   fs.writeFileSync(outputPath, PNG.sync.write(crop))
 }
 
+function stageAnimationFrames(candidate, stageRoot) {
+  const stageUnitRoot = path.join(stageRoot, candidate.unit_id)
+  fs.rmSync(stageUnitRoot, { recursive: true, force: true })
+  fs.mkdirSync(stageUnitRoot, { recursive: true })
+  const groups = groupAtlasFramesByAnimation(candidate.unit_id, candidate.atlas_frames || [], candidate.estimated_frame_size)
+  const staged = {}
+
+  for (const [animationName, frames] of Object.entries(groups)) {
+    const animationRoot = path.join(stageUnitRoot, animationName)
+    fs.mkdirSync(animationRoot, { recursive: true })
+    staged[animationName] = frames.map((frame, index) => {
+      const outputPath = path.join(animationRoot, `${String(index).padStart(3, '0')}.png`)
+      writeFrameCrop(candidate.local_sheet_path, frame, outputPath)
+      return {
+        index,
+        path: toFsUrl(outputPath),
+        file_name: path.basename(outputPath),
+        width: frame.w,
+        height: frame.h,
+        source_name: frame.name,
+      }
+    })
+  }
+
+  return staged
+}
+
+function groupAtlasFramesByAnimation(unitId, atlasFrames, estimatedFrameSize) {
+  const groups = new Map()
+  for (const frame of atlasFrames) {
+    if (estimatedFrameSize && (frame.w !== estimatedFrameSize.width || frame.h !== estimatedFrameSize.height)) {
+      continue
+    }
+    const animationName = animationNameFromFrame(unitId, frame.name)
+    if (!animationName) continue
+    if (!groups.has(animationName)) groups.set(animationName, [])
+    groups.get(animationName).push(frame)
+  }
+
+  const ordered = {}
+  for (const animationName of preferredAnimationNames) {
+    const frames = groups.get(animationName)
+    if (!frames?.length) continue
+    ordered[animationName] = frames
+      .sort((left, right) => frameSequenceIndex(left.name) - frameSequenceIndex(right.name) || left.name.localeCompare(right.name))
+      .slice(0, 16)
+  }
+  return ordered
+}
+
+function animationNameFromFrame(unitId, frameName) {
+  const baseName = path.basename(frameName, '.png')
+  const withoutIndex = baseName.replace(/_\d+$/, '')
+  return normalizeAnimationName(unitId, withoutIndex)
+}
+
+function frameSequenceIndex(frameName) {
+  const match = frameName.match(/_(\d+)\.png$/)
+  return match ? Number(match[1]) : 0
+}
+
 function animationSortIndex(name) {
   const index = preferredAnimationNames.indexOf(name)
   return index === -1 ? preferredAnimationNames.length : index
@@ -643,14 +723,30 @@ function buildStagedManifest(packagePath, stagedCandidates) {
     characters: stagedCandidates.map((candidate) => {
       const framePath = candidate.staged_frame_url || candidate.preview_url
       const frameSize = candidate.staged_frame_size || candidate.estimated_frame_size || candidate.sheet_size
-      const frameRef = {
+      const stagedAnimations = candidate.staged_animations || {}
+      const animationNames = Object.keys(stagedAnimations)
+      const fallbackFrameRef = {
         index: 0,
         path: framePath,
         file_name: path.basename(framePath),
         width: frameSize.width,
         height: frameSize.height,
       }
-
+      const directions = Object.fromEntries(
+        (animationNames.length > 0 ? animationNames : ['idle']).map((animationName) => {
+          const frames = stagedAnimations[animationName] || [fallbackFrameRef]
+          return [animationName, { frame_count: frames.length, frames }]
+        }),
+      )
+      const animations = (animationNames.length > 0 ? animationNames : ['idle']).map((animationName) => {
+        const frames = stagedAnimations[animationName] || [fallbackFrameRef]
+        return {
+          name: animationName,
+          source_names: frames.map((frame) => frame.source_name || 'duelyst_stage'),
+          directions: { south: frames },
+          preview_gifs: [],
+        }
+      })
       return {
         character_id: `duelyst_${candidate.unit_id}`,
         display_name: `Duelyst ${candidate.display_name}`,
@@ -659,25 +755,13 @@ function buildStagedManifest(packagePath, stagedCandidates) {
         source_folder: packagePath,
         canvas_size: { width: frameSize.width, height: frameSize.height },
         directions: {
-          south: {
-            idle: {
-              frame_count: 1,
-              frames: [frameRef],
-            },
-          },
+          south: directions,
         },
-        animations: [
-          {
-            name: 'idle',
-            source_names: ['duelyst_stage'],
-            directions: { south: [frameRef] },
-            preview_gifs: [],
-          },
-        ],
-        animation_names: ['idle'],
+        animations,
+        animation_names: animations.map((animation) => animation.name),
         source_quality_warnings: [
           'Staged from a Duelyst whole-unit sprite sheet, not a modular part pack.',
-          'Use manual, preset-region, or APES extraction after selecting this staged source frame.',
+          `${animations.reduce((total, animation) => total + (animation.directions.south?.length || 0), 0)} staged atlas frame(s) are available across ${animations.length} animation(s).`,
           ...candidate.warnings,
         ],
         rotation_preview_paths: [{ direction: 'south', path: framePath }],

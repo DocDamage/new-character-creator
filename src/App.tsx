@@ -471,7 +471,8 @@ function App() {
     const jobs = stagedCharacters
       .filter((character) => requestedIds.has(character.character_id) && !existingCharacterIds.has(character.character_id))
       .map((character, index) => {
-        const job = makeApesJob(character, ['idle'], ['south'], apesCoreLabels, [0, 0])
+        const idleFrameCount = character.directions.south?.idle?.frames.length ?? 0
+        const job = makeApesJob(character, ['idle'], ['south'], apesCoreLabels, [0, Math.max(0, Math.min(7, idleFrameCount - 1))])
         const jobId = `apes_${character.character_id}_${now}_${index + 1}`
         const inputFrames = job.input_frames.length === 1
           ? [
@@ -488,7 +489,7 @@ function App() {
           input_frames: inputFrames,
           output_root: `data/apes/output/${jobId}`,
           logs: [
-            'Prepared APES input manifest from staged Duelyst review crop.',
+            'Prepared APES input manifest from staged Duelyst atlas frames.',
             ...(job.input_frames.length === 1 ? ['Duplicated the staged source frame so the APES bridge has the minimum two-frame runtime input. Review output masks carefully.'] : []),
             ...job.logs,
           ],

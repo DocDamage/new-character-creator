@@ -113,9 +113,9 @@ The manifest inventories the local supervised datasets and emits quoted Windows-
 
 Important: Duelyst staged frames are private local inputs. Their labels are produced from Duelyst path/name/animation metadata plus a lightweight alpha-silhouette detector, not from human-reviewed APES correspondence labels. They should be used for filtering, inference, reviewed APES masks, and pseudo-label generation before being treated as supervised training examples.
 
-`npm run apes:prepare-duelyst-jobs` writes ignored APES job JSON files for the staged APES-review Duelyst candidates. `npm run apes:run-duelyst-jobs` runs those jobs immediately. Current staged Duelyst jobs duplicate a single representative crop to satisfy APES' two-frame minimum; APES may complete with an empty report when no moving parts can be selected. That empty report is expected for some static crops and is not an environment failure.
+`npm run apes:prepare-duelyst-jobs` writes ignored APES job JSON files for the staged APES-review Duelyst candidates. `npm run apes:run-duelyst-jobs` runs those jobs immediately. Current staged Duelyst jobs use real staged idle atlas frames when available and only duplicate a representative crop for one-frame sources. APES may still complete with an empty report when no moving parts can be selected; that empty report is expected for some static or low-motion inputs and is not an environment failure.
 
-Known limitation: the private Duelyst package is currently staged as one representative crop per unit. APES works best with true multi-frame motion pairs, so the next quality step is staging actual Duelyst animation frames from the atlas rather than duplicating one crop.
+Current quality note: the first verified multi-frame Duelyst APES job produced creator-sized `head`, `torso`, and `front_arm` review masks, but missed other requested labels. Treat APES output as review material, not accepted training labels, until masks are manually checked and promoted.
 
 The app treats APES as a core extraction path, not a side experiment: every report includes provenance, semantic labels, review status, warnings, and editable mask paths.
 

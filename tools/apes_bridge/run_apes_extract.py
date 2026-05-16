@@ -229,7 +229,24 @@ def score_label(candidate_bounds: dict[str, int], label: str) -> float:
     preset = PRESET_BOUNDS.get(label)
     if preset is None:
         return 0.0
-    return rect_iou(candidate_bounds, preset) * 0.7 + center_distance_score(candidate_bounds, preset) * 0.3
+    normalized_bounds = normalize_bounds_to_creator_canvas(candidate_bounds)
+    return rect_iou(normalized_bounds, preset) * 0.7 + center_distance_score(normalized_bounds, preset) * 0.3
+
+
+def normalize_bounds_to_creator_canvas(bounds: dict[str, int], source_size: int = 256, target_size: int = 64) -> dict[str, int]:
+    if max(bounds["x"] + bounds["w"], bounds["y"] + bounds["h"]) <= target_size:
+        return bounds
+    scale = target_size / source_size
+    x = max(0, min(target_size - 1, round(bounds["x"] * scale)))
+    y = max(0, min(target_size - 1, round(bounds["y"] * scale)))
+    right = max(x + 1, min(target_size, round((bounds["x"] + bounds["w"]) * scale)))
+    bottom = max(y + 1, min(target_size, round((bounds["y"] + bounds["h"]) * scale)))
+    return {"x": x, "y": y, "w": right - x, "h": bottom - y}
+
+
+def write_creator_sized_image(source_path: Path, target_path: Path, mode: str) -> None:
+    with Image.open(source_path) as source:
+        source.convert(mode).resize((64, 64), Image.Resampling.NEAREST).save(target_path)
 
 
 def assign_masks(job: dict[str, Any], selection_dir: Path) -> tuple[list[dict[str, Any]], list[str]]:
@@ -292,18 +309,18 @@ def build_report_from_vendor_output(job: dict[str, Any], output_dir: Path, vendo
     for item in assigned_masks:
         label = item["label"]
         target_mask = masks_dir / f"{label}_mask.png"
-        shutil.copy2(item["mask_path"], target_mask)
+        write_creator_sized_image(item["mask_path"], target_mask, "L")
 
         target_part = parts_dir / f"{label}.png"
         if item["image_path"].exists():
-            shutil.copy2(item["image_path"], target_part)
+            write_creator_sized_image(item["image_path"], target_part, "RGBA")
 
         report_masks.append(
             {
                 "label": label,
                 "path": report_path(target_mask),
                 "image_path": report_path(target_part),
-                "bounds": item["bounds"],
+                "bounds": normalize_bounds_to_creator_canvas(item["bounds"]),
                 "confidence": item["confidence"],
                 "reviewed": False,
                 "warnings": item["warnings"],
