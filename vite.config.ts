@@ -1,5 +1,5 @@
 import { defineConfig } from 'vite'
-import type { Connect, ViteDevServer } from 'vite'
+import type { Connect, PreviewServer, ViteDevServer } from 'vite'
 import react from '@vitejs/plugin-react'
 import { spawnSync } from 'node:child_process'
 import fs from 'node:fs'
@@ -13,8 +13,19 @@ const appRoot = __dirname
 function localAssetToolsPlugin() {
   return {
     name: 'local-asset-tools',
+    configurePreviewServer(server: PreviewServer) {
+      server.middlewares.use((req: IncomingMessage, res: ServerResponse, next: Connect.NextFunction) => {
+        if (!serveLocalAssetRequest(req, res, next)) {
+          next()
+        }
+      })
+    },
     configureServer(server: ViteDevServer) {
       server.middlewares.use(async (req: IncomingMessage, res: ServerResponse, next: Connect.NextFunction) => {
+        if (serveLocalAssetRequest(req, res, next)) {
+          return
+        }
+
         if (req.url === '/__local/apes-tools') {
           if (req.method !== 'POST') {
             res.statusCode = 405
@@ -201,6 +212,57 @@ function localAssetToolsPlugin() {
       })
     },
   }
+}
+
+function serveLocalAssetRequest(req: IncomingMessage, res: ServerResponse, next: Connect.NextFunction) {
+  const requestPath = getRequestPath(req.url)
+  if (!requestPath?.startsWith('/assets/')) {
+    return false
+  }
+
+  const assetsRoot = path.resolve(appRoot, 'assets')
+  const localPath = path.resolve(appRoot, `.${requestPath}`)
+  if (!localPath.startsWith(`${assetsRoot}${path.sep}`)) {
+    res.statusCode = 403
+    res.end('Forbidden')
+    return true
+  }
+
+  fs.promises.stat(localPath).then((stats) => {
+    if (!stats.isFile()) {
+      next()
+      return
+    }
+
+    const contentType = getAssetContentType(localPath)
+    if (contentType) {
+      res.setHeader('Content-Type', contentType)
+    }
+    res.setHeader('Cache-Control', 'no-cache')
+    fs.createReadStream(localPath).pipe(res)
+  }).catch(() => {
+    next()
+  })
+
+  return true
+}
+
+function getRequestPath(url: string | undefined) {
+  if (!url) return null
+  try {
+    return decodeURIComponent(url.split('?')[0] ?? '')
+  } catch {
+    return null
+  }
+}
+
+function getAssetContentType(filePath: string) {
+  const extension = path.extname(filePath).toLowerCase()
+  if (extension === '.png') return 'image/png'
+  if (extension === '.json') return 'application/json'
+  if (extension === '.svg') return 'image/svg+xml'
+  if (extension === '.txt') return 'text/plain; charset=utf-8'
+  return null
 }
 
 async function readJsonBody(req: IncomingMessage) {
