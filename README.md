@@ -1,6 +1,15 @@
 # Animated Pixel Character Creator
 
-Local Vite + React + TypeScript app for building a kitbash-oriented character creator from the 50 sprite folders in `../Animated-Pixel-Pack-Characters-V1`.
+Local Vite + React + TypeScript app for building a kitbash-oriented pixel character creator from indexed sprite folders, extracted reusable parts, APES masks, Duelyst staged source sheets, and deterministic kitbash recipes.
+
+## Current status
+
+- Frontend build passes with `npm run build`.
+- Browser regression harness passes with `npm run test:browser`.
+- Local dev server has been verified at `http://127.0.0.1:8002/`.
+- APES GPU preflight passes in `apes-gpu-modern` with CUDA PyTorch, PyTorch3D, PyG extensions, OpenCV, checkpoints, and okaysamurai test data available.
+- The only APES preflight warning is that upstream APES originally targeted Python 3.7 while the working local environment uses Python 3.10.
+- Duelyst package unpacking and staging has been verified against `assets/Duelyst-Unit-Animations.unitypackage`: 7145 assets scanned, 696 sprite sheets found, and staged candidates open in the workstation.
 
 ## Commands
 
@@ -12,6 +21,14 @@ npm run dev -- --host 127.0.0.1 --port 8002 --strictPort
 npm run build
 npm run test:browser
 ```
+
+APES GPU verification on the home PC:
+
+```bash
+micromamba run -n apes-gpu-modern python tools\apes_bridge\check_apes_env.py --json
+```
+
+Full APES/PyTorch3D rebuild notes live in `docs/apes-gpu-rebuild.md`.
 
 If the sprite pack lives somewhere other than `../Animated-Pixel-Pack-Characters-V1`, override it with `PIXEL_CREATOR_ASSET_ROOT` or `--asset-root`:
 
@@ -47,13 +64,39 @@ The `Settings` screen now also exposes a `Copy browser regression command` actio
 - Pixel-perfect canvas preview for real source frames.
 - Fast Creator for part-source selection and recipe export.
 - Art Workstation with preset regions, APES/preset/connected/manual mode comparison, region controls, and cleanup tool surface.
+- Manual mask cleanup with persisted reviewed manual parts.
+- Part Library with filtering, reviewed/unreviewed state, JSON export, visible JSON export, and APES QA cleanup.
 - Batch Generator with deterministic seeded variants.
-- Asset Audit with class counts and source warnings.
-- APES Lab with first-class job creation, local preflight/bridge actions, a one-click local QA harness generator, logs, job config export, failure surfacing, and report import state.
+- Asset Audit with class counts, source warnings, and Duelyst unitypackage inspection/staging.
+- APES Lab with first-class job creation, local preflight/bridge actions, a one-click local QA harness generator, logs, job config export, failure surfacing, file import, pasted JSON import, and APES-to-part-library conversion.
 - Export panel for generic manifests, rendered frame/package downloads, Godot scene stubs, SpriteFrames stubs, and batch queues.
 - Browser-side spritesheet downloads for the current animation/direction and all directions of the current action.
 - CLI character export under `data/exports/<character_id>/` with `package_manifest.json`, rendered frames/sheets, engine metadata, and source-frame references.
 - APES bridge contract under `tools/apes_bridge/`.
+- Settings screen with asset-root repair/reindex commands, local dev-server repair/reindex actions, APES interpreter configuration, placeholder bridge toggle, APES preflight summary, browser regression command copy, and portable setup bundle download.
+
+## Data and asset handling
+
+Large local assets are intentionally ignored by git:
+
+```text
+assets/checkpoints/
+assets/creative_flow/
+assets/okay_samurai/
+assets/okaysamurai_sheets/
+assets/Animated-Pixel-Pack-Characters-V1/
+assets/Duelyst-Unit-Animations.unitypackage
+checkpoints/
+training data/
+data/cache/
+```
+
+The APES runtime expects historical paths under the repo root. On this machine those paths are junctions into ignored asset folders:
+
+```text
+checkpoints -> assets/checkpoints
+training data/okaysamurai_sheets -> assets/okaysamurai_sheets
+```
 
 ## APES bridge
 
@@ -69,13 +112,21 @@ data/apes/output/
 - real bridge mode for a CUDA-capable APES machine: prepares a temporary APES dataset from job frames, runs the vendored `inference_os.py`, and writes `status.json`, `preflight.json`, and `apes_report.json`
 - placeholder mode for local harness work on this machine when `--allow-placeholder` is explicitly enabled
 
-For the current no-CUDA Windows machine, the useful workflow is in the app:
+For a non-GPU Windows machine, the useful workflow is in the app:
 
 1. Start `npm run dev`.
 2. Open `Settings` and set the APES Python path only if you are pointing at a dedicated APES environment on another machine.
 3. Open `APES Lab`.
 4. Click `Generate local QA harness` to regenerate and import the static sample APES parts without using the terminal.
-5. Click `Run APES preflight` to see why the full runtime is unavailable on this machine, or to validate the home GPU machine later.
+5. Click `Run APES preflight` to see why the full runtime is unavailable on that machine, or to validate the home GPU machine.
+
+For the home GPU PC, the APES runtime is now verified. Use:
+
+```bash
+micromamba run -n apes-gpu-modern python tools\apes_bridge\check_apes_env.py --json
+```
+
+If that ever regresses, rebuild from `docs/apes-gpu-rebuild.md`.
 
 You can still regenerate the harness from the terminal when needed:
 
@@ -108,4 +159,4 @@ The browser harness now covers:
 
 ## Source assets
 
-The original sprite pack is read-only. Generated manifests, bridge output, exports, and screenshots live under `character-creator/`.
+The original sprite packs and training/checkpoint data are read-only inputs. Generated manifests, bridge output, exports, staged Duelyst crops, browser test artifacts, and APES caches live under ignored local folders inside this repo.

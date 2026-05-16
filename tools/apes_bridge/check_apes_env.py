@@ -14,9 +14,13 @@ REQUIRED_MODULES = (
     "torchvision",
     "cv2",
     "h5py",
+    "matplotlib",
+    "pytorch3d",
     "skimage",
     "scipy",
     "numpy",
+    "torch_cluster",
+    "torch_scatter",
     "tqdm",
 )
 
@@ -117,8 +121,9 @@ def build_report(test_folder: Path | None = None) -> dict[str, Any]:
     data_health = _sample_data_health(resolved_test_folder)
 
     findings: list[str] = []
+    warnings: list[str] = []
     if sys.version_info[:2] != (3, 7):
-        findings.append(
+        warnings.append(
             f"APES upstream targets Python 3.7; current interpreter is {sys.version.split()[0]}."
         )
     if not checkpoint_path.exists():
@@ -168,6 +173,7 @@ def build_report(test_folder: Path | None = None) -> dict[str, Any]:
             "nvidia_smi": shutil.which("nvidia-smi"),
         },
         "findings": findings,
+        "warnings": warnings,
     }
 
 

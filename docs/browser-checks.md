@@ -16,9 +16,19 @@ If you want the automated smoke pass instead of stepping through the UI manually
 npm run test:browser
 ```
 
-That harness covers export/package downloads, manual mask save persistence, recipe save/load, and Part Library bulk review actions.
+That harness covers export/package downloads, manual mask save persistence, recipe save/load, Part Library bulk review actions, APES QA harness generation and import, Duelyst audit behavior, and the portable local setup bundle download from `Settings`.
 
-It now also covers APES QA harness generation and import, Duelyst audit behavior, and the portable local setup bundle download from `Settings`.
+Latest verified automated run:
+
+- `npm run test:browser -- --reporter=line`
+- 6 tests passed
+
+Latest verified local app state:
+
+- `npm run build` passes
+- dev server verified at `http://127.0.0.1:8002/`
+- Duelyst audit scanned 7145 assets, found 696 sprite sheets, staged candidates, and opened `duelyst_f1_elyxstormblade` in the workstation
+- APES env preflight is ready in `apes-gpu-modern`
 
 ## Export Panel
 
@@ -83,6 +93,22 @@ It now also covers APES QA harness generation and import, Duelyst audit behavior
 8. Click `Load and replace QA sample report` and confirm it still imports cleanly from `public/data/qa/apes_report_harness.json`.
 9. Paste the contents of `public/data/qa/apes_report_harness.json` into the textarea and click `Import pasted JSON`.
 10. Confirm the import succeeds without console errors and APES parts remain selectable in `Fast Creator` and editable in `Art Workstation`.
+
+## APES GPU Preflight
+
+Run this on the home GPU PC:
+
+```bash
+micromamba run -n apes-gpu-modern python tools\apes_bridge\check_apes_env.py --json
+```
+
+Confirm:
+
+- `ready` is `true`
+- `pytorch3d`, `torch_cluster`, and `torch_scatter` are `true`
+- `torch.cuda_available` is `true`
+- the checkpoint path points at `checkpoints/train_cluster/model_best.pth.tar`
+- the test folder points at `training data/okaysamurai_sheets`
 
 ## Duelyst Audit
 

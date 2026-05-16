@@ -43,12 +43,28 @@ The preflight currently verifies:
 - PyTorch reports CUDA availability
 - `conda`/`mamba` and `nvidia-smi` availability in `PATH`
 
-On this repo's current Windows machine, the typical blockers are missing conda tooling, missing APES Python modules, and no configured CUDA path.
+On the home GPU PC, the current working environment is `apes-gpu-modern`. It has been verified with:
 
-For the CUDA-capable home PC, use the included setup files in this folder:
+- Python `3.10.20`
+- PyTorch `2.5.1+cu124`
+- TorchVision `0.20.1+cu124`
+- PyTorch3D `0.7.8`
+- `torch-scatter 2.1.2+pt25cu124`
+- `torch-cluster 1.6.3+pt25cu124`
+- `opencv-python-headless 4.10.0.84`
+- `numpy 1.26.4`
+- CUDA available on the RTX 3060
+
+The detailed rebuild recipe is in `docs/apes-gpu-rebuild.md`.
+
+The main PyTorch3D root cause was Windows toolchain mismatch: CUDA rejected VS 2026, CUDA 12.1 rejected the installed VS 2022 STL, and a mixed `cuda-nvcc`/`cuda-cccl` environment produced misleading CUB/Thrust errors. The working path is VS 2022 Build Tools plus CUDA 12.4 PyTorch wheels, then a source build of PyTorch3D.
+
+For older CUDA-capable setup attempts, these helper files remain available:
 
 - `environment.gpu.yml` creates the dedicated APES runtime environment
 - `setup_home_pc.ps1` updates that environment and runs a preflight check inside it
+
+The current known-good setup is newer than the original APES target and is documented in `docs/apes-gpu-rebuild.md`.
 
 The app treats APES as a core extraction path, not a side experiment: every report includes provenance, semantic labels, review status, warnings, and editable mask paths.
 
@@ -63,3 +79,17 @@ npm run qa:apes-harness
 That command regenerates `public/data/qa/apes_report_harness.json` plus matching part and mask PNGs so the `Load and replace QA sample report` button in APES Lab imports real preview assets even without the APES runtime.
 
 If the app is already running under `npm run dev`, APES Lab also exposes a `Generate local QA harness` button that calls the same generator through the local Vite dev server and imports the refreshed harness report immediately.
+
+## Current verification commands
+
+```text
+micromamba run -n apes-gpu-modern python -c "import torch, torchvision, cv2, numpy, pytorch3d, torch_scatter, torch_cluster; print(torch.__version__, torch.version.cuda, torch.cuda.is_available()); print(cv2.__version__, numpy.__version__, pytorch3d.__version__)"
+micromamba run -n apes-gpu-modern python tools\apes_bridge\check_apes_env.py --json
+```
+
+Expected preflight state:
+
+- `ready: true`
+- every required module present
+- `torch.cuda_available: true`
+- Python 3.10 warning only

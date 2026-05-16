@@ -8,7 +8,9 @@
 
 **Tech Stack:** Vite, React, TypeScript, browser Canvas APIs, localStorage for UI/session state, downloadable JSON/PNG artifacts, Python APES bridge contracts under `tools/apes_bridge`.
 
-**Implementation Status:** Completed in this pass. Composite rendering, persistent extracted payloads, manual mask cleanup, deterministic batch recipe previews/package manifests, and APES report import/status bridge support are implemented and verified with `npm run build` plus browser checks at `http://127.0.0.1:8002/`.
+**Implementation Status:** Completed and extended. Composite rendering, persistent extracted payloads, manual mask cleanup, deterministic batch recipe previews/package manifests, APES report import/status bridge support, Duelyst package staging, Settings setup bundles, and APES GPU preflight support are implemented. Verified with `npm run build`, `npm run test:browser -- --reporter=line`, browser checks at `http://127.0.0.1:8002/`, Duelyst staging, and APES GPU preflight in `apes-gpu-modern`.
+
+**APES GPU Status:** PyTorch3D is now fixed on the home RTX 3060 PC. The working env uses Python 3.10, PyTorch `2.5.1+cu124`, PyTorch3D `0.7.8`, matching PyG CUDA wheels, headless OpenCV, and NumPy `1.26.4`. Rebuild instructions are documented in `docs/apes-gpu-rebuild.md`.
 
 ---
 
@@ -33,7 +35,7 @@
 - Modify: `src/App.tsx`
 - Modify: `src/App.css`
 
-- [ ] **Step 1: Add a composite renderer component**
+- [x] **Step 1: Add a composite renderer component**
 
 Create `src/CompositeCanvas.tsx` that:
 - Receives `recipe`, `characters`, `partLibrary`, `animation`, `direction`, and `frameIndex`.
@@ -44,11 +46,11 @@ Create `src/CompositeCanvas.tsx` that:
 - Applies layer offset and recipe palette CSS canvas filter.
 - Uses nearest-neighbor drawing.
 
-- [ ] **Step 2: Show composite preview in Fast Creator and Exports**
+- [x] **Step 2: Show composite preview in Fast Creator and Exports**
 
 Render `CompositeCanvas` beside the all-direction source preview so the user sees the generated kitbash result.
 
-- [ ] **Step 3: Verify**
+- [x] **Step 3: Verify**
 
 Run: `npm run build`
 
@@ -66,22 +68,22 @@ Browser check:
 - Modify: `src/utils.ts`
 - Modify: `src/App.tsx`
 
-- [ ] **Step 1: Extend `ExtractedPart`**
+- [x] **Step 1: Extend `ExtractedPart`**
 
 Add optional fields:
 - `image_data_url?: string`
 - `mask_data_url?: string`
 - `source_frame_path?: string`
 
-- [ ] **Step 2: Update extraction helpers**
+- [x] **Step 2: Update extraction helpers**
 
 Change preset and connected extraction helpers to return PNG data URLs while still downloading files.
 
-- [ ] **Step 3: Store payloads in Part Library**
+- [x] **Step 3: Store payloads in Part Library**
 
 When extracting a region or connected cluster, save data URLs into the `ExtractedPart` record so parts can survive reload and render without relying on downloaded files.
 
-- [ ] **Step 4: Verify**
+- [x] **Step 4: Verify**
 
 Extract a connected-pixel part, reload, and confirm it still appears in the Part Library and can be selected in Fast Creator.
 
@@ -94,7 +96,7 @@ Extract a connected-pixel part, reload, and confirm it still appears in the Part
 - Modify: `src/App.tsx`
 - Modify: `src/App.css`
 
-- [ ] **Step 1: Add pure mask operations**
+- [x] **Step 1: Add pure mask operations**
 
 Implement functions:
 - `paintMaskPixel(mask, x, y, enabled)`
@@ -105,15 +107,15 @@ Implement functions:
 - `mirrorMask(mask)`
 - `nudgeMask(mask, dx, dy)`
 
-- [ ] **Step 2: Add editable cleanup canvas**
+- [x] **Step 2: Add editable cleanup canvas**
 
 In Art Workstation, when manual mode is selected, display an editable 64x64 mask canvas with pencil, eraser, fill, grow, shrink, invert, mirror, and nudge controls.
 
-- [ ] **Step 3: Save reviewed cleaned mask**
+- [x] **Step 3: Save reviewed cleaned mask**
 
 Allow `Save cleanup as part` to create/update an `ExtractedPart` with `extraction_method: "manual"` and a persisted mask data URL.
 
-- [ ] **Step 4: Verify**
+- [x] **Step 4: Verify**
 
 Paint a mask pixel, save a manual part, reload, and confirm the manual part remains in Part Library.
 
@@ -126,15 +128,15 @@ Paint a mask pixel, save a manual part, reload, and confirm the manual part rema
 - Create: `src/exportPackage.ts`
 - Modify: `src/App.tsx`
 
-- [ ] **Step 1: Add offscreen renderer**
+- [x] **Step 1: Add offscreen renderer**
 
 Export a helper that renders a recipe/layer set to a PNG data URL for a given animation/direction/frame.
 
-- [ ] **Step 2: Add batch render action**
+- [x] **Step 2: Add batch render action**
 
 Batch Generator should render deterministic variant preview thumbnails and download a batch queue manifest including recipe settings, source part ids, and APES provenance.
 
-- [ ] **Step 3: Verify**
+- [x] **Step 3: Verify**
 
 Generate batch variants with a fixed seed twice and confirm identical variant IDs, parts, palettes, and rendered preview count.
 
@@ -147,7 +149,7 @@ Generate batch variants with a fixed seed twice and confirm identical variant ID
 - Modify: `src/App.tsx`
 - Modify: `src/utils.ts`
 
-- [ ] **Step 1: Add package manifest builder**
+- [x] **Step 1: Add package manifest builder**
 
 Build a package manifest with:
 - individual frames
@@ -160,11 +162,11 @@ Build a package manifest with:
 - reusable part folders
 - extraction provenance
 
-- [ ] **Step 2: Add export package button**
+- [x] **Step 2: Add export package button**
 
 Add `Download full package manifest` and `Download rendered frame set` to Exports.
 
-- [ ] **Step 3: Verify**
+- [x] **Step 3: Verify**
 
 Click package export buttons and ensure no console errors. Confirm downloaded JSON includes APES `source_part_id` entries.
 
@@ -177,7 +179,7 @@ Click package export buttons and ensure no console errors. Confirm downloaded JS
 - Modify: `tools/apes_bridge/README.md`
 - Modify: `src/App.tsx`
 
-- [ ] **Step 1: Normalize APES report schema**
+- [x] **Step 1: Normalize APES report schema**
 
 Ensure reports include:
 - `job_id`
@@ -188,11 +190,11 @@ Ensure reports include:
 - `confidence`
 - `warnings`
 
-- [ ] **Step 2: Import pasted/uploaded report JSON**
+- [x] **Step 2: Import pasted/uploaded report JSON**
 
 Add an APES Lab text import area so users can paste a real APES report and convert masks into library parts.
 
-- [ ] **Step 3: Verify**
+- [x] **Step 3: Verify**
 
 Paste the expected report template and confirm APES parts import with labels, bounds, warnings, and review status.
 
