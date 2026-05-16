@@ -138,6 +138,8 @@ data/training/apes_finetune/finetune_manifest.json
 data/training/apes_finetune/duelyst_sheets/
 ```
 
+The private manifest labels all detected Duelyst unit sheets and stages the requested review subset. Labels include source family, normalized animation names, broad body class, training role, and alpha-silhouette detector metrics. Each staged folder under `duelyst_sheets/` also receives a `label.json` beside the copied frame and alpha mask.
+
 Verify the Duelyst review dataset can be used by APES preflight:
 
 ```powershell

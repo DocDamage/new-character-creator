@@ -82,6 +82,12 @@ data/training/apes_finetune/finetune_manifest.json
 data/training/apes_finetune/duelyst_sheets/
 ```
 
+Each Duelyst staged character folder contains:
+
+- `<character_id>_0.png`: the private representative crop copied from the local staged cache
+- `<character_id>_0_mask.png`: an alpha-derived foreground mask
+- `label.json`: source family, filename/animation labels, detector class, final broad `body_class`, `training_role`, and the detector metrics used for review triage
+
 The manifest inventories the local supervised datasets and emits quoted Windows-safe commands for APES training:
 
 - `creative_flow` corrnet fine-tuning from `assets/creative_flow/{train,val,test}`
@@ -89,7 +95,7 @@ The manifest inventories the local supervised datasets and emits quoted Windows-
 - `okay_samurai` fullnet fine-tuning from existing corrnet/fullnet checkpoints
 - Duelyst pseudo-label review using the private staged sheet dataset
 
-Important: Duelyst staged frames are private local inputs and currently only provide image/mask pairs from alpha silhouettes. They should be used for inference, reviewed APES masks, and pseudo-label generation before being treated as supervised training examples.
+Important: Duelyst staged frames are private local inputs. Their labels are produced from Duelyst path/name/animation metadata plus a lightweight alpha-silhouette detector, not from human-reviewed APES correspondence labels. They should be used for filtering, inference, reviewed APES masks, and pseudo-label generation before being treated as supervised training examples.
 
 The app treats APES as a core extraction path, not a side experiment: every report includes provenance, semantic labels, review status, warnings, and editable mask paths.
 

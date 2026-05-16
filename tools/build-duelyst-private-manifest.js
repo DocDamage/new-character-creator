@@ -1,7 +1,7 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { inspectDuelystPackage } from './duelyst-package.js'
+import { duelystLabelSchema, inspectDuelystPackage } from './duelyst-package.js'
 
 const appRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const args = process.argv.slice(2)
@@ -22,7 +22,7 @@ async function main() {
   const packagePath = getOption('--package', path.resolve(appRoot, 'assets', 'Duelyst-Unit-Animations.unitypackage'))
   const outPath = path.resolve(appRoot, getOption('--out', path.join('public', 'data', 'manifests', 'duelyst.private.json')))
   const stageTopCount = Number(getOption('--stage-count', '64'))
-  const duelyst = await inspectDuelystPackage(appRoot, { packagePath, stageTopCount })
+  const duelyst = await inspectDuelystPackage(appRoot, { packagePath, stageTopCount, candidateLimit: 'all' })
 
   const payload = {
     format: 'pixel_creator_duelyst_private_manifest',
@@ -33,6 +33,7 @@ async function main() {
     extraction_root: duelyst.extraction_root,
     total_assets: duelyst.total_assets,
     extension_counts: duelyst.extension_counts,
+    label_schema: duelystLabelSchema(),
     candidate_units: duelyst.candidate_units,
     staged_manifest: duelyst.staged_manifest,
     findings: duelyst.findings,

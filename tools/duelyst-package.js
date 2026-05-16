@@ -6,11 +6,26 @@ import { PNG } from 'pngjs'
 const defaultPackagePath = path.resolve('assets', 'Duelyst-Unit-Animations.unitypackage')
 const positiveHumanoidPattern = /general|sister|siren|pyromancer|guard|guardian|mage|mancer|vanguard|dragoon|seeker|weaver|caligrapher|champion|heir|kage|blade|raider|tracker|hunter|warrior|priest|templar|knight|soldier|windslicer|ritualist|herald/i
 const negativeCreaturePattern = /golem|mech|crawler|crab|beast|hound|wing|dragon|wisp|obelysk|cannon|quillbeast|flumposaur|owlbear|beholder|serpenti|spelljammer|trinitywing|monster|artifact|magma|horror|demon|burrower|mecha/i
+const mechPattern = /mech|mecha|golem|construct|cannon|artifact|obelisk|obelysk|walker|warbird/i
+const structurePattern = /obelisk|obelysk|artifact|wall|portal|egg|structure|pillar|prism|monument/i
+const casterPattern = /mage|mancer|siren|priest|ritualist|prophet|oracle|shaman|seer|sorcerer|witch|wizard|pyromancer|necromancer|summoner/i
+const rangedPattern = /archer|hunter|tracker|sniper|gunner|sharpshooter|ranger|marksman|cannon|turret/i
 const preferredAnimationNames = ['idle', 'breathing', 'run', 'attack', 'hit', 'death']
+const duelystSourceFamilies = {
+  f1: 'lyonar',
+  f2: 'songhai',
+  f3: 'vetruvian',
+  f4: 'abyssian',
+  f5: 'magmar',
+  f6: 'vanar',
+  neutral: 'neutral',
+  boss: 'boss',
+}
 
 export async function inspectDuelystPackage(appRoot, options = {}) {
   const packagePath = path.resolve(appRoot, options.packagePath || defaultPackagePath)
   const stageTopCount = clampStageCount(options.stageTopCount)
+  const candidateLimit = clampCandidateLimit(options.candidateLimit, stageTopCount)
 
   if (!fs.existsSync(packagePath)) {
     return {
@@ -56,7 +71,7 @@ export async function inspectDuelystPackage(appRoot, options = {}) {
     extraction_root: extractionRoot,
     total_assets: entries.length,
     extension_counts: extensionCounts,
-    candidate_units: candidateUnits.slice(0, Math.max(stageTopCount, 12)),
+    candidate_units: candidateUnits.slice(0, candidateLimit),
     staged_manifest: stagedManifest,
     findings: [
       `${extensionCounts['.png'] ?? 0} sprite sheets detected under Duelyst unit spritesheets.`,
@@ -71,6 +86,13 @@ function clampStageCount(value) {
   const parsed = Number(value)
   if (!Number.isFinite(parsed)) return 8
   return Math.max(1, Math.min(256, Math.floor(parsed)))
+}
+
+function clampCandidateLimit(value, stageTopCount) {
+  if (value === 'all' || value === Infinity) return Number.POSITIVE_INFINITY
+  const parsed = Number(value)
+  if (!Number.isFinite(parsed)) return Math.max(stageTopCount, 12)
+  return Math.max(stageTopCount, Math.min(5000, Math.floor(parsed)))
 }
 
 function ensurePackageExtraction(appRoot, packagePath) {
@@ -257,6 +279,8 @@ function scoreAndStageCandidates(units, stageRoot) {
     }
 
     const animationNames = Array.from(unit.animation_names).sort((left, right) => animationSortIndex(left) - animationSortIndex(right) || left.localeCompare(right))
+    const detector = representativeFrame ? detectSpriteFrame(unit.sheet_path, representativeFrame) : detectSpriteSheet(unit.sheet_path)
+    const labels = buildUnitLabels(unit, animationNames, atlasFrames, estimatedFrameSize, detector)
     const reasons = []
     const warnings = []
     let score = 0
@@ -291,9 +315,17 @@ function scoreAndStageCandidates(units, stageRoot) {
       reasons.push('name looks closer to a humanoid fighter/caster than a creature')
       score += 16
     }
+    if (labels.detector_class === 'humanoid') {
+      reasons.push('silhouette detector suggests humanoid proportions')
+      score += 10
+    }
     if (negativeCreaturePattern.test(unit.unit_id)) {
       warnings.push('name looks creature-, mech-, or monster-focused')
       score -= 24
+    }
+    if (['creature', 'mech', 'structure'].includes(labels.detector_class)) {
+      warnings.push(`silhouette detector suggests ${labels.detector_class} proportions`)
+      score -= 8
     }
 
     const previewFilePath = representativeFrame ? stagedFramePath : unit.preview_path && fs.existsSync(unit.preview_path) ? unit.preview_path : unit.sheet_path
@@ -310,6 +342,7 @@ function scoreAndStageCandidates(units, stageRoot) {
       plist_source_path: unit.plist_source_path || '',
       estimated_frame_size: estimatedFrameSize,
       animation_names: animationNames,
+      labels,
       animation_clip_count: unit.animation_clip_count,
       controller_count: unit.controller_count,
       preview_url: toFsUrl(previewFilePath),
@@ -322,6 +355,211 @@ function scoreAndStageCandidates(units, stageRoot) {
       warnings,
     }
   })
+}
+
+export function duelystLabelSchema() {
+  return {
+    label_scope: 'unit_identity_visual_detector_and_training_triage',
+    warning: 'These labels combine filename/path/animation metadata with a lightweight alpha-silhouette detector. They are not APES ground-truth body-part correspondence labels.',
+    fields: {
+      source_family: 'Duelyst faction/source prefix inferred from the unit file name.',
+      body_class: 'Final broad visual class after combining filename hints with detector evidence.',
+      detector_class: 'Broad visual class inferred from the representative sprite silhouette.',
+      detector_metrics: 'Alpha-mask geometry and color-footprint measurements used by the detector.',
+      combat_role: 'Very coarse filename-derived role: general, caster, ranged, melee, or unknown.',
+      training_role: 'How this asset should enter the local fine-tuning/review path.',
+      animation_labels: 'Animation names normalized from Unity animation clips.',
+      asset_labels: 'Flat tags useful for filtering manifests and review batches.',
+      label_confidence: 'high/medium/low confidence for broad triage labels.',
+      needs_manual_review: 'True because these are review labels, not supervised segmentation truth.',
+    },
+  }
+}
+
+function buildUnitLabels(unit, animationNames, atlasFrames, estimatedFrameSize, detector) {
+  const sourceFamily = inferSourceFamily(unit.unit_id)
+  const heuristicClass = inferHeuristicBodyClass(unit.unit_id)
+  const bodyClass = combineBodyClass(heuristicClass, detector.class_name)
+  const combatRole = inferCombatRole(unit.unit_id)
+  const trainingRole = inferTrainingRole(bodyClass)
+  const assetLabels = [
+    'duelyst',
+    'private_local_asset',
+    `source_${sourceFamily}`,
+    `body_${bodyClass}`,
+    `detector_${detector.class_name}`,
+    `role_${combatRole}`,
+    `training_${trainingRole}`,
+  ]
+
+  if (animationNames.includes('idle') || animationNames.includes('breathing')) assetLabels.push('has_idle_or_breathing')
+  if (animationNames.includes('attack')) assetLabels.push('has_attack')
+  if (atlasFrames.length > 0) assetLabels.push('has_atlas_frames')
+
+  return {
+    label_source: 'filename_path_animation_plus_alpha_silhouette_detector',
+    source_family: sourceFamily,
+    unit_slug: unit.unit_id,
+    unit_title: unit.display_name,
+    heuristic_body_class: heuristicClass,
+    detector_class: detector.class_name,
+    body_class: bodyClass,
+    combat_role: combatRole,
+    training_role: trainingRole,
+    animation_labels: animationNames,
+    asset_labels: assetLabels,
+    detector_metrics: detector.metrics,
+    atlas_summary: {
+      frame_count: atlasFrames.length,
+      typical_frame_size: estimatedFrameSize
+        ? { width: estimatedFrameSize.width, height: estimatedFrameSize.height }
+        : null,
+    },
+    label_confidence: inferLabelConfidence(heuristicClass, detector.class_name),
+    needs_manual_review: true,
+  }
+}
+
+function inferSourceFamily(unitId) {
+  const prefix = unitId.split('_')[0]
+  return duelystSourceFamilies[prefix] ?? 'unknown'
+}
+
+function inferHeuristicBodyClass(unitId) {
+  if (structurePattern.test(unitId)) return 'structure'
+  if (mechPattern.test(unitId)) return 'mech'
+  if (positiveHumanoidPattern.test(unitId)) return 'humanoid'
+  if (negativeCreaturePattern.test(unitId)) return 'creature'
+  return 'unknown'
+}
+
+function combineBodyClass(heuristicClass, detectorClass) {
+  if (heuristicClass !== 'unknown' && heuristicClass === detectorClass) return heuristicClass
+  if (heuristicClass === 'structure' || heuristicClass === 'mech') return heuristicClass
+  if (detectorClass === 'structure') return detectorClass
+  if (heuristicClass === 'humanoid' && detectorClass !== 'structure') return heuristicClass
+  if (detectorClass !== 'unknown') return detectorClass
+  return heuristicClass
+}
+
+function inferCombatRole(unitId) {
+  if (/general/i.test(unitId)) return 'general'
+  if (casterPattern.test(unitId)) return 'caster'
+  if (rangedPattern.test(unitId)) return 'ranged'
+  if (positiveHumanoidPattern.test(unitId)) return 'melee'
+  return 'unknown'
+}
+
+function inferTrainingRole(bodyClass) {
+  if (bodyClass === 'humanoid') return 'apes_humanoid_review_candidate'
+  if (bodyClass === 'unknown') return 'apes_uncertain_review_candidate'
+  if (bodyClass === 'creature') return 'creature_reference_or_negative'
+  if (bodyClass === 'mech') return 'mech_reference_or_negative'
+  if (bodyClass === 'structure') return 'structure_reference_or_negative'
+  return 'private_reference_only'
+}
+
+function inferLabelConfidence(heuristicClass, detectorClass) {
+  if (heuristicClass !== 'unknown' && heuristicClass === detectorClass) return 'high'
+  if (heuristicClass !== 'unknown' || detectorClass !== 'unknown') return 'medium'
+  return 'low'
+}
+
+function detectSpriteSheet(sheetPath) {
+  const sheetSize = readPngDimensions(sheetPath)
+  return {
+    class_name: 'unknown',
+    metrics: {
+      detection_source: 'sheet_fallback',
+      width: sheetSize.width,
+      height: sheetSize.height,
+      reason: 'No representative atlas frame was available for silhouette detection.',
+    },
+  }
+}
+
+function detectSpriteFrame(sheetPath, frame) {
+  const source = PNG.sync.read(fs.readFileSync(sheetPath))
+  const bounds = { minX: frame.w, minY: frame.h, maxX: -1, maxY: -1 }
+  const buckets = new Set()
+  let alphaPixels = 0
+  let lowerMass = 0
+  let topMass = 0
+  let edgePixels = 0
+
+  for (let y = 0; y < frame.h; y += 1) {
+    for (let x = 0; x < frame.w; x += 1) {
+      const sourceIndex = ((frame.y + y) * source.width + frame.x + x) * 4
+      const alpha = source.data[sourceIndex + 3]
+      if (alpha <= 12) continue
+
+      alphaPixels += 1
+      bounds.minX = Math.min(bounds.minX, x)
+      bounds.minY = Math.min(bounds.minY, y)
+      bounds.maxX = Math.max(bounds.maxX, x)
+      bounds.maxY = Math.max(bounds.maxY, y)
+      if (y >= frame.h * 0.58) lowerMass += 1
+      if (y <= frame.h * 0.28) topMass += 1
+      if (x <= 1 || y <= 1 || x >= frame.w - 2 || y >= frame.h - 2) edgePixels += 1
+
+      const r = source.data[sourceIndex]
+      const g = source.data[sourceIndex + 1]
+      const b = source.data[sourceIndex + 2]
+      buckets.add(`${r >> 5}:${g >> 5}:${b >> 5}`)
+    }
+  }
+
+  if (alphaPixels === 0 || bounds.maxX < bounds.minX || bounds.maxY < bounds.minY) {
+    return {
+      class_name: 'unknown',
+      metrics: {
+        detection_source: 'representative_frame_alpha',
+        width: frame.w,
+        height: frame.h,
+        alpha_pixels: alphaPixels,
+        reason: 'No opaque silhouette pixels were found.',
+      },
+    }
+  }
+
+  const bboxWidth = bounds.maxX - bounds.minX + 1
+  const bboxHeight = bounds.maxY - bounds.minY + 1
+  const bboxArea = bboxWidth * bboxHeight
+  const aspectRatio = Number((bboxWidth / bboxHeight).toFixed(3))
+  const fillRatio = Number((alphaPixels / bboxArea).toFixed(3))
+  const lowerMassRatio = Number((lowerMass / alphaPixels).toFixed(3))
+  const topMassRatio = Number((topMass / alphaPixels).toFixed(3))
+  const edgeTouchRatio = Number((edgePixels / alphaPixels).toFixed(3))
+  const colorBucketCount = buckets.size
+  let className = 'unknown'
+
+  if (edgeTouchRatio > 0.18 || fillRatio > 0.62) {
+    className = 'structure'
+  } else if (aspectRatio >= 0.45 && aspectRatio <= 1.25 && lowerMassRatio >= 0.3 && topMassRatio >= 0.08) {
+    className = 'humanoid'
+  } else if (aspectRatio > 1.25 || lowerMassRatio > 0.55) {
+    className = 'creature'
+  } else if (colorBucketCount <= 7 && fillRatio > 0.42) {
+    className = 'mech'
+  }
+
+  return {
+    class_name: className,
+    metrics: {
+      detection_source: 'representative_frame_alpha',
+      width: frame.w,
+      height: frame.h,
+      bbox_width: bboxWidth,
+      bbox_height: bboxHeight,
+      alpha_pixels: alphaPixels,
+      aspect_ratio: aspectRatio,
+      fill_ratio: fillRatio,
+      lower_mass_ratio: lowerMassRatio,
+      top_mass_ratio: topMassRatio,
+      edge_touch_ratio: edgeTouchRatio,
+      color_bucket_count: colorBucketCount,
+    },
+  }
 }
 
 function readPngDimensions(filePath) {
@@ -416,7 +654,8 @@ function buildStagedManifest(packagePath, stagedCandidates) {
       return {
         character_id: `duelyst_${candidate.unit_id}`,
         display_name: `Duelyst ${candidate.display_name}`,
-        class_type: 'duelyst_stage',
+        class_type: candidate.labels?.training_role || 'duelyst_stage',
+        labels: candidate.labels,
         source_folder: packagePath,
         canvas_size: { width: frameSize.width, height: frameSize.height },
         directions: {

@@ -103,8 +103,31 @@ def prepare_duelyst_sheet_dataset(private_manifest: Path, output_root: Path, roo
         character_dir.mkdir(parents=True, exist_ok=True)
         target_image = character_dir / f"{character_id}_0.png"
         target_mask = character_dir / f"{character_id}_0_mask.png"
+        target_label = character_dir / "label.json"
+        labels = character.get("labels", {})
         shutil.copy2(source, target_image)
         write_alpha_mask(source, target_mask)
+        target_label.write_text(
+            json.dumps(
+                {
+                    "character_id": character_id,
+                    "display_name": character.get("display_name", character_id),
+                    "source_manifest": normalize(private_manifest),
+                    "representative_frame": frame_path,
+                    "image": normalize(target_image),
+                    "alpha_mask": normalize(target_mask),
+                    "labels": labels,
+                    "body_class": labels.get("body_class"),
+                    "detector_class": labels.get("detector_class"),
+                    "training_role": labels.get("training_role"),
+                    "needs_manual_review": labels.get("needs_manual_review", True),
+                    "note": "Local Duelyst review label. This is detector/metadata triage, not APES ground-truth correspondence.",
+                },
+                indent=2,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
         copied += 1
 
     return {

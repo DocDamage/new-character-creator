@@ -9,7 +9,7 @@ Local Vite + React + TypeScript app for building a kitbash-oriented pixel charac
 - Local dev server has been verified at `http://127.0.0.1:8002/`.
 - APES GPU preflight passes in `apes-gpu-modern` with CUDA PyTorch, PyTorch3D, PyG extensions, OpenCV, checkpoints, and okaysamurai test data available.
 - The only APES preflight warning is that upstream APES originally targeted Python 3.7 while the working local environment uses Python 3.10.
-- Duelyst package unpacking and staging has been verified against `assets/Duelyst-Unit-Animations.unitypackage`: 7145 assets scanned, 696 sprite sheets found, and staged candidates open in the workstation.
+- Duelyst package unpacking, detector labeling, and staging has been verified against `assets/Duelyst-Unit-Animations.unitypackage`: 7145 assets scanned, 696 sprite sheets labeled, and 64 staged candidates prepared for review.
 
 ## Commands
 
@@ -117,7 +117,7 @@ data/cache/duelyst-package/
 data/cache/duelyst-stage/
 ```
 
-The manifest records candidate unit sheets, staged review frames, source paths, and warnings. It is meant for local review, APES extraction, and private experimentation only; the extracted assets and private manifest are not committed.
+The manifest records every candidate unit sheet, staged review frames, source paths, warnings, and detector labels. The labels combine Duelyst path/name/animation metadata with a lightweight alpha-silhouette detector that measures the representative crop's bounds, fill, mass distribution, edge contact, and color footprint. Those labels are meant for filtering and review triage; they are not APES ground-truth body-part correspondence labels. The extracted assets and private manifest are not committed.
 
 ## Training and fine-tuning path
 
@@ -138,7 +138,7 @@ Current local inventory:
 - Okay Samurai supervised APES data: 3000 train pairs, 700 val pairs, 900 test pairs, with split HDF5 files present.
 - Creative Flow supervised corrnet data: 8058 train pairs, 1165 val pairs, 1078 test pairs.
 - Okay Samurai sheet runtime data: 20 character folders for APES inference/preflight.
-- Duelyst private runtime data: 64 staged character folders generated from the private manifest.
+- Duelyst private runtime data: 64 staged character folders generated from the private manifest, each with a copied frame, alpha mask, and `label.json`.
 
 The generated `finetune_manifest.json` includes ready-to-run commands for:
 
@@ -147,7 +147,7 @@ The generated `finetune_manifest.json` includes ready-to-run commands for:
 - Okay Samurai fullnet fine-tuning from existing checkpoints
 - Duelyst APES pseudo-label/review preparation
 
-Duelyst staged frames do not include ground-truth correspondence labels, so they are not supervised training data by themselves. Use them for APES inference, review, and pseudo-label promotion before mixing them into supervised fine-tuning.
+Duelyst staged frames now include detector/metadata labels such as `source_family`, `body_class`, `detector_class`, `combat_role`, `training_role`, `animation_labels`, and detector metrics. They still do not include ground-truth correspondence labels, so use them for APES inference, review, and pseudo-label promotion before mixing them into supervised fine-tuning.
 
 ## APES bridge
 
