@@ -183,6 +183,14 @@ This writes ignored job configs under `data/apes/input/` plus `duelyst_job_batch
 npm run apes:run-duelyst-jobs
 ```
 
+Summarize completed local APES outputs for review:
+
+```powershell
+npm run apes:summarize-outputs
+```
+
+That writes `data/apes/output/apes_output_inventory.json` with report counts, labels, missing expected labels, low-confidence masks, warnings, and review state.
+
 Current Duelyst staged jobs use real staged idle atlas frames when available and only duplicate a representative crop for one-frame sources. The APES runtime can execute that path; the first verified multi-frame Duelyst job produced creator-sized `head`, `torso`, and `front_arm` review masks. Treat those as review signals, not training labels, until manually checked and promoted.
 
 ## Notes For Future Rebuilds

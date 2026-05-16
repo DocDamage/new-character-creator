@@ -35,7 +35,16 @@ function localAssetToolsPlugin() {
           }
 
           const body = await readJsonBody(req)
-          const action = body.action === 'preflight' ? 'preflight' : body.action === 'run-job' ? 'run-job' : body.action === 'generate-harness' ? 'generate-harness' : null
+          const action =
+            body.action === 'preflight'
+              ? 'preflight'
+              : body.action === 'run-job'
+                ? 'run-job'
+                : body.action === 'generate-harness'
+                  ? 'generate-harness'
+                  : body.action === 'summarize-outputs'
+                    ? 'summarize-outputs'
+                    : null
           const pythonPath = typeof body.pythonPath === 'string' && body.pythonPath.trim() ? body.pythonPath.trim() : process.execPath
           const allowPlaceholder = body.allowPlaceholder === true
           const job = body.job && typeof body.job === 'object' ? body.job : null
@@ -69,6 +78,8 @@ function localAssetToolsPlugin() {
               ? [path.resolve(bridgeRoot, 'check_apes_env.py'), '--json']
               : action === 'generate-harness'
                 ? [path.resolve(appRoot, 'tools', 'generate-apes-qa-harness.js')]
+                : action === 'summarize-outputs'
+                  ? [path.resolve(bridgeRoot, 'summarize_apes_outputs.py')]
                 : [
                     path.resolve(bridgeRoot, 'run_apes_extract.py'),
                     tempJobPath!,
@@ -85,6 +96,7 @@ function localAssetToolsPlugin() {
           let preflight: unknown = null
           let status: unknown = null
           let report: unknown = null
+          let inventory: unknown = null
           if (action === 'preflight' && command.stdout) {
             try {
               preflight = JSON.parse(command.stdout)
@@ -123,6 +135,15 @@ function localAssetToolsPlugin() {
             }
           }
 
+          if (action === 'summarize-outputs') {
+            const inventoryPath = path.resolve(outputRoot, 'apes_output_inventory.json')
+            try {
+              inventory = JSON.parse(await fs.promises.readFile(inventoryPath, 'utf8'))
+            } catch (error) {
+              void error
+            }
+          }
+
           const payload = {
             action,
             pythonPath,
@@ -132,7 +153,8 @@ function localAssetToolsPlugin() {
             preflight,
             status,
             report,
-            outputDir: action === 'run-job' ? outputDir : action === 'generate-harness' ? path.resolve(appRoot, 'public', 'data', 'qa') : null,
+            inventory,
+            outputDir: action === 'run-job' ? outputDir : action === 'generate-harness' ? path.resolve(appRoot, 'public', 'data', 'qa') : action === 'summarize-outputs' ? outputRoot : null,
           }
 
           res.statusCode = command.status === 0 ? 200 : 500

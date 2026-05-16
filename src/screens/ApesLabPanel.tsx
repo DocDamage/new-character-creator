@@ -11,6 +11,7 @@ type ApesLabPanelProps = {
   runApesPreflight: () => Promise<void>
   runApesJob: (jobId: string) => Promise<void>
   runPreparedDuelystJobs: () => Promise<void>
+  summarizeApesOutputs: () => Promise<void>
   generateApesQaHarness: () => Promise<void>
   loadApesQaHarnessReport: () => Promise<void>
   clearApesQaHarnessParts: () => void
@@ -41,6 +42,7 @@ export function ApesLabPanel({
   runApesPreflight,
   runApesJob,
   runPreparedDuelystJobs,
+  summarizeApesOutputs,
   generateApesQaHarness,
   loadApesQaHarnessReport,
   clearApesQaHarnessParts,
@@ -199,6 +201,7 @@ export function ApesLabPanel({
         <button data-testid="run-prepared-duelyst-apes-jobs" onClick={() => void runPreparedDuelystJobs()} disabled={apesBridgeBusy || !import.meta.env.DEV || preparedDuelystJobs.length === 0}>
           Run Duelyst queue ({preparedDuelystJobs.length})
         </button>
+        <button data-testid="summarize-apes-outputs" onClick={() => void summarizeApesOutputs()} disabled={apesBridgeBusy || !import.meta.env.DEV}>Inventory APES outputs</button>
         <button data-testid="generate-apes-qa-harness" onClick={() => void generateApesQaHarness()} disabled={apesBridgeBusy || !import.meta.env.DEV}>Generate local QA harness</button>
         <button data-testid="clear-apes-qa-harness-parts" onClick={clearApesQaHarnessParts} disabled={qaHarnessParts.length === 0}>Clear QA harness parts</button>
         <button data-testid="load-apes-qa-report" onClick={() => void loadApesQaHarnessReport()}>

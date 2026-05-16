@@ -41,7 +41,7 @@ import { FastCreatorPanel } from './screens/FastCreatorPanel'
 import { PartLibraryPanel } from './screens/PartLibraryPanel'
 import { SettingsPanel } from './screens/SettingsPanel'
 import { WorkstationPanel } from './screens/WorkstationPanel'
-import type { AnimationName, ApesBridgeStatus, ApesJob, ApesPreflightReport, ApesReport, AssetManifest, ComposerLayerSettings, Direction, DuelystPackageAudit, ExtractedPart, ExtractionMethod, PaletteRules, PartLabel, Rect } from './types'
+import type { AnimationName, ApesBridgeStatus, ApesJob, ApesOutputInventory, ApesPreflightReport, ApesReport, AssetManifest, ComposerLayerSettings, Direction, DuelystPackageAudit, ExtractedPart, ExtractionMethod, PaletteRules, PartLabel, Rect } from './types'
 import {
   buildExportManifest,
   buildAsepriteReference,
@@ -81,7 +81,7 @@ const apesCoreLabels: PartLabel[] = ['head', 'torso', 'front_arm', 'back_arm', '
 const defaultPaletteRules: Omit<PaletteRules, 'team_color'> = { hue_shift: 0, saturation: 100, brightness: 100 }
 
 type LocalApesToolPayload = {
-  action: 'preflight' | 'run-job' | 'generate-harness'
+  action: 'preflight' | 'run-job' | 'generate-harness' | 'summarize-outputs'
   pythonPath: string
   statusCode: number
   stdout: string
@@ -89,6 +89,7 @@ type LocalApesToolPayload = {
   preflight?: ApesPreflightReport | null
   status?: ApesBridgeStatus | null
   report?: ApesReport | null
+  inventory?: ApesOutputInventory | null
   outputDir?: string | null
   error?: string
 }
@@ -673,6 +674,41 @@ function App() {
       setApesBridgeStatus(`Generated and imported the local APES QA harness with ${payload.report.masks.length} sample mask(s).`)
     } catch (error) {
       setApesBridgeStatus(`APES QA harness generation failed. ${error instanceof Error ? error.message : String(error)}`)
+    } finally {
+      setApesBridgeBusy(false)
+    }
+  }
+
+  async function summarizeApesOutputs() {
+    if (!import.meta.env.DEV) {
+      setApesBridgeStatus('APES output inventory only works through the local dev server. Start the app with npm run dev on the APES machine.')
+      return
+    }
+
+    setApesBridgeBusy(true)
+    setApesBridgeStatus('Scanning APES output reports...')
+    try {
+      const response = await fetch('/__local/apes-tools', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'summarize-outputs', pythonPath: apesPythonPath.trim() }),
+      })
+      const payload = await response.json() as LocalApesToolPayload
+      if (!response.ok) {
+        throw new Error(payload.stderr || payload.error || `APES output inventory failed with status ${payload.statusCode}`)
+      }
+
+      const inventory = payload.inventory
+      if (!inventory) {
+        setApesBridgeStatus('APES output inventory completed, but the inventory file could not be loaded.')
+        return
+      }
+
+      setApesBridgeStatus(
+        `Inventoried ${inventory.report_count} APES report(s): ${inventory.summary.needs_review} need review, ${inventory.summary.empty_reports} empty, ${inventory.summary.reviewed_reports} fully reviewed. Wrote ${inventory.output_root}/apes_output_inventory.json.`,
+      )
+    } catch (error) {
+      setApesBridgeStatus(`APES output inventory failed. ${error instanceof Error ? error.message : String(error)}`)
     } finally {
       setApesBridgeBusy(false)
     }
@@ -1397,6 +1433,7 @@ function App() {
               runApesPreflight={runApesPreflight}
               runApesJob={runApesJob}
               runPreparedDuelystJobs={runPreparedDuelystJobs}
+              summarizeApesOutputs={summarizeApesOutputs}
               generateApesQaHarness={generateApesQaHarness}
               loadApesQaHarnessReport={loadApesQaHarnessReport}
               clearApesQaHarnessParts={clearApesQaHarnessParts}

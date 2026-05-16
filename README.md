@@ -21,6 +21,7 @@ npm run duelyst:private-manifest
 npm run apes:prepare-finetune
 npm run apes:prepare-duelyst-jobs
 npm run apes:run-duelyst-jobs
+npm run apes:summarize-outputs
 npm run export:character -- 1-warrior-woman
 npm run dev -- --host 127.0.0.1 --port 8002 --strictPort
 npm run build
@@ -156,7 +157,7 @@ The generated `finetune_manifest.json` includes ready-to-run commands for:
 
 Duelyst staged frames now include detector/metadata labels such as `source_family`, `body_class`, `detector_class`, `combat_role`, `training_role`, `animation_labels`, and detector metrics. In Asset Audit, the default Duelyst filters show staged APES-review candidates and the `Queue APES jobs` action creates persisted APES Lab jobs for the filtered staged set. APES Lab includes `Run Duelyst queue` to run the prepared Duelyst jobs one at a time. The queue now uses real staged idle atlas frames when available and only falls back to duplication for one-frame sources. These labels still are not ground-truth correspondence labels, so run/review APES outputs and promote accepted masks before mixing them into supervised fine-tuning.
 
-For a repeatable command-line queue, run `npm run apes:prepare-duelyst-jobs`. It writes ignored job configs under `data/apes/input/`. `npm run apes:run-duelyst-jobs` executes that batch through the APES bridge.
+For a repeatable command-line queue, run `npm run apes:prepare-duelyst-jobs`. It writes ignored job configs under `data/apes/input/`. `npm run apes:run-duelyst-jobs` executes that batch through the APES bridge. `npm run apes:summarize-outputs` scans completed ignored reports and writes `data/apes/output/apes_output_inventory.json` for review triage.
 
 ## APES bridge
 
@@ -171,6 +172,7 @@ data/apes/output/
 
 - real bridge mode for a CUDA-capable APES machine: prepares a temporary APES dataset from job frames, runs the vendored `inference_os.py`, and writes `status.json`, `preflight.json`, and `apes_report.json`
 - placeholder mode for local harness work on this machine when `--allow-placeholder` is explicitly enabled
+- output inventory mode: summarizes report status, labels, missing expected labels, low-confidence masks, warnings, and review state across `data/apes/output`
 
 The Windows APES bridge includes compatibility fixes for the modern `apes-gpu-modern` environment: Vite `/@fs/` path resolution, absolute runtime output paths, 256x256 APES runtime normalization, `torch_batch_svd` fallback via `torch.linalg.svd`, `torch.symeig` replacement with `torch.linalg.eigh`, current scikit-image `slic` arguments, and Windows-safe APES character path handling. `tensorboard` is required because APES imports training utilities during inference startup.
 

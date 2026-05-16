@@ -115,6 +115,14 @@ Important: Duelyst staged frames are private local inputs. Their labels are prod
 
 `npm run apes:prepare-duelyst-jobs` writes ignored APES job JSON files for the staged APES-review Duelyst candidates. `npm run apes:run-duelyst-jobs` runs those jobs immediately. Current staged Duelyst jobs use real staged idle atlas frames when available and only duplicate a representative crop for one-frame sources. APES may still complete with an empty report when no moving parts can be selected; that empty report is expected for some static or low-motion inputs and is not an environment failure.
 
+After one or more APES jobs run, summarize the ignored local output folder with:
+
+```text
+npm run apes:summarize-outputs
+```
+
+That writes `data/apes/output/apes_output_inventory.json` with report counts, mask labels, missing expected labels, confidence ranges, warning counts, and review state. The APES Lab also exposes this through `Inventory APES outputs` when the app is running under `npm run dev`.
+
 Current quality note: the first verified multi-frame Duelyst APES job produced creator-sized `head`, `torso`, and `front_arm` review masks, but missed other requested labels. Treat APES output as review material, not accepted training labels, until masks are manually checked and promoted.
 
 The app treats APES as a core extraction path, not a side experiment: every report includes provenance, semantic labels, review status, warnings, and editable mask paths.

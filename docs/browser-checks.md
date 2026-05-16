@@ -35,6 +35,7 @@ Latest verified local app state:
 - Queued Duelyst APES jobs persist across reloads and APES Lab exposes `Run Duelyst queue` for prepared Duelyst jobs
 - CLI Duelyst APES queue writes 60 ignored jobs with `npm run apes:prepare-duelyst-jobs`
 - Real APES execution reaches vendored network/deformer on the RTX 3060; multi-frame Duelyst idle jobs can produce creator-sized review masks
+- APES Lab exposes `Inventory APES outputs`, backed by `npm run apes:summarize-outputs`, to summarize completed local reports for review triage
 - Fine-tune prep writes `data/training/apes_finetune/finetune_manifest.json` and 64 Duelyst review folders
 
 ## Export Panel

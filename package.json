@@ -12,6 +12,7 @@
     "apes:prepare-finetune": "micromamba run -n apes-gpu-modern python tools/apes_bridge/prepare_finetune_data.py",
     "apes:prepare-duelyst-jobs": "micromamba run -n apes-gpu-modern python tools/apes_bridge/prepare_duelyst_apes_jobs.py",
     "apes:run-duelyst-jobs": "micromamba run -n apes-gpu-modern python tools/apes_bridge/prepare_duelyst_apes_jobs.py --run",
+    "apes:summarize-outputs": "micromamba run -n apes-gpu-modern python tools/apes_bridge/summarize_apes_outputs.py",
     "qa:apes-harness": "node tools/generate-apes-qa-harness.js",
     "test:browser": "playwright test",
     "test:browser:headed": "playwright test --headed",

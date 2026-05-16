@@ -237,6 +237,39 @@ export type ApesReport = {
   warnings: string[]
 }
 
+export type ApesOutputInventory = {
+  generated_at: string
+  output_root: string
+  input_root: string
+  report_count: number
+  summary: {
+    complete_reports: number
+    empty_reports: number
+    needs_review: number
+    reviewed_reports: number
+    label_counts: Partial<Record<PartLabel, number>> & Record<string, number | undefined>
+  }
+  reports: Array<{
+    job_id: string
+    status: string
+    character_id: string | null
+    output_dir: string
+    report_path: string
+    input_job_path: string | null
+    mask_count: number
+    labels: string[]
+    missing_labels: string[]
+    low_confidence_labels: string[]
+    average_confidence: number | null
+    min_confidence: number | null
+    reviewed_count: number
+    review_state: 'empty' | 'reviewed' | 'unreviewed' | 'mixed'
+    warning_count: number
+    warnings: string[]
+    needs_review: boolean
+  }>
+}
+
 export type KitbashLayer = {
   label: PartLabel
   source_character: string
