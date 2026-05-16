@@ -37,13 +37,13 @@ class TestData(Dataset):
         self.pairs = list(combinations(np.arange(self.num_frame), 2))
         self.img_list, self.mask_list, self.slic_list, self.src_pixel_group_all = [], [], [], []
         for i in range(self.num_frame):
-            char_name = root.split("/")[-1]
+            char_name = os.path.basename(os.path.normpath(root))
             img_i = cv2.imread(os.path.join(root, f"{char_name}_{i}.png"))
             mask_i = cv2.imread(os.path.join(root, f"{char_name}_{i}_mask.png"), 0)
             mask_i = remove_noise(mask_i)
             mask_i = (mask_i > 50)
             slic_i = segmentation.slic(img_i, n_segments=50, mask=mask_i, start_label=1, min_size_factor=0.5,
-                                       enforce_connectivity=False, compactness=35, max_iter=200, sigma=0)
+                                       enforce_connectivity=False, compactness=35, max_num_iter=200, sigma=0)
             slic_i -= 1
             # img_slic = segmentation.mark_boundaries(img_i, slic_i)
             # cv2.imshow("img", img_slic)

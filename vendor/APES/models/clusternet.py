@@ -66,7 +66,7 @@ class TransNet(nn.Module):
 
 
 def sync_motion_seg(z_mat: torch.Tensor, force_d: int = -1, t: float = -np.inf, cut_thres: float = 0.1):
-    e, V = torch.symeig(z_mat, eigenvectors=True)
+    e, V = torch.linalg.eigh(z_mat, UPLO="U")
     if force_d != -1:
         d = force_d
     else:

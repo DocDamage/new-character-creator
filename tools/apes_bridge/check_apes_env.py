@@ -21,6 +21,7 @@ REQUIRED_MODULES = (
     "numpy",
     "torch_cluster",
     "torch_scatter",
+    "tensorboard",
     "tqdm",
 )
 
@@ -45,7 +46,12 @@ def _find_char_dirs(test_folder: Path) -> list[Path]:
 
 def resolve_repo_path(raw_path: str | Path, repo_root: Path | None = None) -> Path:
     repo = repo_root or _repo_root()
-    path = Path(raw_path)
+    raw = str(raw_path)
+    if raw.startswith("/@fs/"):
+        return Path(raw.removeprefix("/@fs/"))
+    if raw.startswith("/") and not Path(raw).is_absolute():
+        return (repo / raw.removeprefix("/")).resolve()
+    path = Path(raw)
     if path.is_absolute():
         return path
     return (repo / path).resolve()

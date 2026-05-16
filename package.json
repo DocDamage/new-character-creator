@@ -10,6 +10,8 @@
     "export:character": "node tools/export-character.js",
     "duelyst:private-manifest": "node tools/build-duelyst-private-manifest.js",
     "apes:prepare-finetune": "micromamba run -n apes-gpu-modern python tools/apes_bridge/prepare_finetune_data.py",
+    "apes:prepare-duelyst-jobs": "micromamba run -n apes-gpu-modern python tools/apes_bridge/prepare_duelyst_apes_jobs.py",
+    "apes:run-duelyst-jobs": "micromamba run -n apes-gpu-modern python tools/apes_bridge/prepare_duelyst_apes_jobs.py --run",
     "qa:apes-harness": "node tools/generate-apes-qa-harness.js",
     "test:browser": "playwright test",
     "test:browser:headed": "playwright test --headed",

@@ -42,6 +42,7 @@ The preflight currently verifies:
 - the active Python interpreter and required import modules are present
 - PyTorch reports CUDA availability
 - `conda`/`mamba` and `nvidia-smi` availability in `PATH`
+- `tensorboard`, which APES imports through its training utilities even during inference startup
 
 On the home GPU PC, the current working environment is `apes-gpu-modern`. It has been verified with:
 
@@ -54,6 +55,7 @@ On the home GPU PC, the current working environment is `apes-gpu-modern`. It has
 - `opencv-python-headless 4.10.0.84`
 - `numpy 1.26.4`
 - CUDA available on the RTX 3060
+- TensorBoard `2.20.0`
 
 The detailed rebuild recipe is in `docs/apes-gpu-rebuild.md`.
 
@@ -66,6 +68,13 @@ For older CUDA-capable setup attempts, these helper files remain available:
 
 The current known-good setup is newer than the original APES target and is documented in `docs/apes-gpu-rebuild.md`.
 
+The vendored APES runtime has compatibility shims for the modern Windows GPU environment:
+
+- `torch_batch_svd` is optional; APES falls back to `torch.linalg.svd` when the native extension is unavailable.
+- Removed `torch.symeig` calls are routed through `torch.linalg.eigh`.
+- The inference loader uses Windows-safe path basename handling.
+- The bridge normalizes runtime APES frames to 256x256, which the vendored model expects.
+
 ## Fine-tuning data preparation
 
 Run this from the repo root:
@@ -73,6 +82,7 @@ Run this from the repo root:
 ```text
 npm run duelyst:private-manifest -- --stage-count 64
 npm run apes:prepare-finetune
+npm run apes:prepare-duelyst-jobs
 ```
 
 The prep command writes:
@@ -80,6 +90,7 @@ The prep command writes:
 ```text
 data/training/apes_finetune/finetune_manifest.json
 data/training/apes_finetune/duelyst_sheets/
+data/apes/input/duelyst_job_batch.json
 ```
 
 Each Duelyst staged character folder contains:
@@ -96,6 +107,8 @@ The manifest inventories the local supervised datasets and emits quoted Windows-
 - Duelyst pseudo-label review using the private staged sheet dataset
 
 Important: Duelyst staged frames are private local inputs. Their labels are produced from Duelyst path/name/animation metadata plus a lightweight alpha-silhouette detector, not from human-reviewed APES correspondence labels. They should be used for filtering, inference, reviewed APES masks, and pseudo-label generation before being treated as supervised training examples.
+
+`npm run apes:prepare-duelyst-jobs` writes ignored APES job JSON files for the staged APES-review Duelyst candidates. `npm run apes:run-duelyst-jobs` runs those jobs immediately. Current staged Duelyst jobs duplicate a single representative crop to satisfy APES' two-frame minimum; APES may complete with an empty report when no moving parts can be selected. That empty report is expected for some static crops and is not an environment failure.
 
 The app treats APES as a core extraction path, not a side experiment: every report includes provenance, semantic labels, review status, warnings, and editable mask paths.
 

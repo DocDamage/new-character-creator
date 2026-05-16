@@ -152,6 +152,20 @@ Expected result:
 - `character_count: 64`
 - `torch.cuda_available: true`
 
+Prepare command-line Duelyst APES jobs from the same private staged manifest:
+
+```powershell
+npm run apes:prepare-duelyst-jobs
+```
+
+This writes ignored job configs under `data/apes/input/` plus `duelyst_job_batch.json`. To execute the prepared jobs through the local bridge:
+
+```powershell
+npm run apes:run-duelyst-jobs
+```
+
+Current Duelyst staged jobs duplicate a single static crop to satisfy APES' two-frame minimum. The APES runtime can now execute that path, but static duplicated crops may produce empty review reports because APES cannot select moving parts from identical frames. Treat those as review signals, not training labels.
+
 ## Notes For Future Rebuilds
 
 - Do not install `pytorch3d` from conda on Windows for this env; it can silently drag the runtime back to CPU.
@@ -159,3 +173,5 @@ Expected result:
 - Use VS 2022 Build Tools for native extension builds. VS 2026 is too new for this CUDA/PyTorch3D path.
 - Avoid installing both conda OpenCV and pip OpenCV in the same env.
 - Re-pin `numpy==1.26.4` after pip commands that may upgrade it.
+- Install `tensorboard`; APES imports it through training utilities during inference startup.
+- `torch_batch_svd` is not required in this Windows env because the vendored APES runtime falls back to `torch.linalg.svd`.

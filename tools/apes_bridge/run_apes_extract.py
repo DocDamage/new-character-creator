@@ -149,7 +149,7 @@ def prepare_runtime_dataset(job: dict[str, Any], runtime_dir: Path) -> Path:
             raise FileNotFoundError(f"Missing APES input frame: {normalize_path(frame_path)}")
 
         with Image.open(frame_path) as source:
-            image = source.convert("RGBA")
+            image = source.convert("RGBA").resize((256, 256), Image.Resampling.NEAREST)
             image.convert("RGB").save(char_dir / f"{char_name}_{index}.png")
 
             alpha = image.getchannel("A")
@@ -323,6 +323,25 @@ def build_report_from_vendor_output(job: dict[str, Any], output_dir: Path, vendo
     }
 
 
+def is_empty_part_selection_failure(error: Exception) -> bool:
+    message = str(error)
+    return "number of total parts: 0" in message or "Invalid input for linprog" in message
+
+
+def build_empty_part_report(job: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "job_id": job["job_id"],
+        "status": "complete",
+        "masks": [],
+        "semantic_mapping": {label: label for label in job.get("output_labels", [])},
+        "warnings": [
+            "APES inference ran, but the part selector produced zero accepted parts.",
+            "This commonly happens for Duelyst staged jobs because the current queue duplicates one static crop to satisfy APES' two-frame minimum.",
+            "Use a true multi-frame Duelyst animation source or manually review/extract parts from the staged crop.",
+        ],
+    }
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="Run the APES extraction bridge for one job config.")
     parser.add_argument("job", type=Path, help="Path to a job JSON file produced by the creator app.")
@@ -336,6 +355,8 @@ def main() -> None:
 
     job = read_job(args.job)
     output_dir = args.output or Path("data") / "apes" / "output" / job["job_id"]
+    if not output_dir.is_absolute():
+        output_dir = repo_root() / output_dir
     output_dir.mkdir(parents=True, exist_ok=True)
     runtime_dir = output_dir / "runtime"
     runtime_dir.mkdir(parents=True, exist_ok=True)
@@ -370,6 +391,16 @@ def main() -> None:
             logs.extend(vendor_logs)
             report = build_report_from_vendor_output(job, output_dir, vendor_output_dir)
         except Exception as exc:
+            if is_empty_part_selection_failure(exc):
+                logs.append("APES ran but selected zero usable parts for this job.")
+                logs.append(str(exc))
+                report = build_empty_part_report(job)
+                report_path = output_dir / "apes_report.json"
+                report_path.write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
+                logs.append(f"Wrote empty APES review report: {normalize_path(report_path)}")
+                write_status(output_dir, "complete", logs)
+                print(f"Wrote empty APES review report: {report_path}")
+                return
             logs.append("APES bridge execution failed.")
             write_status(output_dir, "failed", logs, failure_details=str(exc))
             raise SystemExit(str(exc))

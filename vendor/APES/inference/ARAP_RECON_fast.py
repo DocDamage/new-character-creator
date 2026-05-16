@@ -14,7 +14,12 @@ from pytorch3d.renderer import (
     TexturesUV
 )
 from pytorch3d.renderer.blending import BlendParams, hard_rgb_blend
-from torch_batch_svd import svd
+try:
+    from torch_batch_svd import svd
+except ModuleNotFoundError:
+    def svd(matrices):
+        u, s, vh = torch.linalg.svd(matrices, full_matrices=False)
+        return u, s, vh.transpose(-2, -1)
 
 RES_DIM = 256.0
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
