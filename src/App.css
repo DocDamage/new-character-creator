@@ -397,6 +397,18 @@ input {
   gap: 6px;
 }
 
+.checkbox-field {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.checkbox-field input {
+  width: 16px;
+  min-height: 16px;
+  accent-color: #f4c963;
+}
+
 .field.compact {
   min-width: 180px;
 }
@@ -526,13 +538,34 @@ input {
 
 .mask-tools {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: minmax(0, 1fr);
   gap: 8px;
 }
 
-.mask-tools .field,
-.mask-tools .primary {
-  grid-column: 1 / -1;
+.mask-tool-grid,
+.mask-action-grid,
+.mask-nudge-grid {
+  display: grid;
+  gap: 8px;
+}
+
+.mask-tool-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.mask-action-grid,
+.mask-nudge-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.mask-status {
+  margin: 0;
+  padding: 8px;
+  color: var(--text-muted);
+  background: #111821;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  font-size: 12px;
 }
 
 .batch-controls {
@@ -609,12 +642,39 @@ input {
 
 .audit-grid,
 .apes-summary,
+.apes-health-grid,
 .export-grid,
 .validation-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
   gap: 10px;
   margin-bottom: 14px;
+}
+
+.apes-health-grid article {
+  display: grid;
+  gap: 4px;
+  padding: 10px;
+  border-radius: 7px;
+  border: 1px solid var(--line);
+  background: var(--control);
+}
+
+.apes-health-grid article.pass {
+  border-color: rgba(108, 214, 143, 0.48);
+}
+
+.apes-health-grid article.warn {
+  border-color: rgba(241, 199, 102, 0.48);
+}
+
+.apes-health-grid strong {
+  color: var(--text-strong);
+}
+
+.apes-health-grid span {
+  color: var(--text-muted);
+  font-size: 12px;
 }
 
 .apes-config {
@@ -659,6 +719,104 @@ input {
   min-width: 0;
 }
 
+.apes-import textarea {
+  min-height: 180px;
+  padding: 10px;
+  resize: vertical;
+  color: var(--text);
+  background: #111821;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  font: 12px/1.45 var(--mono);
+}
+
+.export-status-card {
+  display: grid;
+  gap: 6px;
+  padding: 10px;
+  margin-bottom: 14px;
+  border: 1px solid rgba(108, 214, 143, 0.36);
+  border-radius: 7px;
+  background: rgba(18, 25, 34, 0.9);
+}
+
+.export-status-card strong {
+  color: var(--text-strong);
+}
+
+.export-status-card span {
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.settings-panel {
+  display: grid;
+  gap: 14px;
+}
+
+.settings-grid,
+.settings-actions {
+  display: grid;
+  gap: 10px;
+}
+
+.settings-grid {
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+}
+
+.settings-actions {
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+}
+
+.audit-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.audit-subheading {
+  margin-top: 18px;
+}
+
+.settings-card {
+  display: grid;
+  gap: 8px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: var(--control);
+}
+
+.settings-card strong {
+  color: var(--text-strong);
+}
+
+.settings-card.settings-card-warning {
+  border-color: rgba(241, 199, 102, 0.55);
+  background: rgba(241, 199, 102, 0.12);
+}
+
+.settings-card.settings-card-warning strong {
+  color: #f1c766;
+}
+
+.settings-card span {
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.settings-card code {
+  padding: 10px;
+  color: #cad4df;
+  background: #0c1118;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  font: 12px/1.5 var(--mono);
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
 .audit-grid strong {
   color: var(--accent);
   font-size: 24px;
@@ -684,6 +842,10 @@ input {
 .warning-list {
   max-height: 330px;
   overflow: auto;
+}
+
+.compact-warning-list {
+  max-height: none;
 }
 
 .warning-list p {
@@ -763,8 +925,80 @@ input {
   border-color: rgba(108, 214, 143, 0.48);
 }
 
+.job.running {
+  border-color: rgba(85, 170, 255, 0.48);
+}
+
 .job.failed {
   border-color: rgba(245, 117, 117, 0.58);
+}
+
+.duelyst-summary-grid {
+  margin-top: 14px;
+}
+
+.duelyst-candidate-list {
+  display: grid;
+  gap: 12px;
+}
+
+.duelyst-candidate {
+  display: grid;
+  grid-template-columns: 112px minmax(0, 1fr);
+  gap: 12px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: var(--control);
+}
+
+.duelyst-preview {
+  width: 112px;
+  height: 112px;
+  object-fit: contain;
+  image-rendering: pixelated;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: #0c1118;
+}
+
+.duelyst-copy {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+
+.duelyst-copy strong {
+  color: var(--text-strong);
+}
+
+.duelyst-copy p {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.duelyst-copy code {
+  padding: 10px;
+  color: #cad4df;
+  background: #0c1118;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  font: 12px/1.4 var(--mono);
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 720px) {
+  .duelyst-candidate {
+    grid-template-columns: 1fr;
+  }
+
+  .duelyst-preview {
+    width: 100%;
+    max-width: 180px;
+    height: auto;
+    aspect-ratio: 1;
+  }
 }
 
 .error-text {

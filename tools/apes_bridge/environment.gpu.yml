@@ -1,0 +1,30 @@
+name: apes-gpu
+channels:
+  - pytorch
+  - pytorch3d
+  - fvcore
+  - iopath
+  - conda-forge
+  - bottler
+dependencies:
+  - python=3.7
+  - pytorch=1.7.1
+  - torchvision=0.8.2
+  - cudatoolkit=11.0
+  - fvcore
+  - iopath
+  - nvidiacub
+  - pytorch3d
+  - pip
+  - pip:
+      - Pillow>=10.0.0
+      - scikit-image==0.18.2
+      - tqdm==4.62.3
+      - protobuf==3.20.0
+      - tensorboard==1.15.0
+      - scikit-learn==0.24.2
+      - h5py==3.6.0
+      - opencv-python==4.5.2.54
+      - kornia==0.5.11
+      - torch-cluster -f https://pytorch-geometric.com/whl/torch-1.7.1+cu110.html
+      - torch-scatter -f https://pytorch-geometric.com/whl/torch-1.7.1+cu110.html

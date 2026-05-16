@@ -5,9 +5,9 @@ import { fileURLToPath } from 'node:url';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const appRoot = path.resolve(__dirname, '..');
 const projectRoot = path.resolve(appRoot, '..');
-const assetRoot = path.resolve(projectRoot, 'Animated-Pixel-Pack-Characters-V1');
 const manifestDir = path.resolve(appRoot, 'public', 'data', 'manifests');
 const manifestPath = path.resolve(manifestDir, 'characters.json');
+const cliArgs = process.argv.slice(2);
 
 const directionAliases = new Map([
   ['north', 'north'],
@@ -41,6 +41,19 @@ const animationAliases = new Map([
 
 const canonicalDirections = ['north', 'south', 'east', 'west'];
 const expectedAnimations = ['idle', 'walk', 'running_jump', 'attack'];
+
+function getOptionValue(name) {
+  const inline = cliArgs.find((arg) => arg.startsWith(`${name}=`));
+  if (inline) return inline.slice(name.length + 1);
+  const index = cliArgs.findIndex((arg) => arg === name);
+  if (index >= 0) return cliArgs[index + 1];
+  return undefined;
+}
+
+function resolveAssetRoot() {
+  const override = getOptionValue('--asset-root') ?? process.env.PIXEL_CREATOR_ASSET_ROOT;
+  return path.resolve(override ?? path.resolve(projectRoot, 'Animated-Pixel-Pack-Characters-V1'));
+}
 
 function fsUrl(filePath) {
   return `/@fs/${filePath.replaceAll(path.sep, '/')}`;
@@ -115,7 +128,7 @@ function collectGifs(characterPath, rawAnimationName) {
     .map((entry) => fsUrl(path.resolve(gifRoot, entry.name)));
 }
 
-function buildCharacter(folderName) {
+function buildCharacter(folderName, assetRoot) {
   const characterPath = path.resolve(assetRoot, folderName);
   const warnings = [];
   const directions = {};
@@ -203,12 +216,19 @@ function buildCharacter(folderName) {
 }
 
 function main() {
+  if (cliArgs.includes('--help') || cliArgs.includes('-h')) {
+    console.log('Usage: node tools/index-assets.js [--asset-root <path>]');
+    console.log('Environment override: PIXEL_CREATOR_ASSET_ROOT=<path>');
+    return;
+  }
+
+  const assetRoot = resolveAssetRoot();
   if (!fs.existsSync(assetRoot)) {
     throw new Error(`Asset root not found: ${assetRoot}`);
   }
 
   fs.mkdirSync(manifestDir, { recursive: true });
-  const characters = listDirs(assetRoot).map(buildCharacter);
+  const characters = listDirs(assetRoot).map(name => buildCharacter(name, assetRoot));
   const manifest = {
     generated_at: new Date().toISOString(),
     asset_root: assetRoot,

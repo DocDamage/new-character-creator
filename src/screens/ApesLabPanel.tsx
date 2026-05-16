@@ -1,0 +1,326 @@
+import { useState } from 'react'
+import { apesQaHarnessJobId } from '../appPersistence'
+import { clampFrameInput } from '../inputUtils'
+import { humanoid64Preset } from '../presets'
+import type { AnimationName, ApesJob, ApesPreflightReport, ApesReport, CharacterManifest, Direction, ExtractedPart, PartLabel } from '../types'
+import { downloadJson, getFrames, slugLabel } from '../utils'
+
+type ApesLabPanelProps = {
+  jobs: ApesJob[]
+  createApesJob: () => void
+  runApesPreflight: () => Promise<void>
+  runApesJob: (jobId: string) => Promise<void>
+  generateApesQaHarness: () => Promise<void>
+  loadApesQaHarnessReport: () => Promise<void>
+  clearApesQaHarnessParts: () => void
+  selectedCharacter: CharacterManifest
+  partLibrary: ExtractedPart[]
+  apesAnimations: AnimationName[]
+  apesDirections: Direction[]
+  apesLabels: PartLabel[]
+  apesFrameRange: [number, number]
+  setApesFrameRange: (range: [number, number]) => void
+  toggleApesAnimation: (name: AnimationName) => void
+  toggleApesDirection: (name: Direction) => void
+  toggleApesLabel: (name: PartLabel) => void
+  importApesReport: (report: ApesReport) => void
+  apesPythonPath: string
+  apesAllowPlaceholder: boolean
+  apesBridgeBusy: boolean
+  apesBridgeStatus: string
+  apesPreflight: ApesPreflightReport | null
+  apesHarnessGeneratedAt: string
+  mainDirections: Direction[]
+  apesCoreLabels: PartLabel[]
+}
+
+export function ApesLabPanel({
+  jobs,
+  createApesJob,
+  runApesPreflight,
+  runApesJob,
+  generateApesQaHarness,
+  loadApesQaHarnessReport,
+  clearApesQaHarnessParts,
+  selectedCharacter,
+  partLibrary,
+  apesAnimations,
+  apesDirections,
+  apesLabels,
+  apesFrameRange,
+  setApesFrameRange,
+  toggleApesAnimation,
+  toggleApesDirection,
+  toggleApesLabel,
+  importApesReport,
+  apesPythonPath,
+  apesAllowPlaceholder,
+  apesBridgeBusy,
+  apesBridgeStatus,
+  apesPreflight,
+  apesHarnessGeneratedAt,
+  mainDirections,
+  apesCoreLabels,
+}: ApesLabPanelProps) {
+  const [reportText, setReportText] = useState('')
+  const apesParts = partLibrary.filter((part) => part.extraction_method === 'apes')
+  const reviewedApesParts = apesParts.filter((part) => part.reviewed)
+  const qaHarnessParts = apesParts.filter((part) => part.tags.includes('qa_harness') || part.part_id.startsWith(`${apesQaHarnessJobId}_`))
+  const expectedInputCount = apesAnimations.reduce(
+    (total, animation) =>
+      total +
+      apesDirections.reduce((directionTotal, direction) => {
+        const [start, end] = apesFrameRange[0] <= apesFrameRange[1] ? apesFrameRange : [apesFrameRange[1], apesFrameRange[0]]
+        return directionTotal + getFrames(selectedCharacter, animation, direction).filter((frame) => frame.index >= start && frame.index <= end).length
+      }, 0),
+    0,
+  )
+  const installedModules = apesPreflight ? Object.values(apesPreflight.modules).filter(Boolean).length : 0
+  const totalModules = apesPreflight ? Object.keys(apesPreflight.modules).length : 0
+  const envToolAvailable = Boolean(apesPreflight?.tools.conda || apesPreflight?.tools.mamba || apesPreflight?.tools.micromamba)
+  const harnessLabel = apesHarnessGeneratedAt ? new Date(apesHarnessGeneratedAt).toLocaleString() : 'not generated in this browser yet'
+  const preflightChecks = apesPreflight
+    ? [
+        { label: 'Python', value: apesPreflight.python.version, status: apesPreflight.python.version.startsWith('3.7') ? 'pass' : 'warn' },
+        { label: 'Torch', value: apesPreflight.torch.installed ? `torch ${apesPreflight.torch.version ?? 'installed'}` : 'missing', status: apesPreflight.torch.installed ? 'pass' : 'warn' },
+        { label: 'CUDA', value: apesPreflight.torch.cuda_available ? 'available' : 'unavailable', status: apesPreflight.torch.cuda_available ? 'pass' : 'warn' },
+        { label: 'Modules', value: `${installedModules}/${totalModules} installed`, status: installedModules === totalModules ? 'pass' : 'warn' },
+        { label: 'Dataset', value: apesPreflight.data.exists ? `${apesPreflight.data.character_count} chars` : 'missing', status: apesPreflight.data.exists && apesPreflight.data.character_count > 0 ? 'pass' : 'warn' },
+        { label: 'Env tools', value: envToolAvailable ? 'available' : 'missing', status: envToolAvailable ? 'pass' : 'warn' },
+        { label: 'nvidia-smi', value: apesPreflight.tools.nvidia_smi ? 'available' : 'missing', status: apesPreflight.tools.nvidia_smi ? 'pass' : 'warn' },
+      ]
+    : []
+
+  return (
+    <section className="panel wide-panel">
+      <div className="panel-heading">
+        <h3>APES Lab</h3>
+        <p>APES is a first-class extraction workflow: create jobs, review logs, import masks, and convert outputs into editable parts.</p>
+      </div>
+      <div className="apes-summary">
+        <article>
+          <strong>Input</strong>
+          <span>{selectedCharacter.character_id} / {apesAnimations.length} animation(s) / {apesDirections.length} direction(s)</span>
+        </article>
+        <article>
+          <strong>Outputs</strong>
+          <span>{apesLabels.map(slugLabel).join(', ') || 'select labels'}</span>
+        </article>
+        <article>
+          <strong>Storage</strong>
+          <span>data/apes/input and data/apes/output</span>
+        </article>
+        <article>
+          <strong>Readiness</strong>
+          <span>{selectedCharacter.source_quality_warnings.length === 0 ? 'source frames clean' : `${selectedCharacter.source_quality_warnings.length} source warning(s)`}</span>
+        </article>
+        <article>
+          <strong>Library</strong>
+          <span>{apesParts.length} APES part(s), {reviewedApesParts.length} reviewed</span>
+        </article>
+        <article>
+          <strong>Job size</strong>
+          <span>{expectedInputCount} frame reference(s), range {apesFrameRange[0]}-{apesFrameRange[1]}</span>
+        </article>
+        <article>
+          <strong>Runtime</strong>
+          <span>{apesPreflight ? (apesPreflight.ready ? 'preflight passed' : 'preflight failed') : 'preflight not run yet'}</span>
+        </article>
+        <article>
+          <strong>Interpreter</strong>
+          <span>{apesPythonPath.trim() || 'dev server default Python'}</span>
+        </article>
+        <article>
+          <strong>Harness</strong>
+          <span>{harnessLabel}</span>
+        </article>
+        <article>
+          <strong>Harness parts</strong>
+          <span>{qaHarnessParts.length} imported</span>
+        </article>
+      </div>
+
+      <div className="apes-config">
+        <fieldset>
+          <legend>Animations</legend>
+          {selectedCharacter.animation_names.map((name) => (
+            <label key={name}>
+              <input type="checkbox" checked={apesAnimations.includes(name)} onChange={() => toggleApesAnimation(name)} />
+              <span>{slugLabel(name)}</span>
+            </label>
+          ))}
+        </fieldset>
+        <fieldset>
+          <legend>Directions</legend>
+          {mainDirections.map((name) => (
+            <label key={name}>
+              <input type="checkbox" checked={apesDirections.includes(name)} onChange={() => toggleApesDirection(name)} />
+              <span>{name}</span>
+            </label>
+          ))}
+        </fieldset>
+        <fieldset>
+          <legend>APES labels</legend>
+          {apesCoreLabels.map((name) => (
+            <label key={name}>
+              <input type="checkbox" checked={apesLabels.includes(name)} onChange={() => toggleApesLabel(name)} />
+              <span>{slugLabel(name)}</span>
+            </label>
+          ))}
+        </fieldset>
+        <fieldset>
+          <legend>Frame range</legend>
+          <label>
+            <span>Start</span>
+            <input
+              type="text"
+              inputMode="numeric"
+              value={apesFrameRange[0]}
+              onChange={(event) => setApesFrameRange([clampFrameInput(event.target.value), apesFrameRange[1]])}
+            />
+          </label>
+          <label>
+            <span>End</span>
+            <input
+              type="text"
+              inputMode="numeric"
+              value={apesFrameRange[1]}
+              onChange={(event) => setApesFrameRange([apesFrameRange[0], clampFrameInput(event.target.value)])}
+            />
+          </label>
+        </fieldset>
+      </div>
+      <div className="status-strip">
+        <button className="primary" onClick={createApesJob}>Create APES job</button>
+        <button className="primary" onClick={() => void runApesPreflight()} disabled={apesBridgeBusy || !import.meta.env.DEV}>Run APES preflight</button>
+        <button onClick={() => void generateApesQaHarness()} disabled={apesBridgeBusy || !import.meta.env.DEV}>Generate local QA harness</button>
+        <button onClick={clearApesQaHarnessParts} disabled={qaHarnessParts.length === 0}>Clear QA harness parts</button>
+        <button onClick={() => void loadApesQaHarnessReport()}>
+          Load and replace QA sample report
+        </button>
+        <button
+          onClick={() => {
+            if (!reportText.trim()) return
+            try {
+              importApesReport(JSON.parse(reportText) as ApesReport)
+              setReportText('')
+            } catch (error) {
+              window.alert(`Could not import APES report: ${error instanceof Error ? error.message : String(error)}`)
+            }
+          }}
+          disabled={!reportText.trim()}
+        >
+          Import pasted JSON
+        </button>
+        <label className="file-import">
+          <span>Import APES report JSON</span>
+          <input
+            type="file"
+            accept="application/json,.json"
+            onChange={(event) => {
+              const file = event.target.files?.[0]
+              if (!file) return
+              file
+                .text()
+                .then((text) => importApesReport(JSON.parse(text) as ApesReport))
+                .catch((error) => {
+                  window.alert(`Could not import APES report: ${error instanceof Error ? error.message : String(error)}`)
+                })
+              event.currentTarget.value = ''
+            }}
+          />
+        </label>
+      </div>
+      <div className={`settings-card ${apesPreflight && !apesPreflight.ready ? 'settings-card-warning' : ''}`}>
+        <strong>Bridge status</strong>
+        <span>{apesBridgeStatus}</span>
+        {apesPreflight ? <code>{apesPreflight.findings.length > 0 ? apesPreflight.findings.join('\n') : `Ready with ${apesPreflight.python.executable}`}</code> : null}
+        {apesAllowPlaceholder ? <span>Placeholder fallback is enabled for this machine. Leave it off on the home GPU PC unless you are testing the UI only.</span> : null}
+      </div>
+      {apesPreflight ? (
+        <div className="apes-health-grid">
+          {preflightChecks.map((item) => (
+            <article key={item.label} className={item.status === 'pass' ? 'pass' : 'warn'}>
+              <strong>{item.label}</strong>
+              <span>{item.value}</span>
+            </article>
+          ))}
+        </div>
+      ) : null}
+      <label className="field apes-import">
+        <span>Paste APES report JSON</span>
+        <textarea
+          value={reportText}
+          onChange={(event) => setReportText(event.target.value)}
+          placeholder={JSON.stringify(
+            {
+              job_id: 'apes_example_job',
+              masks: [
+                {
+                  label: 'head',
+                  path: 'data/apes/output/apes_example_job/masks/head_mask.png',
+                  bounds: { x: 18, y: 6, w: 28, h: 24 },
+                  confidence: 0.94,
+                  reviewed: false,
+                  warnings: ['Hairline overlaps the hood edge on north-facing frames.'],
+                },
+              ],
+              semantic_mapping: { head: 'head' },
+              warnings: ['Review imported APES masks in the Art Workstation before final export.'],
+            },
+            null,
+            2,
+          )}
+        />
+      </label>
+      <div className="job-list">
+        {jobs.map((job) => (
+          <article key={job.job_id} className={`job ${job.status}`}>
+            <div>
+              <strong>{job.job_id}</strong>
+              <span>{job.status}</span>
+            </div>
+            <p>{job.animations.join(', ')} across {job.directions.join(', ')}</p>
+            <p>{job.input_frames.length} input frame references prepared for APES.</p>
+            {job.failure_details ? <p className="error-text">{job.failure_details}</p> : null}
+            <div className="job-actions">
+              <button onClick={() => downloadJson(`${job.job_id}.json`, job)}>Download job config</button>
+              <button
+                onClick={() =>
+                  downloadJson(`${job.job_id}_expected_report.json`, {
+                    job_id: job.job_id,
+                    status: 'complete',
+                    masks: job.output_labels.map((label) => ({
+                      label,
+                      path: `data/apes/output/${job.job_id}/masks/${label}_mask.png`,
+                      bounds: humanoid64Preset[label],
+                      confidence: 0,
+                      reviewed: false,
+                      warnings: [],
+                    })),
+                    semantic_mapping: {
+                      head: 'head',
+                      torso: 'torso',
+                      left_arm: 'front_arm',
+                      right_arm: 'back_arm',
+                      left_leg: 'front_leg',
+                      right_leg: 'back_leg',
+                    },
+                    warnings: ['Masks must be reviewed in the Art Workstation before final export.'],
+                  })
+                }
+              >
+                Download report template
+              </button>
+              <button className="primary" onClick={() => void runApesJob(job.job_id)} disabled={apesBridgeBusy || !import.meta.env.DEV}>Run local bridge</button>
+            </div>
+            {job.status === 'complete' ? (
+              <p>{job.output_labels.length} APES mask records are now available in the Part Library for review.</p>
+            ) : null}
+          </article>
+        ))}
+        {jobs.length === 0 ? <p className="empty">No APES jobs yet. Create one from this screen or the top bar.</p> : null}
+      </div>
+    </section>
+  )
+}

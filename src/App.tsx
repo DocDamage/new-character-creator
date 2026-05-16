@@ -1,11 +1,45 @@
 import { useEffect, useMemo, useState } from 'react'
-import type { Dispatch, SetStateAction } from 'react'
 import './App.css'
-import { CompositeCanvas } from './CompositeCanvas'
-import { MaskEditor } from './MaskEditor'
+import {
+  apesAllowPlaceholderStorageKey,
+  apesHarnessGeneratedAtStorageKey,
+  apesPreflightStorageKey,
+  apesPythonPathStorageKey,
+  apesQaHarnessJobId,
+  assetRootInputStorageKey,
+  composerRecipesStorageKey,
+  loadStoredApesPreflight,
+  loadStoredBoolean,
+  loadStoredComposerRecipes,
+  loadStoredPartLibrary,
+  loadStoredString,
+  makeDraftRecipeId,
+  partLibraryStorageKey,
+  storeBoolean,
+  storeJson,
+  storeString,
+  type SavedComposerRecipe,
+} from './appPersistence'
+import type { ManualMaskSaveRequest } from './appViewTypes'
+import {
+  buildFullPackageManifest,
+  buildGodotSceneText,
+  buildRenderedFrameSet,
+  downloadFullPackageZip,
+  downloadRenderedFrameSetZip,
+} from './exportPackage'
+import { buildManualMaskPart } from './manualParts'
 import { PixelCanvas } from './PixelCanvas'
-import { extractionModes, humanoid64Preset, layerOrder, palettePresets, partLabels } from './presets'
-import type { AnimationName, ApesJob, ApesReport, AssetManifest, CharacterManifest, ComposerLayerSettings, Direction, ExtractedPart, ExtractionMethod, KitbashRecipe, PaletteRules, PartLabel, Rect } from './types'
+import { humanoid64Preset, layerOrder, palettePresets } from './presets'
+import { ApesLabPanel } from './screens/ApesLabPanel'
+import { AssetAuditPanel } from './screens/AssetAuditPanel'
+import { BatchGeneratorPanel } from './screens/BatchGeneratorPanel'
+import { ExportsPanel } from './screens/ExportsPanel'
+import { FastCreatorPanel } from './screens/FastCreatorPanel'
+import { PartLibraryPanel } from './screens/PartLibraryPanel'
+import { SettingsPanel } from './screens/SettingsPanel'
+import { WorkstationPanel } from './screens/WorkstationPanel'
+import type { AnimationName, ApesBridgeStatus, ApesJob, ApesPreflightReport, ApesReport, AssetManifest, ComposerLayerSettings, Direction, DuelystPackageAudit, ExtractedPart, ExtractionMethod, PaletteRules, PartLabel, Rect } from './types'
 import {
   buildExportManifest,
   buildAsepriteReference,
@@ -27,27 +61,7 @@ import {
   slugLabel,
 } from './utils'
 
-type Screen = 'fast' | 'workstation' | 'library' | 'batch' | 'audit' | 'apes' | 'exports'
-type BatchPart = {
-  label: PartLabel
-  source_character: string
-  method: string
-  source_part_id?: string
-  reviewed?: boolean
-}
-type BatchVariant = { id: string; base: string; palette: string; parts: BatchPart[]; recipe: KitbashRecipe }
-type PartReviewFilter = 'all' | 'reviewed' | 'needs_review'
-type SavedComposerRecipe = {
-  recipe_id: string
-  name: string
-  base_character: string
-  selected_parts: Record<PartLabel, string>
-  selected_part_ids: Partial<Record<PartLabel, string>>
-  layer_settings: Partial<Record<PartLabel, ComposerLayerSettings>>
-  palette: string
-  palette_rules?: Omit<PaletteRules, 'team_color'>
-  saved_at: string
-}
+type Screen = 'fast' | 'workstation' | 'library' | 'batch' | 'audit' | 'apes' | 'exports' | 'settings'
 
 const screens: Array<{ id: Screen; label: string }> = [
   { id: 'fast', label: 'Fast Creator' },
@@ -57,40 +71,41 @@ const screens: Array<{ id: Screen; label: string }> = [
   { id: 'audit', label: 'Asset Audit' },
   { id: 'apes', label: 'APES Lab' },
   { id: 'exports', label: 'Exports' },
+  { id: 'settings', label: 'Settings' },
 ]
 
 const mainDirections: Direction[] = ['south', 'east', 'north', 'west']
 const apesCoreLabels: PartLabel[] = ['head', 'torso', 'front_arm', 'back_arm', 'front_leg', 'back_leg']
-const partLibraryStorageKey = 'pixel_creator_part_library'
-const composerRecipesStorageKey = 'pixel_creator_saved_recipes'
 const defaultPaletteRules: Omit<PaletteRules, 'team_color'> = { hue_shift: 0, saturation: 100, brightness: 100 }
 
-function loadStoredPartLibrary(): ExtractedPart[] {
-  if (typeof window === 'undefined') return []
-  const raw = window.localStorage.getItem(partLibraryStorageKey)
-  if (!raw) return []
-
-  try {
-    return JSON.parse(raw) as ExtractedPart[]
-  } catch {
-    return []
-  }
+type LocalApesToolPayload = {
+  action: 'preflight' | 'run-job' | 'generate-harness'
+  pythonPath: string
+  statusCode: number
+  stdout: string
+  stderr: string
+  preflight?: ApesPreflightReport | null
+  status?: ApesBridgeStatus | null
+  report?: ApesReport | null
+  outputDir?: string | null
+  error?: string
 }
 
-function loadStoredComposerRecipes(): SavedComposerRecipe[] {
-  if (typeof window === 'undefined') return []
-  const raw = window.localStorage.getItem(composerRecipesStorageKey)
-  if (!raw) return []
-
-  try {
-    return JSON.parse(raw) as SavedComposerRecipe[]
-  } catch {
-    return []
-  }
+type LocalAssetToolPayload = {
+  action: 'repair' | 'reindex' | 'duelyst-audit'
+  stdout?: string
+  stderr?: string
+  status?: number
+  error?: string
+  duelyst?: DuelystPackageAudit | null
 }
 
-function makeDraftRecipeId(characterId = 'character') {
-  return `generated_${characterId}_${Date.now()}`
+function isApesQaHarnessReport(report: ApesReport) {
+  return report.job_id === apesQaHarnessJobId || report.warnings.some((warning) => warning.toLowerCase().includes('qa harness'))
+}
+
+function isApesQaHarnessPart(part: ExtractedPart) {
+  return part.extraction_method === 'apes' && (part.tags.includes('qa_harness') || part.part_id.startsWith(`${apesQaHarnessJobId}_`))
 }
 
 function App() {
@@ -122,13 +137,43 @@ function App() {
   const [apesDirections, setApesDirections] = useState<Direction[]>(mainDirections)
   const [apesLabels, setApesLabels] = useState<PartLabel[]>(apesCoreLabels)
   const [apesFrameRange, setApesFrameRange] = useState<[number, number]>([0, 7])
+  const [exportStatus, setExportStatus] = useState('Ready to export package data.')
+  const [assetRootInput, setAssetRootInput] = useState('')
+  const [settingsStatus, setSettingsStatus] = useState('Copy a command from here when you move the project to another machine.')
+  const [settingsBusy, setSettingsBusy] = useState(false)
+  const [duelystBusy, setDuelystBusy] = useState(false)
+  const [duelystAudit, setDuelystAudit] = useState<DuelystPackageAudit | null>(null)
+  const [duelystStatus, setDuelystStatus] = useState('Analyze the Duelyst unitypackage to preview candidate sheets and stage cropped frames into the current workstation flow.')
+  const [apesPythonPath, setApesPythonPath] = useState(() => loadStoredString(apesPythonPathStorageKey))
+  const [apesAllowPlaceholder, setApesAllowPlaceholder] = useState(() => loadStoredBoolean(apesAllowPlaceholderStorageKey))
+  const [apesBridgeStatus, setApesBridgeStatus] = useState('Set the APES Python path in Settings, then run preflight from APES Lab.')
+  const [apesBridgeBusy, setApesBridgeBusy] = useState(false)
+  const [apesPreflight, setApesPreflight] = useState<ApesPreflightReport | null>(loadStoredApesPreflight)
+  const [apesHarnessGeneratedAt, setApesHarnessGeneratedAt] = useState(() => loadStoredString(apesHarnessGeneratedAtStorageKey))
+
+  async function fetchManifest() {
+    const response = await fetch('/data/manifests/characters.json')
+    if (!response.ok) {
+      throw new Error(`Failed to load manifest: ${response.status}`)
+    }
+
+    return await response.json() as AssetManifest
+  }
+
+  function applyManifest(data: AssetManifest, preferredCharacterId?: string) {
+    setManifest(data)
+    const nextCharacterId =
+      preferredCharacterId && data.characters.some((character) => character.character_id === preferredCharacterId)
+        ? preferredCharacterId
+        : data.characters[0]?.character_id ?? ''
+    setSelectedId(nextCharacterId)
+    setAssetRootInput((current) => current || window.localStorage.getItem(assetRootInputStorageKey) || data.asset_root || '')
+  }
 
   useEffect(() => {
-    fetch('/data/manifests/characters.json')
-      .then((response) => response.json())
-      .then((data: AssetManifest) => {
-        setManifest(data)
-        setSelectedId(data.characters[0]?.character_id ?? '')
+    fetchManifest()
+      .then((data) => {
+        applyManifest(data)
       })
       .catch((error) => {
         console.error('Failed to load manifest', error)
@@ -136,14 +181,34 @@ function App() {
   }, [])
 
   useEffect(() => {
-    window.localStorage.setItem(partLibraryStorageKey, JSON.stringify(partLibrary))
+    storeJson(partLibraryStorageKey, partLibrary)
   }, [partLibrary])
 
   useEffect(() => {
-    window.localStorage.setItem(composerRecipesStorageKey, JSON.stringify(savedRecipes))
+    storeJson(composerRecipesStorageKey, savedRecipes)
   }, [savedRecipes])
 
-  const characters = manifest?.characters ?? []
+  useEffect(() => {
+    storeString(assetRootInputStorageKey, assetRootInput)
+  }, [assetRootInput])
+
+  useEffect(() => {
+    storeString(apesPythonPathStorageKey, apesPythonPath.trim())
+  }, [apesPythonPath])
+
+  useEffect(() => {
+    storeBoolean(apesAllowPlaceholderStorageKey, apesAllowPlaceholder)
+  }, [apesAllowPlaceholder])
+
+  useEffect(() => {
+    storeJson(apesPreflightStorageKey, apesPreflight)
+  }, [apesPreflight])
+
+  useEffect(() => {
+    storeString(apesHarnessGeneratedAtStorageKey, apesHarnessGeneratedAt)
+  }, [apesHarnessGeneratedAt])
+
+  const characters = useMemo(() => [...(manifest?.characters ?? []), ...(duelystAudit?.staged_manifest.characters ?? [])], [manifest, duelystAudit])
   const selectedCharacter = characters.find((character) => character.character_id === selectedId) ?? characters[0]
   const framePath = getFramePath(selectedCharacter, animation, direction, frameIndex)
   const onionPath = getFramePath(selectedCharacter, animation, direction, Math.max(frameIndex - 1, 0))
@@ -296,6 +361,11 @@ function App() {
       apesLabels.length > 0 ? apesLabels : apesCoreLabels,
       apesFrameRange,
     )
+    if (job.input_frames.length === 0) {
+      setApesBridgeStatus('APES job not created because the current animation, direction, and frame-range selection produced no source frames.')
+      setScreen('apes')
+      return
+    }
     setApesJobs((current) => [job, ...current])
     setScreen('apes')
   }
@@ -312,53 +382,189 @@ function App() {
     setApesLabels((current) => (current.includes(name) ? current.filter((item) => item !== name) : [...current, name]))
   }
 
-  function markJobFailed(jobId: string) {
+  function syncApesJobStatus(jobId: string, status: ApesBridgeStatus) {
     setApesJobs((current) =>
       current.map((job) =>
         job.job_id === jobId
           ? {
               ...job,
-              status: 'failed',
-              failure_details: 'APES executable has not been connected yet. Run tools/apes_bridge/run_apes_extract.py after installing the APES backend.',
-              logs: [...job.logs, 'Bridge call failed: missing APES backend executable.'],
+              status: status.status,
+              failure_details: status.failure_details,
+              logs: status.logs.length > 0 ? status.logs : job.logs,
             }
           : job,
       ),
     )
   }
 
-  function markJobComplete(jobId: string) {
-    const job = apesJobs.find((item) => item.job_id === jobId)
-    if (job) {
-      const apesParts = makeApesPartsFromJob(job)
-      setPartLibrary((current) => [
-        ...apesParts,
-        ...current.filter((part) => !apesParts.some((apesPart) => apesPart.part_id === part.part_id)),
-      ])
+  async function runApesPreflight() {
+    if (!import.meta.env.DEV) {
+      setApesBridgeStatus('APES preflight only works through the local dev server. Start the app with npm run dev on the machine that has the APES environment.')
+      return
     }
 
-    setApesJobs((current) =>
-      current.map((job) =>
-        job.job_id === jobId
-          ? {
-              ...job,
-              status: 'complete',
-              logs: [...job.logs, `Imported APES report and converted ${job.output_labels.length} masks into editable parts.`],
-            }
-          : job,
-      ),
-    )
+    setApesBridgeBusy(true)
+    setApesBridgeStatus('Running APES preflight through the local dev server...')
+    try {
+      const response = await fetch('/__local/apes-tools', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'preflight', pythonPath: apesPythonPath.trim() }),
+      })
+      const payload = await response.json() as LocalApesToolPayload
+      const report = payload.preflight ?? null
+      setApesPreflight(report)
+      if (!response.ok) {
+        throw new Error(payload.stderr || payload.error || `APES preflight failed with status ${payload.statusCode}`)
+      }
+
+      if (!report) {
+        setApesBridgeStatus('APES preflight returned no report.')
+        return
+      }
+
+      setApesBridgeStatus(
+        report.ready
+          ? `APES ready. Using ${report.python.executable}.`
+          : `APES not ready: ${report.findings[0] ?? 'see findings below.'}`,
+      )
+    } catch (error) {
+      setApesBridgeStatus(`APES preflight failed. ${error instanceof Error ? error.message : String(error)}`)
+    } finally {
+      setApesBridgeBusy(false)
+    }
   }
 
-  function importApesReport(report: ApesReport) {
+  async function runApesJob(jobId: string) {
+    const job = apesJobs.find((item) => item.job_id === jobId)
+    if (!job) return
+    if (!import.meta.env.DEV) {
+      setApesBridgeStatus('APES job execution only works through the local dev server. Start the app with npm run dev on the APES machine.')
+      return
+    }
+
+    setApesBridgeBusy(true)
+    setApesBridgeStatus(`Running APES bridge for ${job.job_id}...`)
+    setApesJobs((current) =>
+      current.map((item) =>
+        item.job_id === jobId
+          ? {
+              ...item,
+              status: 'running',
+              failure_details: undefined,
+              logs: [...item.logs, `Launching local APES bridge with ${apesPythonPath.trim() || 'the dev server Python interpreter'}.`],
+            }
+          : item,
+      ),
+    )
+
+    try {
+      const response = await fetch('/__local/apes-tools', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'run-job',
+          pythonPath: apesPythonPath.trim(),
+          allowPlaceholder: apesAllowPlaceholder,
+          job,
+        }),
+      })
+      const payload = await response.json() as LocalApesToolPayload
+      if (payload.preflight) {
+        setApesPreflight(payload.preflight)
+      }
+      if (payload.status) {
+        syncApesJobStatus(jobId, payload.status)
+      }
+      if (!response.ok) {
+        throw new Error(payload.status?.failure_details || payload.stderr || payload.error || `APES job failed with status ${payload.statusCode}`)
+      }
+
+      if (payload.report) {
+        importApesReport(payload.report)
+        setApesBridgeStatus(`APES job ${job.job_id} completed and imported ${payload.report.masks.length} mask(s) into the Part Library.`)
+        return
+      }
+
+      setApesBridgeStatus(`APES job ${job.job_id} finished without an importable report.`)
+    } catch (error) {
+      setApesBridgeStatus(`APES run failed. ${error instanceof Error ? error.message : String(error)}`)
+      setApesJobs((current) =>
+        current.map((item) =>
+          item.job_id === jobId
+            ? {
+                ...item,
+                status: 'failed',
+                failure_details: error instanceof Error ? error.message : String(error),
+              }
+            : item,
+        ),
+      )
+    } finally {
+      setApesBridgeBusy(false)
+    }
+  }
+
+  async function generateApesQaHarness() {
+    if (!import.meta.env.DEV) {
+      setApesBridgeStatus('Local QA harness generation only works through the dev server. Start the app with npm run dev on this machine.')
+      return
+    }
+
+    setApesBridgeBusy(true)
+    setApesBridgeStatus('Generating the local APES QA harness through the dev server...')
+    try {
+      const response = await fetch('/__local/apes-tools', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'generate-harness' }),
+      })
+      const payload = await response.json() as LocalApesToolPayload
+      if (!response.ok) {
+        throw new Error(payload.stderr || payload.error || `APES QA harness generation failed with status ${payload.statusCode}`)
+      }
+
+      if (!payload.report) {
+        setApesBridgeStatus('APES QA harness generated, but the report could not be loaded back into the app.')
+        return
+      }
+
+      setApesHarnessGeneratedAt(new Date().toISOString())
+      importApesReport(payload.report, { replaceQaHarnessExisting: true })
+      setApesBridgeStatus(`Generated and imported the local APES QA harness with ${payload.report.masks.length} sample mask(s).`)
+    } catch (error) {
+      setApesBridgeStatus(`APES QA harness generation failed. ${error instanceof Error ? error.message : String(error)}`)
+    } finally {
+      setApesBridgeBusy(false)
+    }
+  }
+
+  async function loadApesQaHarnessReport() {
+    try {
+      const response = await fetch('/data/qa/apes_report_harness.json')
+      if (!response.ok) {
+        throw new Error(`QA harness report request failed with status ${response.status}`)
+      }
+
+      const report = await response.json() as ApesReport
+      importApesReport(report, { replaceQaHarnessExisting: true })
+      setApesBridgeStatus(`Loaded and replaced the APES QA sample report with ${report.masks.length} sample mask(s).`)
+    } catch (error) {
+      window.alert(`Could not load QA APES report: ${error instanceof Error ? error.message : String(error)}`)
+    }
+  }
+
+  function importApesReport(report: ApesReport, options: { replaceQaHarnessExisting?: boolean } = {}) {
     const job = apesJobs.find((item) => item.job_id === report.job_id)
     const fallbackInput = job?.input_frames[0]
     const characterId = job?.character_id ?? selectedCharacter?.character_id ?? 'unknown_character'
     const animations = job?.animations ?? [fallbackInput?.animation ?? animation]
     const directions = job?.directions ?? [fallbackInput?.direction ?? direction]
+    const isQaHarness = isApesQaHarnessReport(report)
+    const replaceQaHarnessExisting = options.replaceQaHarnessExisting ?? isQaHarness
     const importedParts = report.masks.map((mask, index): ExtractedPart => {
       const input = job?.input_frames.find((frame) => frame.animation === 'idle' && frame.direction === 'south') ?? fallbackInput
-      const region = humanoid64Preset[mask.label]
+      const region = mask.bounds ?? humanoid64Preset[mask.label]
       return {
         part_id: `${report.job_id}_${mask.label}_${String(index).padStart(3, '0')}`,
         character_id: characterId,
@@ -366,16 +572,24 @@ function App() {
         source_animation: input?.animation ?? animations[0] ?? 'idle',
         source_direction: input?.direction ?? directions[0] ?? 'south',
         source_frame_path: input?.path,
-        image_path: `data/apes/output/${report.job_id}/parts/${mask.label}.png`,
+        image_path: mask.image_path ?? `data/apes/output/${report.job_id}/parts/${mask.label}.png`,
         mask_path: mask.path,
         bounds: region,
         anchor: { x: region.x + Math.round(region.w / 2), y: region.y + Math.round(region.h / 2) },
         extraction_method: 'apes',
         compatibility: { animations, directions },
-        tags: ['apes', 'report_import', mask.label, `confidence_${Math.round(mask.confidence * 100)}`],
+        tags: [
+          'apes',
+          'report_import',
+          mask.label,
+          `confidence_${Math.round(mask.confidence * 100)}`,
+          `report_${report.job_id}`,
+          ...(isQaHarness ? ['qa_harness'] : []),
+        ],
         reviewed: mask.reviewed,
         warnings: [
           ...report.warnings,
+          ...(mask.warnings ?? []),
           mask.confidence < 0.65 ? `Low APES confidence for ${mask.label}: ${mask.confidence}.` : '',
         ].filter(Boolean),
       }
@@ -383,7 +597,15 @@ function App() {
 
     setPartLibrary((current) => [
       ...importedParts,
-      ...current.filter((part) => !importedParts.some((imported) => imported.part_id === part.part_id)),
+      ...current.filter((part) => {
+        if (importedParts.some((imported) => imported.part_id === part.part_id)) {
+          return false
+        }
+        if (replaceQaHarnessExisting && isApesQaHarnessPart(part)) {
+          return false
+        }
+        return true
+      }),
     ])
     setApesJobs((current) =>
       current.map((item) =>
@@ -395,6 +617,25 @@ function App() {
             }
           : item,
       ),
+    )
+  }
+
+  function clearApesQaHarnessParts() {
+    let removedCount = 0
+    setPartLibrary((current) => {
+      const next = current.filter((part) => {
+        const shouldRemove = isApesQaHarnessPart(part)
+        if (shouldRemove) {
+          removedCount += 1
+        }
+        return !shouldRemove
+      })
+      return next
+    })
+    setApesBridgeStatus(
+      removedCount > 0
+        ? `Removed ${removedCount} APES QA harness part(s) from the Part Library.`
+        : 'No APES QA harness parts were present in the Part Library.',
     )
   }
 
@@ -442,21 +683,23 @@ function App() {
     setPartLibrary([])
   }
 
-  function saveEditedMask(partId: string, maskDataUrl: string) {
-    setPartLibrary((current) =>
-      current.map((part) =>
-        part.part_id === partId
-          ? {
-              ...part,
-              mask_data_url: maskDataUrl,
-              reviewed: true,
-              tags: Array.from(new Set([...part.tags, 'manual_cleanup'])),
-              warnings: Array.from(new Set([...part.warnings, 'Mask reviewed in the manual cleanup workstation.'])),
-            }
-          : part,
-      ),
-    )
-    setExtractionHistory((current) => [`${partId} mask saved and marked reviewed`, ...current].slice(0, 8))
+  function saveEditedMask({ sourcePartId, maskDataUrl, bounds }: ManualMaskSaveRequest) {
+    const sourcePart = sourcePartId ? partLibrary.find((part) => part.part_id === sourcePartId) : undefined
+    const manualPart = buildManualMaskPart({
+      sourcePart,
+      selectedCharacterId: selectedCharacter.character_id,
+      selectedCharacterClassType: selectedCharacter.class_type,
+      selectedRegion,
+      animation,
+      direction,
+      frameIndex,
+      framePath,
+      bounds,
+      maskDataUrl,
+    })
+
+    setPartLibrary((current) => [manualPart, ...current.filter((part) => part.part_id !== manualPart.part_id)])
+    setExtractionHistory((current) => [`${manualPart.part_id} saved as a reviewed manual part`, ...current].slice(0, 8))
   }
 
   function exportPartLibrary() {
@@ -509,37 +752,6 @@ function App() {
     }
   }
 
-  function makeApesPartsFromJob(job: ApesJob): ExtractedPart[] {
-    const fallbackInput = job.input_frames[0]
-    return job.output_labels.map((label) => {
-      const input = job.input_frames.find((frame) => frame.animation === 'idle' && frame.direction === 'south') ?? fallbackInput
-      const region = humanoid64Preset[label]
-      return {
-        part_id: `${job.job_id}_${label}`,
-        character_id: job.character_id,
-        label,
-        source_animation: input?.animation ?? job.animations[0] ?? 'idle',
-        source_direction: input?.direction ?? job.directions[0] ?? 'south',
-        source_frame_path: input?.path,
-        image_path: `${job.output_root}/parts/${label}.png`,
-        mask_path: `${job.output_root}/masks/${label}_mask.png`,
-        bounds: region,
-        anchor: { x: region.x + Math.round(region.w / 2), y: region.y + Math.round(region.h / 2) },
-        extraction_method: 'apes',
-        compatibility: {
-          animations: job.animations,
-          directions: job.directions,
-        },
-        tags: ['apes', 'pose_aware', label, job.character_id],
-        reviewed: false,
-        warnings: [
-          'Imported from APES report template. Review the mask in Art Workstation before production export.',
-          `APES job ${job.job_id} source frames: ${job.input_frames.length}.`,
-        ],
-      }
-    })
-  }
-
   function exportGeneric() {
     if (!recipe || !selectedCharacter) return
     downloadJson(`${recipe.character_id}_manifest.json`, buildExportManifest(selectedCharacter, recipe, apesJobs))
@@ -547,8 +759,7 @@ function App() {
 
   function exportGodotScene() {
     if (!recipe) return
-    const scene = `[gd_scene load_steps=2 format=3]\n\n[ext_resource type="SpriteFrames" path="res://${recipe.character_id}_sprite_frames.tres" id="1"]\n\n[node name="${recipe.character_id}" type="AnimatedSprite2D"]\nsprite_frames = ExtResource("1")\nanimation = "idle_south"\ncentered = true\n`
-    downloadText(`${recipe.character_id}.tscn`, scene)
+    downloadText(`${recipe.character_id}.tscn`, buildGodotSceneText(recipe))
   }
 
   function exportSpriteFrames() {
@@ -586,6 +797,149 @@ function App() {
     await downloadAllDirectionSpriteSheets(selectedCharacter, animation)
   }
 
+  async function exportRenderedFrameSet() {
+    if (!recipe || !selectedCharacter) return
+    setExportStatus('Rendering full frame set...')
+    try {
+      const renderedFrameSet = await buildRenderedFrameSet(selectedCharacter, recipe, characters, partLibrary)
+      downloadJson(`${recipe.character_id}_rendered_frame_set.json`, renderedFrameSet)
+      setExportStatus(`Rendered ${renderedFrameSet.frame_count} frame(s) and ${renderedFrameSet.spritesheet_count} spritesheet record(s).`)
+    } catch (error) {
+      setExportStatus(`Rendered frame set failed: ${error instanceof Error ? error.message : String(error)}`)
+    }
+  }
+
+  async function exportFullPackageManifest() {
+    if (!recipe || !selectedCharacter) return
+    setExportStatus('Building full package manifest...')
+    try {
+      const packageManifest = await buildFullPackageManifest(selectedCharacter, recipe, characters, partLibrary, apesJobs)
+      downloadJson(`${recipe.character_id}_full_package_manifest.json`, packageManifest)
+      setExportStatus(`Full package manifest ready with ${packageManifest.rendered_outputs.frame_count} rendered frame(s).`)
+    } catch (error) {
+      setExportStatus(`Full package export failed: ${error instanceof Error ? error.message : String(error)}`)
+    }
+  }
+
+  async function exportRenderedFrameSetZip() {
+    if (!recipe || !selectedCharacter) return
+    setExportStatus('Building rendered frame zip...')
+    try {
+      const summary = await downloadRenderedFrameSetZip(selectedCharacter, recipe, characters, partLibrary)
+      setExportStatus(`Rendered frame zip ready with ${summary.frame_count} frame(s) and ${summary.spritesheet_count} spritesheet(s).`)
+    } catch (error) {
+      setExportStatus(`Rendered frame zip failed: ${error instanceof Error ? error.message : String(error)}`)
+    }
+  }
+
+  async function exportFullPackageZip() {
+    if (!recipe || !selectedCharacter) return
+    setExportStatus('Building full package zip...')
+    try {
+      const summary = await downloadFullPackageZip(selectedCharacter, recipe, characters, partLibrary, apesJobs)
+      setExportStatus(`Full package zip ready with ${summary.frame_count} frame(s), ${summary.spritesheet_count} spritesheet(s), and ${summary.part_count} selected part folder(s).`)
+    } catch (error) {
+      setExportStatus(`Full package zip failed: ${error instanceof Error ? error.message : String(error)}`)
+    }
+  }
+
+  async function copyCommand(command: string, successMessage: string) {
+    try {
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(command)
+        setSettingsStatus(successMessage)
+        return
+      }
+
+      const input = document.createElement('textarea')
+      input.value = command
+      input.setAttribute('readonly', 'true')
+      input.style.position = 'absolute'
+      input.style.left = '-9999px'
+      document.body.appendChild(input)
+      input.select()
+      document.execCommand('copy')
+      document.body.removeChild(input)
+      setSettingsStatus(successMessage)
+    } catch (error) {
+      setSettingsStatus(`Could not copy command: ${error instanceof Error ? error.message : String(error)}`)
+    }
+  }
+
+  async function runLocalAssetTool(action: 'repair' | 'reindex') {
+    const assetRoot = assetRootInput.trim() || manifest?.asset_root || ''
+    if (!assetRoot) {
+      setSettingsStatus('Set an asset root before running a local repair or reindex action.')
+      return
+    }
+
+    setSettingsBusy(true)
+    setSettingsStatus(action === 'repair' ? 'Running manifest repair through the local dev server...' : 'Running manifest reindex through the local dev server...')
+    try {
+      const response = await fetch('/__local/asset-tools', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action, assetRoot }),
+      })
+      const payload = await response.json() as LocalAssetToolPayload
+      if (!response.ok) {
+        throw new Error(payload.stderr || payload.error || `Tool exited with status ${payload.status ?? response.status}`)
+      }
+
+      const data = await fetchManifest()
+      applyManifest(data, selectedId)
+      const summary = (payload.stdout || '').trim().split('\n').filter(Boolean).slice(-1)[0]
+      setSettingsStatus(summary || (action === 'repair' ? 'Manifest repaired and reloaded.' : 'Manifest reindexed and reloaded.'))
+    } catch (error) {
+      setSettingsStatus(`Local ${action} failed. Start the app with npm run dev or use the copy-command buttons instead. ${error instanceof Error ? error.message : String(error)}`)
+    } finally {
+      setSettingsBusy(false)
+    }
+  }
+
+  async function runDuelystAudit() {
+    if (!import.meta.env.DEV) {
+      setDuelystStatus('Duelyst package inspection only works through the local dev server because the app stages local /@fs previews.')
+      return
+    }
+
+    setDuelystBusy(true)
+    setDuelystStatus('Analyzing the Duelyst unitypackage and staging cropped review frames...')
+    try {
+      const response = await fetch('/__local/asset-tools', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'duelyst-audit', stageTopCount: 8 }),
+      })
+      const payload = await response.json() as LocalAssetToolPayload
+      if (!response.ok || !payload.duelyst) {
+        throw new Error(payload.error || payload.stderr || `Duelyst audit failed with status ${response.status}`)
+      }
+
+      setDuelystAudit(payload.duelyst)
+      setDuelystStatus(`${payload.duelyst.summary} Staged candidates now appear in the source-character picker and can be opened directly in the workstation.`)
+    } catch (error) {
+      setDuelystStatus(`Duelyst audit failed. ${error instanceof Error ? error.message : String(error)}`)
+    } finally {
+      setDuelystBusy(false)
+    }
+  }
+
+  function openDuelystStageCharacter(characterId: string) {
+    if (!duelystAudit?.staged_manifest.characters.some((character) => character.character_id === characterId)) {
+      setDuelystStatus(`Staged Duelyst source ${characterId} is not currently available.`)
+      return
+    }
+
+    setSelectedId(characterId)
+    setAnimation('idle')
+    setDirection('south')
+    setFrameIndex(0)
+    setPlaying(false)
+    setScreen('workstation')
+    setDuelystStatus(`Opened ${characterId} in the workstation. Use preset, manual, or APES extraction from the staged crop.`)
+  }
+
   if (!manifest || !selectedCharacter) {
     return <main className="loading">Indexing the character forge...</main>
   }
@@ -603,7 +957,7 @@ function App() {
 
         <nav className="nav-list" aria-label="Creator screens">
           {screens.map((item) => (
-            <button key={item.id} className={screen === item.id ? 'active' : ''} onClick={() => setScreen(item.id)}>
+            <button key={item.id} data-testid={`nav-${item.id}`} className={screen === item.id ? 'active' : ''} onClick={() => setScreen(item.id)}>
               {item.label}
             </button>
           ))}
@@ -621,7 +975,7 @@ function App() {
         </section>
 
         <section className="sidebar-block stats">
-          <span>{manifest.total_characters} characters</span>
+          <span>{characters.length} sources</span>
           <span>{selectedCharacter.animation_names.length} actions</span>
           <span>{selectedCharacter.source_quality_warnings.length} warnings</span>
         </section>
@@ -651,26 +1005,26 @@ function App() {
             />
             <div className="transport">
               <button onClick={() => setPlaying((value) => !value)}>{playing ? 'Pause' : 'Play'}</button>
-              <select value={animation} onChange={(event) => setAnimation(event.target.value)}>
+              <select aria-label="Animation" value={animation} onChange={(event) => setAnimation(event.target.value)}>
                 {selectedCharacter.animation_names.map((name) => (
                   <option key={name} value={name}>
                     {slugLabel(name)}
                   </option>
                 ))}
               </select>
-              <select value={direction} onChange={(event) => setDirection(event.target.value as Direction)}>
+              <select aria-label="Direction" value={direction} onChange={(event) => setDirection(event.target.value as Direction)}>
                 {mainDirections.map((name) => (
                   <option key={name} value={name}>
                     {name}
                   </option>
                 ))}
               </select>
-              <input type="range" min={0} max={Math.max(frames.length - 1, 0)} value={frameIndex} onChange={(event) => setFrameIndex(Number(event.target.value))} />
+              <input aria-label="Frame index" type="range" min={0} max={Math.max(frames.length - 1, 0)} value={frameIndex} onChange={(event) => setFrameIndex(Number(event.target.value))} />
             </div>
           </section>
 
           {screen === 'fast' ? (
-            <FastCreator
+            <FastCreatorPanel
               selectedCharacter={selectedCharacter}
               characters={characters}
               selectedParts={selectedParts}
@@ -695,10 +1049,11 @@ function App() {
               setPalette={setPalette}
               paletteRules={paletteRules}
               updatePaletteRules={updatePaletteRules}
+              mainDirections={mainDirections}
             />
           ) : null}
           {screen === 'workstation' ? (
-            <Workstation
+            <WorkstationPanel
               selectedRegion={selectedRegion}
               setSelectedRegion={setSelectedRegion}
               regions={regions}
@@ -710,11 +1065,12 @@ function App() {
               connectedSeed={connectedSeed}
               setConnectedSeed={setConnectedSeed}
               parts={partLibrary}
+              sourceFramePath={framePath}
               saveEditedMask={saveEditedMask}
             />
           ) : null}
           {screen === 'library' ? (
-            <PartLibrary
+            <PartLibraryPanel
               parts={partLibrary}
               togglePartReviewed={togglePartReviewed}
               setPartsReviewed={setPartsReviewed}
@@ -724,7 +1080,7 @@ function App() {
             />
           ) : null}
           {screen === 'batch' ? (
-            <BatchGenerator
+            <BatchGeneratorPanel
               batchSeed={batchSeed}
               setBatchSeed={setBatchSeed}
               batchCount={batchCount}
@@ -737,13 +1093,26 @@ function App() {
               currentFrameIndex={frameIndex}
             />
           ) : null}
-          {screen === 'audit' ? <AssetAudit manifest={manifest} classCounts={classCounts} /> : null}
+          {screen === 'audit' ? (
+            <AssetAuditPanel
+              manifest={manifest}
+              classCounts={classCounts}
+              duelystAudit={duelystAudit}
+              duelystBusy={duelystBusy}
+              duelystStatus={duelystStatus}
+              runDuelystAudit={runDuelystAudit}
+              openDuelystStageCharacter={openDuelystStageCharacter}
+            />
+          ) : null}
           {screen === 'apes' ? (
-            <ApesLab
+            <ApesLabPanel
               jobs={apesJobs}
               createApesJob={createApesJob}
-              markJobFailed={markJobFailed}
-              markJobComplete={markJobComplete}
+              runApesPreflight={runApesPreflight}
+              runApesJob={runApesJob}
+              generateApesQaHarness={generateApesQaHarness}
+              loadApesQaHarnessReport={loadApesQaHarnessReport}
+              clearApesQaHarnessParts={clearApesQaHarnessParts}
               selectedCharacter={selectedCharacter}
               partLibrary={partLibrary}
               apesAnimations={apesAnimations}
@@ -755,14 +1124,23 @@ function App() {
               toggleApesDirection={toggleApesDirection}
               toggleApesLabel={toggleApesLabel}
               importApesReport={importApesReport}
+              apesPythonPath={apesPythonPath}
+              apesAllowPlaceholder={apesAllowPlaceholder}
+              apesBridgeBusy={apesBridgeBusy}
+              apesBridgeStatus={apesBridgeStatus}
+              apesPreflight={apesPreflight}
+              apesHarnessGeneratedAt={apesHarnessGeneratedAt}
+              mainDirections={mainDirections}
+              apesCoreLabels={apesCoreLabels}
             />
           ) : null}
           {screen === 'exports' ? (
-            <Exports
+            <ExportsPanel
               recipe={recipe}
               selectedCharacter={selectedCharacter}
               characters={characters}
               partLibrary={partLibrary}
+              mainDirections={mainDirections}
               currentAnimation={animation}
               currentDirection={direction}
               currentFrameIndex={frameIndex}
@@ -774,7 +1152,28 @@ function App() {
               exportAsepriteReference={exportAsepriteReference}
               exportCurrentSpriteSheet={exportCurrentSpriteSheet}
               exportAnimationSheets={exportAnimationSheets}
+              exportRenderedFrameSet={exportRenderedFrameSet}
+              exportFullPackageManifest={exportFullPackageManifest}
+              exportRenderedFrameSetZip={exportRenderedFrameSetZip}
+              exportFullPackageZip={exportFullPackageZip}
+              exportStatus={exportStatus}
               batchVariants={batchVariants}
+            />
+          ) : null}
+          {screen === 'settings' ? (
+            <SettingsPanel
+              manifestAssetRoot={manifest?.asset_root ?? ''}
+              assetRootInput={assetRootInput}
+              setAssetRootInput={setAssetRootInput}
+              settingsStatus={settingsStatus}
+              settingsBusy={settingsBusy}
+              copyCommand={copyCommand}
+              runLocalAssetTool={runLocalAssetTool}
+              apesPythonPath={apesPythonPath}
+              setApesPythonPath={setApesPythonPath}
+              apesAllowPlaceholder={apesAllowPlaceholder}
+              setApesAllowPlaceholder={setApesAllowPlaceholder}
+              apesPreflight={apesPreflight}
             />
           ) : null}
         </div>
@@ -783,982 +1182,8 @@ function App() {
   )
 }
 
-function FastCreator({
-  selectedCharacter,
-  characters,
-  selectedParts,
-  setSelectedParts,
-  selectedPartIds,
-  setSelectedPartIds,
-  layerSettings,
-  updateLayerSetting,
-  partLibrary,
-  recipeId,
-  recipeName,
-  setRecipeName,
-  savedRecipes,
-  saveCurrentRecipe,
-  loadSavedRecipe,
-  startNewRecipe,
-  currentAnimation,
-  currentDirection,
-  currentFrameIndex,
-  recipe,
-  palette,
-  setPalette,
-  paletteRules,
-  updatePaletteRules,
-}: {
-  selectedCharacter: CharacterManifest
-  characters: CharacterManifest[]
-  selectedParts: Record<PartLabel, string>
-  setSelectedParts: Dispatch<SetStateAction<Record<PartLabel, string>>>
-  selectedPartIds: Partial<Record<PartLabel, string>>
-  setSelectedPartIds: Dispatch<SetStateAction<Partial<Record<PartLabel, string>>>>
-  layerSettings: Partial<Record<PartLabel, ComposerLayerSettings>>
-  updateLayerSetting: (label: PartLabel, patch: Partial<ComposerLayerSettings>) => void
-  partLibrary: ExtractedPart[]
-  recipeId: string
-  recipeName: string
-  setRecipeName: (name: string) => void
-  savedRecipes: SavedComposerRecipe[]
-  saveCurrentRecipe: () => void
-  loadSavedRecipe: (recipeId: string) => void
-  startNewRecipe: () => void
-  currentAnimation: AnimationName
-  currentDirection: Direction
-  currentFrameIndex: number
-  recipe: ReturnType<typeof makeRecipe> | null
-  palette: string
-  setPalette: (palette: string) => void
-  paletteRules: Omit<PaletteRules, 'team_color'>
-  updatePaletteRules: (patch: Partial<Omit<PaletteRules, 'team_color'>>) => void
-}) {
-  const reviewedParts = partLibrary.filter((part) => part.reviewed)
-  const selectedReviewedParts = layerOrder
-    .map((label) => reviewedParts.find((part) => part.part_id === selectedPartIds[label]))
-    .filter(Boolean)
-
-  return (
-    <section className="panel wide-panel">
-      <div className="panel-heading">
-        <div>
-          <h3>Fast Creator</h3>
-          <p>Swap semantic parts, keep animation compatibility visible, then export a recipe.</p>
-        </div>
-        <div className="topbar-actions">
-          <button onClick={startNewRecipe}>New recipe</button>
-          <button className="primary" onClick={saveCurrentRecipe}>Save recipe</button>
-        </div>
-      </div>
-      <div className="recipe-controls">
-        <label className="field">
-          <span>Recipe name</span>
-          <input value={recipeName} onChange={(event) => setRecipeName(event.target.value)} />
-        </label>
-        <label className="field">
-          <span>Load saved recipe</span>
-          <select value="" onChange={(event) => loadSavedRecipe(event.target.value)} disabled={savedRecipes.length === 0}>
-            <option value="">{savedRecipes.length === 0 ? 'no saved recipes' : 'choose recipe'}</option>
-            {savedRecipes.map((savedRecipe) => (
-              <option key={savedRecipe.recipe_id} value={savedRecipe.recipe_id}>
-                {savedRecipe.name} / {savedRecipe.base_character}
-              </option>
-            ))}
-          </select>
-        </label>
-        <span className="recipe-id">{recipeId}</span>
-      </div>
-      <DirectionPreviewGrid character={selectedCharacter} animation={currentAnimation} frameIndex={currentFrameIndex} />
-      {recipe ? (
-        <section className="composite-preview-panel">
-          <div>
-            <strong>Composite preview</strong>
-            <span>{slugLabel(currentAnimation)} / {currentDirection} / frame {currentFrameIndex + 1}</span>
-          </div>
-          <CompositeCanvas
-            recipe={recipe}
-            characters={characters}
-            partLibrary={partLibrary}
-            animation={currentAnimation}
-            direction={currentDirection}
-            frameIndex={currentFrameIndex}
-            scale={3}
-            label={`composite ${currentAnimation} ${currentDirection} frame ${currentFrameIndex + 1}`}
-          />
-        </section>
-      ) : null}
-      <div className="part-grid">
-        {layerOrder.map((label) => {
-          const approvedOptions = reviewedParts.filter((part) => part.label === label)
-          const settings = layerSettings[label] ?? { offset: [0, 0], visible: true, locked: false }
-          return (
-            <div key={label} className="composer-layer">
-              <label className="field">
-                <span>{slugLabel(label)} source</span>
-                <select
-                  value={selectedParts[label] ?? selectedCharacter.character_id}
-                  onChange={(event) => setSelectedParts((current) => ({ ...current, [label]: event.target.value }))}
-                >
-                  {characters.map((character) => (
-                    <option key={character.character_id} value={character.character_id}>
-                      {character.display_name}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label className="field">
-                <span>Approved part</span>
-                <select
-                  value={selectedPartIds[label] ?? ''}
-                  onChange={(event) =>
-                    setSelectedPartIds((current) => ({
-                      ...current,
-                      [label]: event.target.value || undefined,
-                    }))
-                  }
-                  disabled={approvedOptions.length === 0}
-                >
-                  <option value="">{approvedOptions.length === 0 ? 'no reviewed parts' : 'use source character'}</option>
-                  {approvedOptions.map((part) => (
-                    <option key={part.part_id} value={part.part_id}>
-                      {slugLabel(part.extraction_method)} / {part.character_id} / {part.part_id}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <div className="layer-controls">
-                <label>
-                  <input
-                    type="checkbox"
-                    checked={settings.visible}
-                    onChange={(event) => updateLayerSetting(label, { visible: event.target.checked })}
-                  />
-                  <span>Visible</span>
-                </label>
-                <label>
-                  <input
-                    type="checkbox"
-                    checked={settings.locked}
-                    onChange={(event) => updateLayerSetting(label, { locked: event.target.checked })}
-                  />
-                  <span>Locked</span>
-                </label>
-                <label>
-                  <span>X</span>
-                  <input
-                    aria-label={`${slugLabel(label)} x offset`}
-                    type="text"
-                    inputMode="numeric"
-                    value={settings.offset[0]}
-                    onChange={(event) => updateLayerSetting(label, { offset: [clampOffsetInput(event.target.value), settings.offset[1]] })}
-                  />
-                </label>
-                <label>
-                  <span>Y</span>
-                  <input
-                    aria-label={`${slugLabel(label)} y offset`}
-                    type="text"
-                    inputMode="numeric"
-                    value={settings.offset[1]}
-                    onChange={(event) => updateLayerSetting(label, { offset: [settings.offset[0], clampOffsetInput(event.target.value)] })}
-                  />
-                </label>
-              </div>
-            </div>
-          )
-        })}
-      </div>
-      <div className="status-strip">
-        <label className="field compact">
-          <span>Team color</span>
-          <select value={palette} onChange={(event) => setPalette(event.target.value)}>
-            {palettePresets.map((name) => (
-              <option key={name} value={name}>
-                {slugLabel(name)}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label className="field compact slider-field">
-          <span>Hue: {paletteRules.hue_shift}</span>
-          <input
-            type="text"
-            inputMode="numeric"
-            value={paletteRules.hue_shift}
-            onChange={(event) => updatePaletteRules({ hue_shift: clampSignedInput(event.target.value, -180, 180) })}
-          />
-        </label>
-        <label className="field compact slider-field">
-          <span>Saturation: {paletteRules.saturation}%</span>
-          <input
-            type="text"
-            inputMode="numeric"
-            value={paletteRules.saturation}
-            onChange={(event) => updatePaletteRules({ saturation: clampUnsignedInput(event.target.value, 0, 200) })}
-          />
-        </label>
-        <label className="field compact slider-field">
-          <span>Brightness: {paletteRules.brightness}%</span>
-          <input
-            type="text"
-            inputMode="numeric"
-            value={paletteRules.brightness}
-            onChange={(event) => updatePaletteRules({ brightness: clampUnsignedInput(event.target.value, 0, 200) })}
-          />
-        </label>
-        <span>Core limbs default to APES masks</span>
-        <span>{reviewedParts.length} reviewed library parts available</span>
-        <span>{selectedReviewedParts.length} approved parts selected in recipe</span>
-        <span>{savedRecipes.length} saved recipe(s)</span>
-      </div>
-    </section>
-  )
-}
-
-function DirectionPreviewGrid({
-  character,
-  animation,
-  frameIndex,
-}: {
-  character: CharacterManifest
-  animation: AnimationName
-  frameIndex: number
-}) {
-  return (
-    <section className="direction-preview" aria-label="All direction preview">
-      <div>
-        <strong>All-direction preview</strong>
-        <span>{slugLabel(animation)} frame {frameIndex + 1}</span>
-      </div>
-      <div className="direction-preview-grid">
-        {mainDirections.map((direction) => (
-          <PixelCanvas
-            key={direction}
-            src={getFramePath(character, animation, direction, frameIndex)}
-            scale={2}
-            label={direction}
-          />
-        ))}
-      </div>
-    </section>
-  )
-}
-
-function Workstation({
-  selectedRegion,
-  setSelectedRegion,
-  regions,
-  updateRegion,
-  extractionMethod,
-  setExtractionMethod,
-  extractCurrentRegion,
-  extractionHistory,
-  connectedSeed,
-  setConnectedSeed,
-  parts,
-  saveEditedMask,
-}: {
-  selectedRegion: PartLabel
-  setSelectedRegion: (label: PartLabel) => void
-  regions: Record<PartLabel, Rect>
-  updateRegion: (key: keyof Rect, value: number) => void
-  extractionMethod: ExtractionMethod
-  setExtractionMethod: (method: ExtractionMethod) => void
-  extractCurrentRegion: () => void
-  extractionHistory: string[]
-  connectedSeed?: { x: number; y: number }
-  setConnectedSeed: (seed: { x: number; y: number } | undefined) => void
-  parts: ExtractedPart[]
-  saveEditedMask: (partId: string, maskDataUrl: string) => void
-}) {
-  const region = regions[selectedRegion]
-  return (
-    <section className="panel wide-panel">
-      <div className="panel-heading">
-        <h3>Art Workstation</h3>
-        <p>Compare APES, preset, connected-pixel, and manual masks on the same 64x64 source frame.</p>
-      </div>
-      <div className="workstation-grid">
-        <div className="tool-bank">
-          {extractionModes.map((mode) => (
-            <button key={mode.id} className={extractionMethod === mode.id ? 'active' : ''} onClick={() => setExtractionMethod(mode.id)}>
-              <strong>{mode.name}</strong>
-              <span>{mode.description}</span>
-            </button>
-          ))}
-        </div>
-        <div className="region-editor">
-          <label className="field">
-            <span>Region</span>
-            <select value={selectedRegion} onChange={(event) => setSelectedRegion(event.target.value as PartLabel)}>
-              {partLabels.map((label) => (
-                <option key={label} value={label}>
-                  {slugLabel(label)}
-                </option>
-              ))}
-            </select>
-          </label>
-          {(['x', 'y', 'w', 'h'] as Array<keyof Rect>).map((key) => (
-            <label key={key} className="field slider-field">
-              <span>{key.toUpperCase()}: {region[key]}</span>
-              <input min={0} max={64} type="range" value={region[key]} onChange={(event) => updateRegion(key, Number(event.target.value))} />
-            </label>
-          ))}
-        </div>
-        <div className="tool-list">
-          {['Pencil', 'Eraser', 'Fill', 'Lasso', 'Magic wand', 'Grow', 'Shrink', 'Mirror', 'Nudge', 'Copy to next frame', 'Mark reviewed'].map((tool) => (
-            <button key={tool}>{tool}</button>
-          ))}
-          <button className="primary" onClick={extractCurrentRegion}>Extract PNG + mask</button>
-          <div className="seed-panel">
-            <strong>Connected seed</strong>
-            <span>{connectedSeed ? `x ${connectedSeed.x}, y ${connectedSeed.y}` : 'Click the canvas in connected-pixel mode.'}</span>
-            <button onClick={() => setConnectedSeed(undefined)}>Clear seed</button>
-          </div>
-          <div className="history-list">
-            {extractionHistory.map((item) => (
-              <span key={item}>{item}</span>
-            ))}
-            {extractionHistory.length === 0 ? <span>No local extractions yet.</span> : null}
-          </div>
-        </div>
-        <MaskEditor parts={parts} selectedRegion={selectedRegion} onSaveMask={saveEditedMask} />
-      </div>
-    </section>
-  )
-}
-
-function PartLibrary({
-  parts,
-  togglePartReviewed,
-  setPartsReviewed,
-  deletePart,
-  clearPartLibrary,
-  exportPartLibrary,
-}: {
-  parts: ExtractedPart[]
-  togglePartReviewed: (partId: string) => void
-  setPartsReviewed: (partIds: string[], reviewed: boolean) => void
-  deletePart: (partId: string) => void
-  clearPartLibrary: () => void
-  exportPartLibrary: () => void
-}) {
-  const [methodFilter, setMethodFilter] = useState<ExtractionMethod | 'all'>('all')
-  const [labelFilter, setLabelFilter] = useState<PartLabel | 'all'>('all')
-  const [reviewFilter, setReviewFilter] = useState<PartReviewFilter>('all')
-  const [query, setQuery] = useState('')
-  const reviewedCount = parts.filter((part) => part.reviewed).length
-  const byMethod = parts.reduce<Record<string, number>>((acc, part) => {
-    acc[part.extraction_method] = (acc[part.extraction_method] ?? 0) + 1
-    return acc
-  }, {})
-  const normalizedQuery = query.trim().toLowerCase()
-  const filteredParts = parts.filter((part) => {
-    const matchesMethod = methodFilter === 'all' || part.extraction_method === methodFilter
-    const matchesLabel = labelFilter === 'all' || part.label === labelFilter
-    const matchesReview =
-      reviewFilter === 'all' || (reviewFilter === 'reviewed' ? part.reviewed : !part.reviewed)
-    const searchable = [part.part_id, part.character_id, part.label, part.extraction_method, ...part.tags].join(' ').toLowerCase()
-    return matchesMethod && matchesLabel && matchesReview && (!normalizedQuery || searchable.includes(normalizedQuery))
-  })
-  const filteredIds = filteredParts.map((part) => part.part_id)
-
-  return (
-    <section className="panel wide-panel">
-      <div className="panel-heading">
-        <div>
-          <h3>Part Library</h3>
-          <p>Reusable extraction records from APES, presets, connected-pixel selections, and manual cleanup.</p>
-        </div>
-        <div className="topbar-actions">
-          <button onClick={exportPartLibrary}>Export library JSON</button>
-          <button onClick={clearPartLibrary}>Clear library</button>
-        </div>
-      </div>
-
-      <div className="validation-grid">
-        <article className="pass">
-          <strong>{parts.length}</strong>
-          <span>total parts</span>
-        </article>
-        <article className={reviewedCount === parts.length && parts.length > 0 ? 'pass' : 'warn'}>
-          <strong>{reviewedCount}</strong>
-          <span>reviewed</span>
-        </article>
-        {Object.entries(byMethod).map(([method, count]) => (
-          <article key={method} className="pass">
-            <strong>{count}</strong>
-            <span>{slugLabel(method)}</span>
-          </article>
-        ))}
-        <article className={filteredParts.length > 0 ? 'pass' : 'warn'}>
-          <strong>{filteredParts.length}</strong>
-          <span>visible results</span>
-        </article>
-      </div>
-
-      <div className="library-filters">
-        <label className="field">
-          <span>Search</span>
-          <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="part id, tag, character" />
-        </label>
-        <label className="field">
-          <span>Method</span>
-          <select value={methodFilter} onChange={(event) => setMethodFilter(event.target.value as ExtractionMethod | 'all')}>
-            <option value="all">all methods</option>
-            <option value="apes">APES</option>
-            <option value="preset_region">preset regions</option>
-            <option value="connected_pixel">connected pixels</option>
-            <option value="manual">manual cleanup</option>
-          </select>
-        </label>
-        <label className="field">
-          <span>Label</span>
-          <select value={labelFilter} onChange={(event) => setLabelFilter(event.target.value as PartLabel | 'all')}>
-            <option value="all">all labels</option>
-            {partLabels.map((label) => (
-              <option key={label} value={label}>
-                {slugLabel(label)}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label className="field">
-          <span>Review</span>
-          <select value={reviewFilter} onChange={(event) => setReviewFilter(event.target.value as PartReviewFilter)}>
-            <option value="all">all review states</option>
-            <option value="needs_review">needs review</option>
-            <option value="reviewed">reviewed</option>
-          </select>
-        </label>
-      </div>
-
-      <div className="status-strip">
-        <button onClick={() => setPartsReviewed(filteredIds, true)} disabled={filteredParts.length === 0}>Mark visible reviewed</button>
-        <button onClick={() => setPartsReviewed(filteredIds, false)} disabled={filteredParts.length === 0}>Mark visible unreviewed</button>
-        <button
-          onClick={() =>
-            downloadJson('pixel_creator_filtered_parts.json', {
-              exported_at: new Date().toISOString(),
-              filters: { methodFilter, labelFilter, reviewFilter, query },
-              part_count: filteredParts.length,
-              parts: filteredParts,
-            })
-          }
-          disabled={filteredParts.length === 0}
-        >
-          Export visible JSON
-        </button>
-      </div>
-
-      <div className="part-library-list">
-        {filteredParts.map((part) => (
-          <article key={part.part_id} className={part.reviewed ? 'reviewed' : ''}>
-            <div>
-              <strong>{part.label}</strong>
-              <span>{part.part_id}</span>
-            </div>
-            <div className="part-meta">
-              <span>{part.character_id}</span>
-              <span>{slugLabel(part.extraction_method)}</span>
-              <span>{part.source_animation} / {part.source_direction}</span>
-              <span>{part.bounds.w}x{part.bounds.h} at {part.bounds.x},{part.bounds.y}</span>
-            </div>
-            <div className="part-meta">
-              {part.tags.map((tag) => (
-                <span key={tag}>{slugLabel(tag)}</span>
-              ))}
-            </div>
-            {part.warnings.length > 0 ? (
-              <p>{part.warnings.join(' ')}</p>
-            ) : null}
-            <div className="job-actions">
-              <button onClick={() => togglePartReviewed(part.part_id)}>{part.reviewed ? 'Mark unreviewed' : 'Mark reviewed'}</button>
-              <button onClick={() => downloadJson(`${part.part_id}.json`, part)}>Download metadata</button>
-              <button onClick={() => deletePart(part.part_id)}>Delete</button>
-            </div>
-          </article>
-        ))}
-        {parts.length === 0 ? <p className="empty">No parts in the library yet. Extract a region or connected cluster from the Art Workstation.</p> : null}
-        {parts.length > 0 && filteredParts.length === 0 ? <p className="empty">No parts match the current filters.</p> : null}
-      </div>
-    </section>
-  )
-}
-
-function BatchGenerator({
-  batchSeed,
-  setBatchSeed,
-  batchCount,
-  setBatchCount,
-  batchVariants,
-  characters,
-  partLibrary,
-  currentAnimation,
-  currentDirection,
-  currentFrameIndex,
-}: {
-  batchSeed: string
-  setBatchSeed: (seed: string) => void
-  batchCount: number
-  setBatchCount: (count: number) => void
-  batchVariants: BatchVariant[]
-  characters: CharacterManifest[]
-  partLibrary: ExtractedPart[]
-  currentAnimation: AnimationName
-  currentDirection: Direction
-  currentFrameIndex: number
-}) {
-  const reviewedParts = partLibrary.filter((part) => part.reviewed)
-  const reviewedApesParts = reviewedParts.filter((part) => part.extraction_method === 'apes')
-  const libraryBackedPartCount = batchVariants.reduce(
-    (total, variant) => total + variant.parts.filter((part) => part.source_part_id).length,
-    0,
-  )
-
-  return (
-    <section className="panel wide-panel">
-      <div className="panel-heading">
-        <h3>Batch Generator</h3>
-        <p>Deterministic variants from APES-approved limbs, preset regions, connected masks, palettes, and tags.</p>
-      </div>
-      <div className="batch-controls">
-        <label className="field">
-          <span>Seed</span>
-          <input value={batchSeed} onChange={(event) => setBatchSeed(event.target.value)} />
-        </label>
-        <label className="field">
-          <span>Export count</span>
-          <input min={1} max={32} type="number" value={batchCount} onChange={(event) => setBatchCount(Number(event.target.value))} />
-        </label>
-      </div>
-      <div className="validation-grid">
-        <article className={reviewedApesParts.length > 0 ? 'pass' : 'warn'}>
-          <strong>{reviewedApesParts.length}</strong>
-          <span>reviewed APES parts</span>
-        </article>
-        <article className={reviewedParts.length > 0 ? 'pass' : 'warn'}>
-          <strong>{reviewedParts.length}</strong>
-          <span>approved library pool</span>
-        </article>
-        <article className={libraryBackedPartCount > 0 ? 'pass' : 'warn'}>
-          <strong>{libraryBackedPartCount}</strong>
-          <span>library picks in queue</span>
-        </article>
-      </div>
-      <div className="status-strip">
-        <button
-          onClick={() =>
-            downloadJson('pixel_creator_batch_package_manifest.json', {
-              exported_at: new Date().toISOString(),
-              seed: batchSeed,
-              count: batchVariants.length,
-              variants: batchVariants.map((variant) => ({
-                id: variant.id,
-                base: variant.base,
-                palette: variant.palette,
-                recipe: variant.recipe,
-                validation: {
-                  has_library_parts: variant.parts.some((part) => part.source_part_id),
-                  apes_part_count: variant.parts.filter((part) => part.method === 'apes').length,
-                  deterministic_seed: batchSeed,
-                },
-              })),
-            })
-          }
-          disabled={batchVariants.length === 0}
-        >
-          Download batch package manifest
-        </button>
-      </div>
-      <div className="variant-list">
-        {batchVariants.map((variant) => (
-          <article key={variant.id}>
-            <strong>{variant.id}</strong>
-            <span>{variant.base}</span>
-            <span>{slugLabel(variant.palette)}</span>
-            <CompositeCanvas
-              recipe={variant.recipe}
-              characters={characters}
-              partLibrary={partLibrary}
-              animation={currentAnimation}
-              direction={currentDirection}
-              frameIndex={currentFrameIndex}
-              scale={2}
-              label={variant.id}
-            />
-            <small>
-              {variant.parts.filter((part) => part.method === 'apes').length} APES parts / {variant.parts.filter((part) => part.source_part_id).length} approved picks
-            </small>
-          </article>
-        ))}
-      </div>
-    </section>
-  )
-}
-
-function AssetAudit({ manifest, classCounts }: { manifest: AssetManifest; classCounts: Record<string, number> }) {
-  const warnings = manifest.characters.flatMap((character) => character.source_quality_warnings.map((warning) => ({ character: character.character_id, warning })))
-  return (
-    <section className="panel wide-panel">
-      <div className="panel-heading">
-        <h3>Asset Audit</h3>
-        <p>Canonical manifest generated from the real source folder. Original assets stay read-only.</p>
-      </div>
-      <div className="audit-grid">
-        {Object.entries(classCounts).map(([name, count]) => (
-          <article key={name}>
-            <strong>{count}</strong>
-            <span>{slugLabel(name)}</span>
-          </article>
-        ))}
-      </div>
-      <div className="warning-list">
-        {warnings.slice(0, 16).map((item) => (
-          <p key={`${item.character}-${item.warning}`}>
-            <strong>{item.character}</strong> {item.warning}
-          </p>
-        ))}
-        {warnings.length === 0 ? <p>No source warnings found.</p> : null}
-      </div>
-    </section>
-  )
-}
-
-function ApesLab({
-  jobs,
-  createApesJob,
-  markJobFailed,
-  markJobComplete,
-  selectedCharacter,
-  partLibrary,
-  apesAnimations,
-  apesDirections,
-  apesLabels,
-  apesFrameRange,
-  setApesFrameRange,
-  toggleApesAnimation,
-  toggleApesDirection,
-  toggleApesLabel,
-  importApesReport,
-}: {
-  jobs: ApesJob[]
-  createApesJob: () => void
-  markJobFailed: (jobId: string) => void
-  markJobComplete: (jobId: string) => void
-  selectedCharacter: CharacterManifest
-  partLibrary: ExtractedPart[]
-  apesAnimations: AnimationName[]
-  apesDirections: Direction[]
-  apesLabels: PartLabel[]
-  apesFrameRange: [number, number]
-  setApesFrameRange: (range: [number, number]) => void
-  toggleApesAnimation: (name: AnimationName) => void
-  toggleApesDirection: (name: Direction) => void
-  toggleApesLabel: (name: PartLabel) => void
-  importApesReport: (report: ApesReport) => void
-}) {
-  const apesParts = partLibrary.filter((part) => part.extraction_method === 'apes')
-  const reviewedApesParts = apesParts.filter((part) => part.reviewed)
-  const expectedInputCount = apesAnimations.reduce(
-    (total, animation) =>
-      total +
-      apesDirections.reduce((directionTotal, direction) => {
-        const [start, end] = apesFrameRange[0] <= apesFrameRange[1] ? apesFrameRange : [apesFrameRange[1], apesFrameRange[0]]
-        return directionTotal + getFrames(selectedCharacter, animation, direction).filter((frame) => frame.index >= start && frame.index <= end).length
-      }, 0),
-    0,
-  )
-
-  return (
-    <section className="panel wide-panel">
-      <div className="panel-heading">
-        <h3>APES Lab</h3>
-        <p>APES is a first-class extraction workflow: create jobs, review logs, import masks, and convert outputs into editable parts.</p>
-      </div>
-      <div className="apes-summary">
-        <article>
-          <strong>Input</strong>
-          <span>{selectedCharacter.character_id} / {apesAnimations.length} animation(s) / {apesDirections.length} direction(s)</span>
-        </article>
-        <article>
-          <strong>Outputs</strong>
-          <span>{apesLabels.map(slugLabel).join(', ') || 'select labels'}</span>
-        </article>
-        <article>
-          <strong>Storage</strong>
-          <span>data/apes/input and data/apes/output</span>
-        </article>
-        <article>
-          <strong>Readiness</strong>
-          <span>{selectedCharacter.source_quality_warnings.length === 0 ? 'source frames clean' : `${selectedCharacter.source_quality_warnings.length} source warning(s)`}</span>
-        </article>
-        <article>
-          <strong>Library</strong>
-          <span>{apesParts.length} APES part(s), {reviewedApesParts.length} reviewed</span>
-        </article>
-        <article>
-          <strong>Job size</strong>
-          <span>{expectedInputCount} frame reference(s), range {apesFrameRange[0]}-{apesFrameRange[1]}</span>
-        </article>
-      </div>
-
-      <div className="apes-config">
-        <fieldset>
-          <legend>Animations</legend>
-          {selectedCharacter.animation_names.map((name) => (
-            <label key={name}>
-              <input type="checkbox" checked={apesAnimations.includes(name)} onChange={() => toggleApesAnimation(name)} />
-              <span>{slugLabel(name)}</span>
-            </label>
-          ))}
-        </fieldset>
-        <fieldset>
-          <legend>Directions</legend>
-          {mainDirections.map((name) => (
-            <label key={name}>
-              <input type="checkbox" checked={apesDirections.includes(name)} onChange={() => toggleApesDirection(name)} />
-              <span>{name}</span>
-            </label>
-          ))}
-        </fieldset>
-        <fieldset>
-          <legend>APES labels</legend>
-          {apesCoreLabels.map((name) => (
-            <label key={name}>
-              <input type="checkbox" checked={apesLabels.includes(name)} onChange={() => toggleApesLabel(name)} />
-              <span>{slugLabel(name)}</span>
-            </label>
-          ))}
-        </fieldset>
-        <fieldset>
-          <legend>Frame range</legend>
-          <label>
-            <span>Start</span>
-            <input
-              type="text"
-              inputMode="numeric"
-              value={apesFrameRange[0]}
-              onChange={(event) => setApesFrameRange([clampFrameInput(event.target.value), apesFrameRange[1]])}
-            />
-          </label>
-          <label>
-            <span>End</span>
-            <input
-              type="text"
-              inputMode="numeric"
-              value={apesFrameRange[1]}
-              onChange={(event) => setApesFrameRange([apesFrameRange[0], clampFrameInput(event.target.value)])}
-            />
-          </label>
-        </fieldset>
-      </div>
-      <div className="status-strip">
-        <button className="primary" onClick={createApesJob}>Create APES job</button>
-        <label className="file-import">
-          <span>Import APES report JSON</span>
-          <input
-            type="file"
-            accept="application/json,.json"
-            onChange={(event) => {
-              const file = event.target.files?.[0]
-              if (!file) return
-              file
-                .text()
-                .then((text) => importApesReport(JSON.parse(text) as ApesReport))
-                .catch((error) => {
-                  window.alert(`Could not import APES report: ${error instanceof Error ? error.message : String(error)}`)
-                })
-              event.currentTarget.value = ''
-            }}
-          />
-        </label>
-      </div>
-      <div className="job-list">
-        {jobs.map((job) => (
-          <article key={job.job_id} className={`job ${job.status}`}>
-            <div>
-              <strong>{job.job_id}</strong>
-              <span>{job.status}</span>
-            </div>
-            <p>{job.animations.join(', ')} across {job.directions.join(', ')}</p>
-            <p>{job.input_frames.length} input frame references prepared for APES.</p>
-            {job.failure_details ? <p className="error-text">{job.failure_details}</p> : null}
-            <div className="job-actions">
-              <button onClick={() => downloadJson(`${job.job_id}.json`, job)}>Download job config</button>
-              <button
-                onClick={() =>
-                  downloadJson(`${job.job_id}_expected_report.json`, {
-                    job_id: job.job_id,
-                    status: 'complete',
-                    masks: job.output_labels.map((label) => ({
-                      label,
-                      path: `data/apes/output/${job.job_id}/masks/${label}_mask.png`,
-                      confidence: 0,
-                      reviewed: false,
-                    })),
-                    semantic_mapping: {
-                      head: 'head',
-                      torso: 'torso',
-                      left_arm: 'front_arm',
-                      right_arm: 'back_arm',
-                      left_leg: 'front_leg',
-                      right_leg: 'back_leg',
-                    },
-                    warnings: ['Masks must be reviewed in the Art Workstation before final export.'],
-                  })
-                }
-              >
-                Download report template
-              </button>
-              <button onClick={() => markJobFailed(job.job_id)}>Simulate bridge error</button>
-              <button onClick={() => markJobComplete(job.job_id)}>Import report to library</button>
-            </div>
-            {job.status === 'complete' ? (
-              <p>{job.output_labels.length} APES mask records are now available in the Part Library for review.</p>
-            ) : null}
-          </article>
-        ))}
-        {jobs.length === 0 ? <p className="empty">No APES jobs yet. Create one from this screen or the top bar.</p> : null}
-      </div>
-    </section>
-  )
-}
-
-function Exports({
-  recipe,
-  selectedCharacter,
-  characters,
-  partLibrary,
-  currentAnimation,
-  currentDirection,
-  currentFrameIndex,
-  exportGeneric,
-  exportGodotScene,
-  exportSpriteFrames,
-  exportUnityMetadata,
-  exportRpgMakerMetadata,
-  exportAsepriteReference,
-  exportCurrentSpriteSheet,
-  exportAnimationSheets,
-  batchVariants,
-}: {
-  recipe: ReturnType<typeof makeRecipe> | null
-  selectedCharacter: CharacterManifest
-  characters: CharacterManifest[]
-  partLibrary: ExtractedPart[]
-  currentAnimation: AnimationName
-  currentDirection: Direction
-  currentFrameIndex: number
-  exportGeneric: () => void
-  exportGodotScene: () => void
-  exportSpriteFrames: () => void
-  exportUnityMetadata: () => void
-  exportRpgMakerMetadata: () => void
-  exportAsepriteReference: () => void
-  exportCurrentSpriteSheet: () => void
-  exportAnimationSheets: () => void
-  batchVariants: BatchVariant[]
-}) {
-  const directionCoverage = selectedCharacter.animation_names.flatMap((name) =>
-    mainDirections.map((item) => getFrames(selectedCharacter, name, item).length > 0),
-  )
-  const validation = [
-    { label: 'Manifest', value: selectedCharacter.animation_names.length > 0 ? 'pass' : 'reject' },
-    { label: '4-direction frames', value: directionCoverage.every(Boolean) ? 'pass' : 'needs cleanup' },
-    { label: 'APES provenance', value: recipe?.layers.some((layer) => layer.extraction_method === 'apes') ? 'pass' : 'needs APES' },
-    { label: 'Godot target', value: recipe?.export_targets.includes('godot_4') ? 'pass' : 'defer' },
-  ]
-  const frameSummary = selectedCharacter.animation_names.flatMap((name) =>
-    mainDirections.map((item) => ({
-      label: `${slugLabel(name)} ${item}`,
-      count: getFrames(selectedCharacter, name, item).length,
-    })),
-  )
-
-  return (
-    <section className="panel wide-panel">
-      <div className="panel-heading">
-        <h3>Export System</h3>
-        <p>Game-ready outputs with extraction provenance, APES metadata, generic JSON, and Godot 4 resources.</p>
-      </div>
-      <div className="validation-grid">
-        {validation.map((item) => (
-          <article key={item.label} className={item.value === 'pass' ? 'pass' : 'warn'}>
-            <strong>{item.label}</strong>
-            <span>{item.value}</span>
-          </article>
-        ))}
-      </div>
-      <div className="export-grid">
-        <button className="primary" onClick={exportGeneric}>Download generic manifest</button>
-        <button onClick={exportCurrentSpriteSheet}>Download current spritesheet</button>
-        <button onClick={exportAnimationSheets}>Download current action sheets</button>
-        <button onClick={exportGodotScene}>Download Godot scene</button>
-        <button onClick={() => downloadJson(`${selectedCharacter.character_id}_batch_queue.json`, batchVariants)}>Download batch queue</button>
-        <button onClick={exportSpriteFrames}>Download SpriteFrames resource</button>
-        <button onClick={exportUnityMetadata}>Download Unity 2D metadata</button>
-        <button onClick={exportRpgMakerMetadata}>Download RPG Maker MZ metadata</button>
-        <button onClick={exportAsepriteReference}>Download Aseprite reference</button>
-      </div>
-      <DirectionPreviewGrid character={selectedCharacter} animation={currentAnimation} frameIndex={currentFrameIndex} />
-      {recipe ? (
-        <section className="composite-preview-panel">
-          <div>
-            <strong>Composite export preview</strong>
-            <span>{slugLabel(currentAnimation)} / {currentDirection} / frame {currentFrameIndex + 1}</span>
-          </div>
-          <CompositeCanvas
-            recipe={recipe}
-            characters={characters}
-            partLibrary={partLibrary}
-            animation={currentAnimation}
-            direction={currentDirection}
-            frameIndex={currentFrameIndex}
-            scale={3}
-            label={`composite ${currentAnimation} ${currentDirection} frame ${currentFrameIndex + 1}`}
-          />
-        </section>
-      ) : null}
-      <div className="frame-summary">
-        <strong>Current sheet</strong>
-        <span>{slugLabel(currentAnimation)} / {currentDirection} / {getFrames(selectedCharacter, currentAnimation, currentDirection).length} frames</span>
-        {frameSummary.map((item) => (
-          <span key={item.label}>{item.label}: {item.count}</span>
-        ))}
-      </div>
-      <pre className="recipe-preview">{JSON.stringify(recipe, null, 2)}</pre>
-    </section>
-  )
-}
-
 function screenLabel(screen: Screen) {
   return screens.find((item) => item.id === screen)?.label ?? 'Creator'
-}
-
-function clampFrameInput(value: string) {
-  const parsed = Number(value.replace(/[^0-9]/g, ''))
-  if (!Number.isFinite(parsed)) return 0
-  return Math.max(0, Math.min(31, parsed))
-}
-
-function clampOffsetInput(value: string) {
-  const parsed = Number(value.replace(/(?!^-)[^0-9]/g, ''))
-  if (!Number.isFinite(parsed)) return 0
-  return Math.max(-32, Math.min(32, parsed))
-}
-
-function clampSignedInput(value: string, min: number, max: number) {
-  const parsed = Number(value.replace(/(?!^-)[^0-9]/g, ''))
-  if (!Number.isFinite(parsed)) return 0
-  return Math.max(min, Math.min(max, parsed))
-}
-
-function clampUnsignedInput(value: string, min: number, max: number) {
-  const parsed = Number(value.replace(/[^0-9]/g, ''))
-  if (!Number.isFinite(parsed)) return min
-  return Math.max(min, Math.min(max, parsed))
 }
 
 export default App

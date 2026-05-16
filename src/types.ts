@@ -47,6 +47,47 @@ export type AssetManifest = {
   characters: CharacterManifest[]
 }
 
+export type DuelystPackageCandidate = {
+  unit_id: string
+  display_name: string
+  sheet_source_path: string
+  sheet_url: string
+  sheet_size: { width: number; height: number }
+  plist_source_path: string
+  estimated_frame_size: { width: number; height: number; occurrences: number; frame_count: number } | null
+  animation_names: string[]
+  animation_clip_count: number
+  controller_count: number
+  preview_url: string
+  staged_frame_url: string
+  staged_frame_size: { width: number; height: number }
+  staged: boolean
+  stage_character_id: string
+  score: number
+  reasons: string[]
+  warnings: string[]
+}
+
+export type DuelystStagedManifest = {
+  generated_at: string
+  package_path: string
+  character_count: number
+  characters: CharacterManifest[]
+}
+
+export type DuelystPackageAudit = {
+  generated_at: string
+  package_path: string
+  available: boolean
+  extraction_root: string
+  total_assets: number
+  extension_counts: Record<string, number>
+  candidate_units: DuelystPackageCandidate[]
+  staged_manifest: DuelystStagedManifest
+  findings: string[]
+  summary: string
+}
+
 export type PartLabel =
   | 'shadow'
   | 'back_item'
@@ -129,13 +170,60 @@ export type ApesJob = {
   failure_details?: string
 }
 
+export type ApesBridgeStatus = {
+  status: ApesJob['status']
+  logs: string[]
+  failure_details?: string
+}
+
+export type ApesPreflightReport = {
+  ready: boolean
+  repo_root: string
+  python: {
+    version: string
+    executable: string
+  }
+  paths: {
+    checkpoint: string
+    vendor_root: string
+    test_folder: string
+  }
+  data: {
+    exists: boolean
+    character_count: number
+    sample_character: string | null
+    sample_png_count: number
+    sample_mask_count: number
+  }
+  modules: Record<string, boolean>
+  module_errors: Record<string, string>
+  torch: {
+    installed: boolean
+    version?: string | null
+    cuda_available: boolean
+    error?: string
+    cuda_error?: string
+  }
+  tools: {
+    conda: string | null
+    mamba: string | null
+    micromamba: string | null
+    nvidia_smi: string | null
+  }
+  findings: string[]
+}
+
 export type ApesReport = {
   job_id: string
+  status?: 'complete' | 'failed' | 'running'
   masks: Array<{
     label: PartLabel
     path: string
+    image_path?: string
+    bounds?: Rect
     confidence: number
     reviewed: boolean
+    warnings?: string[]
   }>
   semantic_mapping: Record<string, PartLabel>
   warnings: string[]

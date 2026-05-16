@@ -6,17 +6,25 @@
   "scripts": {
     "dev": "vite",
     "index:assets": "node tools/index-assets.js",
+    "repair:manifest-paths": "node tools/repair-manifest-paths.js",
     "export:character": "node tools/export-character.js",
+    "qa:apes-harness": "node tools/generate-apes-qa-harness.js",
+    "test:browser": "playwright test",
+    "test:browser:headed": "playwright test --headed",
+    "test:browser:install": "playwright install chromium",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
     "preview": "vite preview"
   },
   "dependencies": {
+    "jszip": "^3.10.1",
+    "pngjs": "^7.0.0",
     "react": "^19.2.6",
     "react-dom": "^19.2.6"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
+    "@playwright/test": "^1.54.2",
     "@types/node": "^24.12.3",
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",

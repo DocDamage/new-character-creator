@@ -33,6 +33,10 @@ export function downloadJson(filename: string, payload: unknown) {
 
 export function downloadText(filename: string, payload: string, type = 'text/plain') {
   const blob = new Blob([payload], { type })
+  downloadBlob(filename, blob)
+}
+
+export function downloadBlob(filename: string, blob: Blob) {
   const url = URL.createObjectURL(blob)
   const link = document.createElement('a')
   link.href = url
@@ -301,6 +305,7 @@ export function makeApesJob(
   frameRange: [number, number] = [0, 7],
 ): ApesJob {
   const [frameStart, frameEnd] = frameRange[0] <= frameRange[1] ? frameRange : [frameRange[1], frameRange[0]]
+  const jobId = `apes_${character.character_id}_${Date.now()}`
   const input_frames = animations.flatMap((animation) =>
     directions.flatMap((direction) =>
       getFrames(character, animation, direction)
@@ -315,7 +320,7 @@ export function makeApesJob(
   )
 
   return {
-    job_id: `apes_${character.character_id}_${Date.now()}`,
+    job_id: jobId,
     character_id: character.character_id,
     animations,
     directions,
@@ -324,7 +329,7 @@ export function makeApesJob(
     status: 'prepared',
     created_at: new Date().toISOString(),
     input_frames,
-    output_root: `data/apes/output/${character.character_id}`,
+    output_root: `data/apes/output/${jobId}`,
     logs: [
       'Prepared APES input manifest.',
       `Prepared ${input_frames.length} normalized 64x64 frame reference(s).`,

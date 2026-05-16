@@ -1,0 +1,106 @@
+{
+  "job_id": "apes_harness_job",
+  "status": "complete",
+  "masks": [
+    {
+      "label": "head",
+      "path": "data/qa/apes_harness_job/masks/head_mask.png",
+      "image_path": "data/qa/apes_harness_job/parts/head.png",
+      "bounds": {
+        "x": 18,
+        "y": 6,
+        "w": 28,
+        "h": 22
+      },
+      "confidence": 0.94,
+      "reviewed": false,
+      "warnings": [
+        "Hair edge overlaps the hood region on some north-facing frames."
+      ]
+    },
+    {
+      "label": "torso",
+      "path": "data/qa/apes_harness_job/masks/torso_mask.png",
+      "image_path": "data/qa/apes_harness_job/parts/torso.png",
+      "bounds": {
+        "x": 20,
+        "y": 22,
+        "w": 24,
+        "h": 18
+      },
+      "confidence": 0.88,
+      "reviewed": false,
+      "warnings": []
+    },
+    {
+      "label": "front_arm",
+      "path": "data/qa/apes_harness_job/masks/front_arm_mask.png",
+      "image_path": "data/qa/apes_harness_job/parts/front_arm.png",
+      "bounds": {
+        "x": 12,
+        "y": 22,
+        "w": 12,
+        "h": 24
+      },
+      "confidence": 0.63,
+      "reviewed": false,
+      "warnings": [
+        "Low-confidence limb edge near the weapon silhouette."
+      ]
+    },
+    {
+      "label": "back_arm",
+      "path": "data/qa/apes_harness_job/masks/back_arm_mask.png",
+      "image_path": "data/qa/apes_harness_job/parts/back_arm.png",
+      "bounds": {
+        "x": 40,
+        "y": 22,
+        "w": 12,
+        "h": 24
+      },
+      "confidence": 0.67,
+      "reviewed": false,
+      "warnings": []
+    },
+    {
+      "label": "front_leg",
+      "path": "data/qa/apes_harness_job/masks/front_leg_mask.png",
+      "image_path": "data/qa/apes_harness_job/parts/front_leg.png",
+      "bounds": {
+        "x": 20,
+        "y": 38,
+        "w": 12,
+        "h": 22
+      },
+      "confidence": 0.72,
+      "reviewed": false,
+      "warnings": []
+    },
+    {
+      "label": "back_leg",
+      "path": "data/qa/apes_harness_job/masks/back_leg_mask.png",
+      "image_path": "data/qa/apes_harness_job/parts/back_leg.png",
+      "bounds": {
+        "x": 32,
+        "y": 38,
+        "w": 12,
+        "h": 22
+      },
+      "confidence": 0.7,
+      "reviewed": false,
+      "warnings": []
+    }
+  ],
+  "semantic_mapping": {
+    "head": "head",
+    "torso": "torso",
+    "front_arm": "front_arm",
+    "back_arm": "back_arm",
+    "front_leg": "front_leg",
+    "back_leg": "back_leg"
+  },
+  "warnings": [
+    "QA harness report. Import into APES Lab and verify that bounds, confidence tags, warnings, and preview paths survive into Part Library entries.",
+    "This harness is static and does not require CUDA or the APES Python runtime."
+  ]
+}

@@ -18,6 +18,8 @@ def main() -> None:
     parts = []
     for index, mask in enumerate(report.get("masks", [])):
         label = mask["label"]
+        bounds = mask.get("bounds") or {"x": 0, "y": 0, "w": 64, "h": 64}
+        mask_warnings = mask.get("warnings", [])
         parts.append(
             {
                 "part_id": f"{args.character}_{label}_apes_{index:03d}",
@@ -28,8 +30,11 @@ def main() -> None:
                 "source_frame_path": args.source_frame,
                 "image_path": "",
                 "mask_path": mask["path"],
-                "anchor": {"x": 32, "y": 32},
-                "bounds": {"x": 0, "y": 0, "w": 64, "h": 64},
+                "anchor": {
+                    "x": bounds["x"] + round(bounds["w"] / 2),
+                    "y": bounds["y"] + round(bounds["h"] / 2),
+                },
+                "bounds": bounds,
                 "extraction_method": "apes",
                 "compatibility": {
                     "animations": [args.animation],
@@ -37,7 +42,10 @@ def main() -> None:
                 },
                 "reviewed": mask.get("reviewed", False),
                 "tags": ["apes", "report_import", args.character, f"confidence_{round(mask.get('confidence', 0) * 100)}"],
-                "warnings": report.get("warnings", []),
+                "warnings": [
+                    *report.get("warnings", []),
+                    *mask_warnings,
+                ],
             }
         )
 

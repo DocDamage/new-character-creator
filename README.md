@@ -10,7 +10,27 @@ npm run index:assets
 npm run export:character -- 1-warrior-woman
 npm run dev -- --host 127.0.0.1 --port 8002 --strictPort
 npm run build
+npm run test:browser
 ```
+
+If the sprite pack lives somewhere other than `../Animated-Pixel-Pack-Characters-V1`, override it with `PIXEL_CREATOR_ASSET_ROOT` or `--asset-root`:
+
+```bash
+$env:PIXEL_CREATOR_ASSET_ROOT = 'D:\sprite-packs\Animated-Pixel-Pack-Characters-V1'
+npm run index:assets
+npm run export:character -- 1-warrior-woman --asset-root 'D:\sprite-packs\Animated-Pixel-Pack-Characters-V1'
+```
+
+If you prefer not to remember the commands, open the `Settings` screen in the app. It has buttons that copy the repair, reindex, and sample export commands with your chosen asset-pack path filled in.
+
+When the app is running with `npm run dev`, the same `Settings` screen can also run the repair and reindex actions directly through the local Vite dev server. APES Lab uses that same local dev flow for APES preflight checks, local bridge runs, and the no-CUDA QA harness generator.
+
+The `Settings` screen now also exposes a `Copy browser regression command` action for the local Playwright harness. That harness validates two non-APES workflows end to end:
+
+- rendered/full-package export downloads
+- manual mask save persistence after reload
+- recipe save/load state
+- Part Library bulk review actions
 
 ## What is implemented
 
@@ -24,10 +44,10 @@ npm run build
 - Art Workstation with preset regions, APES/preset/connected/manual mode comparison, region controls, and cleanup tool surface.
 - Batch Generator with deterministic seeded variants.
 - Asset Audit with class counts and source warnings.
-- APES Lab with first-class job creation, logs, job config export, failure surfacing, and report import state.
-- Export panel for generic manifests, Godot scene stubs, SpriteFrames stubs, and batch queues.
+- APES Lab with first-class job creation, local preflight/bridge actions, a one-click local QA harness generator, logs, job config export, failure surfacing, and report import state.
+- Export panel for generic manifests, rendered frame/package downloads, Godot scene stubs, SpriteFrames stubs, and batch queues.
 - Browser-side spritesheet downloads for the current animation/direction and all directions of the current action.
-- CLI character export under `data/exports/<character_id>/` with copied frames, generic manifest, and Godot files.
+- CLI character export under `data/exports/<character_id>/` with `package_manifest.json`, rendered frames/sheets, engine metadata, and source-frame references.
 - APES bridge contract under `tools/apes_bridge/`.
 
 ## APES bridge
@@ -39,7 +59,38 @@ data/apes/input/
 data/apes/output/
 ```
 
-`tools/apes_bridge/run_apes_extract.py` currently provides the APES service contract and deterministic placeholder masks. Replace the placeholder generator with the real APES runtime when available.
+`tools/apes_bridge/run_apes_extract.py` now has two practical modes:
+
+- real bridge mode for a CUDA-capable APES machine: prepares a temporary APES dataset from job frames, runs the vendored `inference_os.py`, and writes `status.json`, `preflight.json`, and `apes_report.json`
+- placeholder mode for local harness work on this machine when `--allow-placeholder` is explicitly enabled
+
+For the current no-CUDA Windows machine, the useful workflow is in the app:
+
+1. Start `npm run dev`.
+2. Open `Settings` and set the APES Python path only if you are pointing at a dedicated APES environment on another machine.
+3. Open `APES Lab`.
+4. Click `Generate local QA harness` to regenerate and import the static sample APES parts without using the terminal.
+5. Click `Run APES preflight` to see why the full runtime is unavailable on this machine, or to validate the home GPU machine later.
+
+You can still regenerate the harness from the terminal when needed:
+
+```bash
+npm run qa:apes-harness
+```
+
+## Browser regression harness
+
+Use the Playwright harness when you want a repeatable local smoke test instead of stepping through every browser check by hand:
+
+```bash
+npm run test:browser
+```
+
+The first run may require the Playwright browser install:
+
+```bash
+npm run test:browser:install
+```
 
 ## Source assets
 
