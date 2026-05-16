@@ -3,12 +3,14 @@ import './App.css'
 import {
   apesAllowPlaceholderStorageKey,
   apesHarnessGeneratedAtStorageKey,
+  apesJobsStorageKey,
   apesPreflightStorageKey,
   apesPythonPathStorageKey,
   apesQaHarnessJobId,
   assetRootInputStorageKey,
   composerRecipesStorageKey,
   loadStoredApesPreflight,
+  loadStoredApesJobs,
   loadStoredBoolean,
   loadStoredComposerRecipes,
   loadStoredPartLibrary,
@@ -149,7 +151,7 @@ function App() {
   const [recipeName, setRecipeName] = useState('Draft kitbash')
   const [savedRecipes, setSavedRecipes] = useState<SavedComposerRecipe[]>(loadStoredComposerRecipes)
   const [extractionMethod, setExtractionMethod] = useState<ExtractionMethod>('apes')
-  const [apesJobs, setApesJobs] = useState<ApesJob[]>([])
+  const [apesJobs, setApesJobs] = useState<ApesJob[]>(loadStoredApesJobs)
   const [batchSeed, setBatchSeed] = useState('ash-ronin-001')
   const [batchCount, setBatchCount] = useState(8)
   const [palette, setPalette] = useState(palettePresets[0])
@@ -274,6 +276,10 @@ function App() {
   useEffect(() => {
     storeJson(composerRecipesStorageKey, savedRecipes)
   }, [savedRecipes])
+
+  useEffect(() => {
+    storeJson(apesJobsStorageKey, apesJobs)
+  }, [apesJobs])
 
   useEffect(() => {
     storeString(assetRootInputStorageKey, assetRootInput)
@@ -467,12 +473,23 @@ function App() {
       .map((character, index) => {
         const job = makeApesJob(character, ['idle'], ['south'], apesCoreLabels, [0, 0])
         const jobId = `apes_${character.character_id}_${now}_${index + 1}`
+        const inputFrames = job.input_frames.length === 1
+          ? [
+              job.input_frames[0],
+              {
+                ...job.input_frames[0],
+                frame_index: 1,
+              },
+            ]
+          : job.input_frames
         return {
           ...job,
           job_id: jobId,
+          input_frames: inputFrames,
           output_root: `data/apes/output/${jobId}`,
           logs: [
             'Prepared APES input manifest from staged Duelyst review crop.',
+            ...(job.input_frames.length === 1 ? ['Duplicated the staged source frame so the APES bridge has the minimum two-frame runtime input. Review output masks carefully.'] : []),
             ...job.logs,
           ],
         }
@@ -1122,6 +1139,21 @@ function App() {
     }
   }
 
+  async function runPreparedDuelystJobs() {
+    if (apesBridgeBusy) return
+    const prepared = apesJobs.filter((job) => job.character_id.startsWith('duelyst_') && job.status === 'prepared')
+    if (prepared.length === 0) {
+      setApesBridgeStatus('No prepared Duelyst APES jobs are queued.')
+      return
+    }
+
+    setApesBridgeStatus(`Running ${prepared.length} prepared Duelyst APES job(s) one at a time. This can take a while on the 3060.`)
+    for (const job of prepared) {
+      await runApesJob(job.job_id)
+    }
+  }
+
+
   async function loadPrivateDuelystManifest(signal?: AbortSignal) {
     setDuelystBusy(true)
     try {
@@ -1363,6 +1395,7 @@ function App() {
               createApesJob={createApesJob}
               runApesPreflight={runApesPreflight}
               runApesJob={runApesJob}
+              runPreparedDuelystJobs={runPreparedDuelystJobs}
               generateApesQaHarness={generateApesQaHarness}
               loadApesQaHarnessReport={loadApesQaHarnessReport}
               clearApesQaHarnessParts={clearApesQaHarnessParts}

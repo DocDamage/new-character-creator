@@ -150,7 +150,7 @@ The generated `finetune_manifest.json` includes ready-to-run commands for:
 - Okay Samurai fullnet fine-tuning from existing checkpoints
 - Duelyst APES pseudo-label/review preparation
 
-Duelyst staged frames now include detector/metadata labels such as `source_family`, `body_class`, `detector_class`, `combat_role`, `training_role`, `animation_labels`, and detector metrics. In Asset Audit, the default Duelyst filters show staged APES-review candidates and the `Queue APES jobs` action creates APES Lab jobs for the filtered staged set. These labels still are not ground-truth correspondence labels, so run/review APES outputs and promote accepted masks before mixing them into supervised fine-tuning.
+Duelyst staged frames now include detector/metadata labels such as `source_family`, `body_class`, `detector_class`, `combat_role`, `training_role`, `animation_labels`, and detector metrics. In Asset Audit, the default Duelyst filters show staged APES-review candidates and the `Queue APES jobs` action creates persisted APES Lab jobs for the filtered staged set. APES Lab includes `Run Duelyst queue` to run the prepared Duelyst jobs one at a time. Because each staged Duelyst source is a single review crop, the queue duplicates that crop to satisfy the APES bridge's two-frame minimum; review the resulting masks carefully before promotion. These labels still are not ground-truth correspondence labels, so run/review APES outputs and promote accepted masks before mixing them into supervised fine-tuning.
 
 ## APES bridge
 

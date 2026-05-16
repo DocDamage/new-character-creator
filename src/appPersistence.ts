@@ -1,4 +1,4 @@
-import type { ApesPreflightReport, ComposerLayerSettings, ExtractedPart, PaletteRules, PartLabel } from './types'
+import type { ApesJob, ApesPreflightReport, ComposerLayerSettings, ExtractedPart, PaletteRules, PartLabel } from './types'
 
 export type SavedComposerRecipe = {
   recipe_id: string
@@ -18,6 +18,7 @@ export const assetRootInputStorageKey = 'pixel_creator_asset_root_input'
 export const apesPythonPathStorageKey = 'pixel_creator_apes_python_path'
 export const apesAllowPlaceholderStorageKey = 'pixel_creator_apes_allow_placeholder'
 export const apesPreflightStorageKey = 'pixel_creator_apes_preflight'
+export const apesJobsStorageKey = 'pixel_creator_apes_jobs'
 export const apesHarnessGeneratedAtStorageKey = 'pixel_creator_apes_harness_generated_at'
 export const apesQaHarnessJobId = 'apes_harness_job'
 
@@ -43,6 +44,10 @@ export function loadStoredComposerRecipes() {
 
 export function loadStoredApesPreflight() {
   return parseStoredJson<ApesPreflightReport | null>(apesPreflightStorageKey, null)
+}
+
+export function loadStoredApesJobs() {
+  return parseStoredJson<ApesJob[]>(apesJobsStorageKey, [])
 }
 
 export function loadStoredString(storageKey: string, fallback = '') {

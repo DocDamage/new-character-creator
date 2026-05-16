@@ -32,6 +32,7 @@ Latest verified local app state:
 - Private Duelyst manifest generation stages 64 local candidates with `npm run duelyst:private-manifest -- --stage-count 64`
 - Asset Audit auto-loads the private Duelyst manifest when present, renders 696 labeled candidates, and exposes 64 staged `Open in workstation` actions
 - Default Duelyst filters show the staged APES-review subset, and `Queue APES jobs` creates APES Lab jobs for those filtered staged candidates
+- Queued Duelyst APES jobs persist across reloads and APES Lab exposes `Run Duelyst queue` for prepared Duelyst jobs
 - Fine-tune prep writes `data/training/apes_finetune/finetune_manifest.json` and 64 Duelyst review folders
 
 ## Export Panel

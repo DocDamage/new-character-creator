@@ -10,6 +10,7 @@ type ApesLabPanelProps = {
   createApesJob: () => void
   runApesPreflight: () => Promise<void>
   runApesJob: (jobId: string) => Promise<void>
+  runPreparedDuelystJobs: () => Promise<void>
   generateApesQaHarness: () => Promise<void>
   loadApesQaHarnessReport: () => Promise<void>
   clearApesQaHarnessParts: () => void
@@ -39,6 +40,7 @@ export function ApesLabPanel({
   createApesJob,
   runApesPreflight,
   runApesJob,
+  runPreparedDuelystJobs,
   generateApesQaHarness,
   loadApesQaHarnessReport,
   clearApesQaHarnessParts,
@@ -66,6 +68,7 @@ export function ApesLabPanel({
   const apesParts = partLibrary.filter((part) => part.extraction_method === 'apes')
   const reviewedApesParts = apesParts.filter((part) => part.reviewed)
   const qaHarnessParts = apesParts.filter((part) => part.tags.includes('qa_harness') || part.part_id.startsWith(`${apesQaHarnessJobId}_`))
+  const preparedDuelystJobs = jobs.filter((job) => job.character_id.startsWith('duelyst_') && job.status === 'prepared')
   const expectedInputCount = apesAnimations.reduce(
     (total, animation) =>
       total +
@@ -193,6 +196,9 @@ export function ApesLabPanel({
       <div className="status-strip">
         <button className="primary" data-testid="create-apes-job" onClick={createApesJob}>Create APES job</button>
         <button className="primary" data-testid="run-apes-preflight" onClick={() => void runApesPreflight()} disabled={apesBridgeBusy || !import.meta.env.DEV}>Run APES preflight</button>
+        <button data-testid="run-prepared-duelyst-apes-jobs" onClick={() => void runPreparedDuelystJobs()} disabled={apesBridgeBusy || !import.meta.env.DEV || preparedDuelystJobs.length === 0}>
+          Run Duelyst queue ({preparedDuelystJobs.length})
+        </button>
         <button data-testid="generate-apes-qa-harness" onClick={() => void generateApesQaHarness()} disabled={apesBridgeBusy || !import.meta.env.DEV}>Generate local QA harness</button>
         <button data-testid="clear-apes-qa-harness-parts" onClick={clearApesQaHarnessParts} disabled={qaHarnessParts.length === 0}>Clear QA harness parts</button>
         <button data-testid="load-apes-qa-report" onClick={() => void loadApesQaHarnessReport()}>
