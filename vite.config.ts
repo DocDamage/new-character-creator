@@ -44,10 +44,13 @@ function localAssetToolsPlugin() {
                   ? 'generate-harness'
                   : body.action === 'summarize-outputs'
                     ? 'summarize-outputs'
+                    : body.action === 'load-report'
+                      ? 'load-report'
                     : null
-          const pythonPath = typeof body.pythonPath === 'string' && body.pythonPath.trim() ? body.pythonPath.trim() : process.execPath
+          const pythonPath = typeof body.pythonPath === 'string' && body.pythonPath.trim() ? body.pythonPath.trim() : 'python'
           const allowPlaceholder = body.allowPlaceholder === true
           const job = body.job && typeof body.job === 'object' ? body.job : null
+          const reportPath = typeof body.reportPath === 'string' ? body.reportPath.trim() : ''
 
           if (!action) {
             res.statusCode = 400
@@ -67,6 +70,43 @@ function localAssetToolsPlugin() {
           const outputRoot = path.resolve(appRoot, 'data', 'apes', 'output')
           const outputDir = action === 'run-job' && job?.job_id ? path.resolve(outputRoot, job.job_id) : outputRoot
           const tempJobPath = action === 'run-job' && job?.job_id ? path.resolve(outputRoot, `${job.job_id}.job.json`) : null
+
+          if (action === 'load-report') {
+            const resolvedReportPath = path.resolve(appRoot, reportPath)
+            if (!reportPath || !isPathInside(resolvedReportPath, outputRoot) || path.basename(resolvedReportPath) !== 'apes_report.json') {
+              res.statusCode = 400
+              res.setHeader('Content-Type', 'application/json')
+              res.end(JSON.stringify({ error: 'Expected an APES report path inside data/apes/output.' }))
+              return
+            }
+
+            try {
+              const loadedReport = JSON.parse(await fs.promises.readFile(resolvedReportPath, 'utf8'))
+              res.statusCode = 200
+              res.setHeader('Content-Type', 'application/json')
+              res.end(JSON.stringify({
+                action,
+                pythonPath,
+                statusCode: 0,
+                stdout: '',
+                stderr: '',
+                report: loadedReport,
+                outputDir: path.dirname(resolvedReportPath),
+              }))
+            } catch (error) {
+              res.statusCode = 500
+              res.setHeader('Content-Type', 'application/json')
+              res.end(JSON.stringify({
+                action,
+                pythonPath,
+                statusCode: 1,
+                stdout: '',
+                stderr: '',
+                error: error instanceof Error ? error.message : String(error),
+              }))
+            }
+            return
+          }
 
           if (tempJobPath && job) {
             await fs.promises.mkdir(path.dirname(tempJobPath), { recursive: true })
@@ -286,6 +326,11 @@ function getAssetContentType(filePath: string) {
   if (extension === '.svg') return 'image/svg+xml'
   if (extension === '.txt') return 'text/plain; charset=utf-8'
   return null
+}
+
+function isPathInside(childPath: string, parentPath: string) {
+  const relative = path.relative(parentPath, childPath)
+  return relative === '' || (!relative.startsWith('..') && !path.isAbsolute(relative))
 }
 
 async function readJsonBody(req: IncomingMessage) {

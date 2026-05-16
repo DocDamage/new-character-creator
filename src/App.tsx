@@ -81,7 +81,7 @@ const apesCoreLabels: PartLabel[] = ['head', 'torso', 'front_arm', 'back_arm', '
 const defaultPaletteRules: Omit<PaletteRules, 'team_color'> = { hue_shift: 0, saturation: 100, brightness: 100 }
 
 type LocalApesToolPayload = {
-  action: 'preflight' | 'run-job' | 'generate-harness' | 'summarize-outputs'
+  action: 'preflight' | 'run-job' | 'generate-harness' | 'summarize-outputs' | 'load-report'
   pythonPath: string
   statusCode: number
   stdout: string
@@ -176,6 +176,7 @@ function App() {
   const [apesBridgeStatus, setApesBridgeStatus] = useState('Set the APES Python path in Settings, then run preflight from APES Lab.')
   const [apesBridgeBusy, setApesBridgeBusy] = useState(false)
   const [apesPreflight, setApesPreflight] = useState<ApesPreflightReport | null>(loadStoredApesPreflight)
+  const [apesOutputInventory, setApesOutputInventory] = useState<ApesOutputInventory | null>(null)
   const [apesHarnessGeneratedAt, setApesHarnessGeneratedAt] = useState(() => loadStoredString(apesHarnessGeneratedAtStorageKey))
 
   async function fetchManifest(signal?: AbortSignal) {
@@ -704,11 +705,48 @@ function App() {
         return
       }
 
+      setApesOutputInventory(inventory)
       setApesBridgeStatus(
         `Inventoried ${inventory.report_count} APES report(s): ${inventory.summary.needs_review} need review, ${inventory.summary.empty_reports} empty, ${inventory.summary.reviewed_reports} fully reviewed. Wrote ${inventory.output_root}/apes_output_inventory.json.`,
       )
     } catch (error) {
       setApesBridgeStatus(`APES output inventory failed. ${error instanceof Error ? error.message : String(error)}`)
+    } finally {
+      setApesBridgeBusy(false)
+    }
+  }
+
+  async function importApesInventoryReport(reportPath: string) {
+    if (!import.meta.env.DEV) {
+      setApesBridgeStatus('APES report import from inventory only works through the local dev server. Start the app with npm run dev on the APES machine.')
+      return
+    }
+
+    setApesBridgeBusy(true)
+    setApesBridgeStatus(`Loading APES report ${reportPath}...`)
+    try {
+      const response = await fetch('/__local/apes-tools', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'load-report',
+          pythonPath: apesPythonPath.trim(),
+          reportPath,
+        }),
+      })
+      const payload = await response.json() as LocalApesToolPayload
+      if (!response.ok) {
+        throw new Error(payload.stderr || payload.error || `APES report load failed with status ${payload.statusCode}`)
+      }
+      if (!payload.report) {
+        setApesBridgeStatus(`APES report ${reportPath} loaded, but it did not contain importable report data.`)
+        return
+      }
+
+      const importedCount = importApesReport(payload.report, { statusSource: 'file-import', sourceLabel: reportPath })
+      setApesBridgeStatus(`Imported ${importedCount} mask(s) from ${reportPath}. Review them in the Part Library before training/export.`)
+    } catch (error) {
+      setApesBridgeStatus(`APES report import failed. ${error instanceof Error ? error.message : String(error)}`)
     } finally {
       setApesBridgeBusy(false)
     }
@@ -1434,6 +1472,7 @@ function App() {
               runApesJob={runApesJob}
               runPreparedDuelystJobs={runPreparedDuelystJobs}
               summarizeApesOutputs={summarizeApesOutputs}
+              importApesInventoryReport={importApesInventoryReport}
               generateApesQaHarness={generateApesQaHarness}
               loadApesQaHarnessReport={loadApesQaHarnessReport}
               clearApesQaHarnessParts={clearApesQaHarnessParts}
@@ -1453,6 +1492,7 @@ function App() {
               apesBridgeBusy={apesBridgeBusy}
               apesBridgeStatus={apesBridgeStatus}
               apesPreflight={apesPreflight}
+              apesOutputInventory={apesOutputInventory}
               apesHarnessGeneratedAt={apesHarnessGeneratedAt}
               mainDirections={mainDirections}
               apesCoreLabels={apesCoreLabels}

@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { apesQaHarnessJobId } from '../appPersistence'
 import { clampFrameInput } from '../inputUtils'
 import { humanoid64Preset } from '../presets'
-import type { AnimationName, ApesJob, ApesPreflightReport, CharacterManifest, Direction, ExtractedPart, PartLabel } from '../types'
+import type { AnimationName, ApesJob, ApesOutputInventory, ApesPreflightReport, CharacterManifest, Direction, ExtractedPart, PartLabel } from '../types'
 import { downloadJson, getFrames, slugLabel } from '../utils'
 
 type ApesLabPanelProps = {
@@ -12,6 +12,7 @@ type ApesLabPanelProps = {
   runApesJob: (jobId: string) => Promise<void>
   runPreparedDuelystJobs: () => Promise<void>
   summarizeApesOutputs: () => Promise<void>
+  importApesInventoryReport: (reportPath: string) => Promise<void>
   generateApesQaHarness: () => Promise<void>
   loadApesQaHarnessReport: () => Promise<void>
   clearApesQaHarnessParts: () => void
@@ -31,6 +32,7 @@ type ApesLabPanelProps = {
   apesBridgeBusy: boolean
   apesBridgeStatus: string
   apesPreflight: ApesPreflightReport | null
+  apesOutputInventory: ApesOutputInventory | null
   apesHarnessGeneratedAt: string
   mainDirections: Direction[]
   apesCoreLabels: PartLabel[]
@@ -43,6 +45,7 @@ export function ApesLabPanel({
   runApesJob,
   runPreparedDuelystJobs,
   summarizeApesOutputs,
+  importApesInventoryReport,
   generateApesQaHarness,
   loadApesQaHarnessReport,
   clearApesQaHarnessParts,
@@ -62,6 +65,7 @@ export function ApesLabPanel({
   apesBridgeBusy,
   apesBridgeStatus,
   apesPreflight,
+  apesOutputInventory,
   apesHarnessGeneratedAt,
   mainDirections,
   apesCoreLabels,
@@ -251,6 +255,33 @@ export function ApesLabPanel({
               <span>{item.value}</span>
             </article>
           ))}
+        </div>
+      ) : null}
+      {apesOutputInventory ? (
+        <div className="settings-card">
+          <strong>APES output inventory</strong>
+          <span>
+            {apesOutputInventory.report_count} report(s), {apesOutputInventory.summary.needs_review} need review, {apesOutputInventory.summary.empty_reports} empty
+          </span>
+          <div className="job-list compact-list">
+            {apesOutputInventory.reports.slice(0, 8).map((report) => (
+              <article key={`${report.output_dir}-${report.report_path}`} className={`job ${report.needs_review ? 'prepared' : 'complete'}`}>
+                <div>
+                  <strong>{report.job_id}</strong>
+                  <span>{report.review_state}</span>
+                </div>
+                <p>{report.mask_count} mask(s): {report.labels.join(', ') || 'no labels'}</p>
+                {report.missing_labels.length > 0 ? <p>Missing {report.missing_labels.join(', ')}</p> : null}
+                {report.low_confidence_labels.length > 0 ? <p>Low confidence {report.low_confidence_labels.join(', ')}</p> : null}
+                <div className="job-actions">
+                  <button onClick={() => void importApesInventoryReport(report.report_path)} disabled={apesBridgeBusy || report.mask_count === 0 || !import.meta.env.DEV}>
+                    Import report
+                  </button>
+                </div>
+              </article>
+            ))}
+          </div>
+          {apesOutputInventory.reports.length > 8 ? <span>Showing first 8 reports. Use the JSON inventory for the full local list.</span> : null}
         </div>
       ) : null}
       <label className="field apes-import">

@@ -157,7 +157,7 @@ The generated `finetune_manifest.json` includes ready-to-run commands for:
 
 Duelyst staged frames now include detector/metadata labels such as `source_family`, `body_class`, `detector_class`, `combat_role`, `training_role`, `animation_labels`, and detector metrics. In Asset Audit, the default Duelyst filters show staged APES-review candidates and the `Queue APES jobs` action creates persisted APES Lab jobs for the filtered staged set. APES Lab includes `Run Duelyst queue` to run the prepared Duelyst jobs one at a time. The queue now uses real staged idle atlas frames when available and only falls back to duplication for one-frame sources. These labels still are not ground-truth correspondence labels, so run/review APES outputs and promote accepted masks before mixing them into supervised fine-tuning.
 
-For a repeatable command-line queue, run `npm run apes:prepare-duelyst-jobs`. It writes ignored job configs under `data/apes/input/`. `npm run apes:run-duelyst-jobs` executes that batch through the APES bridge. `npm run apes:summarize-outputs` scans completed ignored reports and writes `data/apes/output/apes_output_inventory.json` for review triage.
+For a repeatable command-line queue, run `npm run apes:prepare-duelyst-jobs`. It writes ignored job configs under `data/apes/input/`. `npm run apes:run-duelyst-jobs` executes that batch through the APES bridge. `npm run apes:summarize-outputs` scans completed ignored reports and writes `data/apes/output/apes_output_inventory.json` for review triage. In APES Lab, `Inventory APES outputs` shows the same inventory and can import non-empty local reports into the Part Library.
 
 ## APES bridge
 

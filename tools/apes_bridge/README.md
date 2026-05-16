@@ -121,7 +121,7 @@ After one or more APES jobs run, summarize the ignored local output folder with:
 npm run apes:summarize-outputs
 ```
 
-That writes `data/apes/output/apes_output_inventory.json` with report counts, mask labels, missing expected labels, confidence ranges, warning counts, and review state. The APES Lab also exposes this through `Inventory APES outputs` when the app is running under `npm run dev`.
+That writes `data/apes/output/apes_output_inventory.json` with report counts, mask labels, missing expected labels, confidence ranges, warning counts, and review state. The APES Lab also exposes this through `Inventory APES outputs` when the app is running under `npm run dev`; non-empty inventoried reports can be imported directly into the Part Library from that list.
 
 Current quality note: the first verified multi-frame Duelyst APES job produced creator-sized `head`, `torso`, and `front_arm` review masks, but missed other requested labels. Treat APES output as review material, not accepted training labels, until masks are manually checked and promoted.
 
