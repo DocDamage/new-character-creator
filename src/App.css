@@ -4,6 +4,39 @@
   place-items: center;
   color: var(--text-strong);
   font-size: 15px;
+  padding: 24px;
+  box-sizing: border-box;
+}
+
+.boot-panel {
+  width: min(720px, 100%);
+  display: grid;
+  gap: 14px;
+  padding: 20px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+}
+
+.boot-panel h1 {
+  margin: 0;
+  font-size: 24px;
+}
+
+.boot-panel p,
+.boot-panel code {
+  margin: 0;
+}
+
+.boot-panel code {
+  display: block;
+  padding: 10px 12px;
+  background: var(--control);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  color: var(--text);
+  white-space: pre-wrap;
+  word-break: break-word;
 }
 
 .app-shell {
@@ -165,6 +198,7 @@ input {
   justify-content: space-between;
   gap: 16px;
   background: rgba(17, 22, 30, 0.82);
+  -webkit-backdrop-filter: blur(10px);
   backdrop-filter: blur(10px);
   position: sticky;
   top: 0;
@@ -1045,7 +1079,7 @@ input {
 
   .sidebar {
     position: static;
-    min-height: auto;
+    min-height: 0;
   }
 
   .main-grid,

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import './App.css'
 import {
   apesAllowPlaceholderStorageKey,
@@ -100,6 +100,12 @@ type LocalAssetToolPayload = {
   duelyst?: DuelystPackageAudit | null
 }
 
+type ImportApesReportOptions = {
+  replaceQaHarnessExisting?: boolean
+  statusSource?: 'pasted-json' | 'file-import'
+  sourceLabel?: string
+}
+
 function isApesQaHarnessReport(report: ApesReport) {
   return report.job_id === apesQaHarnessJobId || report.warnings.some((warning) => warning.toLowerCase().includes('qa harness'))
 }
@@ -110,6 +116,8 @@ function isApesQaHarnessPart(part: ExtractedPart) {
 
 function App() {
   const [manifest, setManifest] = useState<AssetManifest | null>(null)
+  const [manifestStatus, setManifestStatus] = useState<'loading' | 'ready' | 'error'>('loading')
+  const [manifestError, setManifestError] = useState('')
   const [screen, setScreen] = useState<Screen>('fast')
   const [selectedId, setSelectedId] = useState('')
   const [animation, setAnimation] = useState<AnimationName>('idle')
@@ -176,7 +184,9 @@ function App() {
             continue
           }
 
-          throw new Error(`Failed to parse manifest ${manifestUrl}: ${error instanceof Error ? error.message : String(error)}`)
+          throw new Error(`Failed to parse manifest ${manifestUrl}: ${error instanceof Error ? error.message : String(error)}`, {
+            cause: error,
+          })
         }
       }
 
@@ -189,7 +199,11 @@ function App() {
     throw new Error(`Failed to load manifest: ${lastStatus ?? 'unknown'}`)
   }
 
-  function applyManifest(data: AssetManifest, preferredCharacterId?: string) {
+  const applyManifest = useCallback((data: AssetManifest, preferredCharacterId?: string) => {
+    if (data.characters.length === 0) {
+      throw new Error('The active manifest does not contain any characters. Reindex the asset pack or switch back to a valid manifest root in Settings.')
+    }
+
     setManifest(data)
     const nextCharacterId =
       preferredCharacterId && data.characters.some((character) => character.character_id === preferredCharacterId)
@@ -197,17 +211,28 @@ function App() {
         : data.characters[0]?.character_id ?? ''
     setSelectedId(nextCharacterId)
     setAssetRootInput((current) => current || window.localStorage.getItem(assetRootInputStorageKey) || data.asset_root || '')
-  }
+  }, [])
+
+  const loadManifest = useCallback(async (preferredCharacterId?: string) => {
+    setManifestStatus('loading')
+    setManifestError('')
+
+    try {
+      const data = await fetchManifest()
+      applyManifest(data, preferredCharacterId)
+      setManifestStatus('ready')
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      setManifest(null)
+      setManifestError(message)
+      setManifestStatus('error')
+      console.error('Failed to load manifest', error)
+    }
+  }, [applyManifest])
 
   useEffect(() => {
-    fetchManifest()
-      .then((data) => {
-        applyManifest(data)
-      })
-      .catch((error) => {
-        console.error('Failed to load manifest', error)
-      })
-  }, [])
+    void loadManifest()
+  }, [loadManifest])
 
   useEffect(() => {
     storeJson(partLibraryStorageKey, partLibrary)
@@ -579,7 +604,7 @@ function App() {
       importApesReport(report, { replaceQaHarnessExisting: true })
       setApesBridgeStatus(`Loaded and replaced the APES QA sample report with ${report.masks.length} sample mask(s).`)
     } catch (error) {
-      window.alert(`Could not load QA APES report: ${error instanceof Error ? error.message : String(error)}`)
+      setApesBridgeStatus(`Could not load the APES QA sample report. ${error instanceof Error ? error.message : String(error)}`)
     }
   }
 
@@ -648,13 +673,25 @@ function App() {
       ),
     )
 
-    if (options.statusSource === 'pasted-json') {
-      setApesBridgeStatus(`Imported APES report from pasted JSON with ${importedParts.length} mask(s).`)
-    } else if (options.statusSource === 'file-import') {
-      setApesBridgeStatus(`Imported APES report file with ${importedParts.length} mask(s).`)
-    }
-
     return importedParts.length
+  }
+
+  function importApesReportText(reportText: string, options: ImportApesReportOptions = {}) {
+    try {
+      const report = JSON.parse(reportText) as ApesReport
+      const importedCount = importApesReport(report, options)
+      if (options.statusSource === 'pasted-json') {
+        setApesBridgeStatus(`Imported APES report from pasted JSON with ${importedCount} mask(s).`)
+      } else if (options.statusSource === 'file-import') {
+        const sourceLabel = options.sourceLabel ? ` ${options.sourceLabel}` : ''
+        setApesBridgeStatus(`Imported APES report file${sourceLabel} with ${importedCount} mask(s).`)
+      }
+      return true
+    } catch (error) {
+      const sourceLabel = options.statusSource === 'file-import' && options.sourceLabel ? ` ${options.sourceLabel}` : ''
+      setApesBridgeStatus(`Could not import APES report${sourceLabel}. ${error instanceof Error ? error.message : String(error)}`)
+      return false
+    }
   }
 
   function downloadLocalSetupBundle() {
@@ -1032,8 +1069,38 @@ function App() {
     setDuelystStatus(`Opened ${characterId} in the workstation. Use preset, manual, or APES extraction from the staged crop.`)
   }
 
-  if (!manifest || !selectedCharacter) {
+  if (manifestStatus === 'loading') {
     return <main className="loading">Indexing the character forge...</main>
+  }
+
+  if (manifestStatus === 'error') {
+    return (
+      <main className="loading">
+        <section className="boot-panel" data-testid="manifest-load-error">
+          <h1>Manifest load failed</h1>
+          <p>The app could not load a usable character manifest, so the editor has not started.</p>
+          <code>{manifestError}</code>
+          <div className="status-strip">
+            <button className="primary" onClick={() => void loadManifest(selectedId)}>Retry manifest load</button>
+          </div>
+          <p>In dev, the app checks `characters.local.json` first and then falls back to `characters.json`. Reindex the asset pack or start the app from the correct project folder if the error persists.</p>
+        </section>
+      </main>
+    )
+  }
+
+  if (!manifest || !selectedCharacter) {
+    return (
+      <main className="loading">
+        <section className="boot-panel" data-testid="manifest-empty-state">
+          <h1>No source characters available</h1>
+          <p>The manifest loaded, but there are no usable source characters to display.</p>
+          <div className="status-strip">
+            <button className="primary" onClick={() => void loadManifest(selectedId)}>Reload manifest</button>
+          </div>
+        </section>
+      </main>
+    )
   }
 
   return (
@@ -1215,7 +1282,7 @@ function App() {
               toggleApesAnimation={toggleApesAnimation}
               toggleApesDirection={toggleApesDirection}
               toggleApesLabel={toggleApesLabel}
-              importApesReport={importApesReport}
+              importApesReport={importApesReportText}
               apesPythonPath={apesPythonPath}
               apesAllowPlaceholder={apesAllowPlaceholder}
               apesBridgeBusy={apesBridgeBusy}

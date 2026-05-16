@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { apesQaHarnessJobId } from '../appPersistence'
 import { clampFrameInput } from '../inputUtils'
 import { humanoid64Preset } from '../presets'
-import type { AnimationName, ApesJob, ApesPreflightReport, ApesReport, CharacterManifest, Direction, ExtractedPart, PartLabel } from '../types'
+import type { AnimationName, ApesJob, ApesPreflightReport, CharacterManifest, Direction, ExtractedPart, PartLabel } from '../types'
 import { downloadJson, getFrames, slugLabel } from '../utils'
 
 type ApesLabPanelProps = {
@@ -23,7 +23,7 @@ type ApesLabPanelProps = {
   toggleApesAnimation: (name: AnimationName) => void
   toggleApesDirection: (name: Direction) => void
   toggleApesLabel: (name: PartLabel) => void
-  importApesReport: (report: ApesReport, options?: { replaceQaHarnessExisting?: boolean; statusSource?: 'pasted-json' | 'file-import' }) => number
+  importApesReport: (reportText: string, options?: { replaceQaHarnessExisting?: boolean; statusSource?: 'pasted-json' | 'file-import'; sourceLabel?: string }) => boolean
   apesPythonPath: string
   apesAllowPlaceholder: boolean
   apesBridgeBusy: boolean
@@ -202,11 +202,8 @@ export function ApesLabPanel({
           data-testid="import-apes-report-json"
           onClick={() => {
             if (!reportText.trim()) return
-            try {
-              importApesReport(JSON.parse(reportText) as ApesReport, { statusSource: 'pasted-json' })
+            if (importApesReport(reportText, { statusSource: 'pasted-json' })) {
               setReportText('')
-            } catch (error) {
-              window.alert(`Could not import APES report: ${error instanceof Error ? error.message : String(error)}`)
             }
           }}
           disabled={!reportText.trim()}
@@ -223,9 +220,8 @@ export function ApesLabPanel({
               if (!file) return
               file
                 .text()
-                .then((text) => importApesReport(JSON.parse(text) as ApesReport, { statusSource: 'file-import' }))
-                .catch((error) => {
-                  window.alert(`Could not import APES report: ${error instanceof Error ? error.message : String(error)}`)
+                .then((text) => {
+                  importApesReport(text, { statusSource: 'file-import', sourceLabel: file.name })
                 })
               event.currentTarget.value = ''
             }}
