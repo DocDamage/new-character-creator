@@ -24,12 +24,16 @@ type FullPackageManifestDownload = {
 }
 
 test.beforeEach(async ({ page }) => {
-  await page.goto('/', { waitUntil: 'domcontentloaded' })
-  await page.evaluate(() => {
-    window.localStorage.clear()
+  const startupConsoleErrors: string[] = []
+  page.on('console', (message) => {
+    if (message.type() === 'error') {
+      startupConsoleErrors.push(message.text())
+    }
   })
-  await page.reload({ waitUntil: 'domcontentloaded' })
+
+  await page.goto('/', { waitUntil: 'domcontentloaded' })
   await page.locator('#character').waitFor()
+  expect(startupConsoleErrors, 'startup should not emit console errors').toEqual([])
 })
 
 test('manual cleanup save persists after reload', async ({ page }) => {

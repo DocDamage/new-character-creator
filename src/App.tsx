@@ -159,7 +159,7 @@ function App() {
   const [apesPreflight, setApesPreflight] = useState<ApesPreflightReport | null>(loadStoredApesPreflight)
   const [apesHarnessGeneratedAt, setApesHarnessGeneratedAt] = useState(() => loadStoredString(apesHarnessGeneratedAtStorageKey))
 
-  async function fetchManifest() {
+  async function fetchManifest(signal?: AbortSignal) {
     const manifestUrls = import.meta.env.DEV
       ? ['/data/manifests/characters.local.json', '/data/manifests/characters.json']
       : ['/data/manifests/characters.json']
@@ -167,7 +167,7 @@ function App() {
     let lastStatus: number | null = null
     for (const [index, manifestUrl] of manifestUrls.entries()) {
       const isLastManifestUrl = index === manifestUrls.length - 1
-      const response = await fetch(manifestUrl)
+      const response = await fetch(manifestUrl, { signal })
       if (response.ok) {
         const contentType = response.headers.get('content-type') || ''
         const responseText = await response.text()
@@ -213,15 +213,20 @@ function App() {
     setAssetRootInput((current) => current || window.localStorage.getItem(assetRootInputStorageKey) || data.asset_root || '')
   }, [])
 
-  const loadManifest = useCallback(async (preferredCharacterId?: string) => {
+  const loadManifest = useCallback(async (preferredCharacterId?: string, signal?: AbortSignal) => {
     setManifestStatus('loading')
     setManifestError('')
 
     try {
-      const data = await fetchManifest()
+      const data = await fetchManifest(signal)
+      if (signal?.aborted) return
       applyManifest(data, preferredCharacterId)
       setManifestStatus('ready')
     } catch (error) {
+      if (signal?.aborted || (error instanceof DOMException && error.name === 'AbortError')) {
+        return
+      }
+
       const message = error instanceof Error ? error.message : String(error)
       setManifest(null)
       setManifestError(message)
@@ -231,7 +236,11 @@ function App() {
   }, [applyManifest])
 
   useEffect(() => {
-    void loadManifest()
+    const controller = new AbortController()
+    void loadManifest(undefined, controller.signal)
+    return () => {
+      controller.abort()
+    }
   }, [loadManifest])
 
   useEffect(() => {
