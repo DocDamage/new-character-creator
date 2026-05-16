@@ -70,6 +70,7 @@ The `Settings` screen now also exposes a `Copy browser regression command` actio
 - Part Library with filtering, reviewed/unreviewed state, JSON export, visible JSON export, and APES QA cleanup.
 - Batch Generator with deterministic seeded variants.
 - Asset Audit with class counts, source warnings, and Duelyst unitypackage inspection/staging.
+- Duelyst Asset Audit filters for search, body class, source family, training role, and staged state, plus batch APES job creation for staged review candidates.
 - APES Lab with first-class job creation, local preflight/bridge actions, a one-click local QA harness generator, logs, job config export, failure surfacing, file import, pasted JSON import, and APES-to-part-library conversion.
 - Export panel for generic manifests, rendered frame/package downloads, Godot scene stubs, SpriteFrames stubs, and batch queues.
 - Production-oriented full package zip with rendered PNGs, Godot 4 `SpriteFrames` resources, Unity import settings and Editor importer script, RPG Maker MZ single-character sheet, Aseprite import script/spec, and extraction provenance.
@@ -149,7 +150,7 @@ The generated `finetune_manifest.json` includes ready-to-run commands for:
 - Okay Samurai fullnet fine-tuning from existing checkpoints
 - Duelyst APES pseudo-label/review preparation
 
-Duelyst staged frames now include detector/metadata labels such as `source_family`, `body_class`, `detector_class`, `combat_role`, `training_role`, `animation_labels`, and detector metrics. They still do not include ground-truth correspondence labels, so use them for APES inference, review, and pseudo-label promotion before mixing them into supervised fine-tuning.
+Duelyst staged frames now include detector/metadata labels such as `source_family`, `body_class`, `detector_class`, `combat_role`, `training_role`, `animation_labels`, and detector metrics. In Asset Audit, the default Duelyst filters show staged APES-review candidates and the `Queue APES jobs` action creates APES Lab jobs for the filtered staged set. These labels still are not ground-truth correspondence labels, so run/review APES outputs and promote accepted masks before mixing them into supervised fine-tuning.
 
 ## APES bridge
 

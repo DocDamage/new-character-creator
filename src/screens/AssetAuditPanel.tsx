@@ -1,4 +1,5 @@
-import type { AssetManifest, DuelystPackageAudit } from '../types'
+import { useMemo, useState } from 'react'
+import type { AssetManifest, DuelystPackageAudit, DuelystPackageCandidate } from '../types'
 import { slugLabel } from '../utils'
 
 type AssetAuditPanelProps = {
@@ -10,6 +11,7 @@ type AssetAuditPanelProps = {
   runDuelystAudit: () => Promise<void>
   loadPrivateDuelystManifest: () => Promise<void>
   openDuelystStageCharacter: (characterId: string) => void
+  createDuelystApesJobs: (characterIds: string[]) => void
 }
 
 export function AssetAuditPanel({
@@ -21,13 +23,51 @@ export function AssetAuditPanel({
   runDuelystAudit,
   loadPrivateDuelystManifest,
   openDuelystStageCharacter,
+  createDuelystApesJobs,
 }: AssetAuditPanelProps) {
+  const [duelystSearch, setDuelystSearch] = useState('')
+  const [bodyFilter, setBodyFilter] = useState('all')
+  const [sourceFilter, setSourceFilter] = useState('all')
+  const [trainingFilter, setTrainingFilter] = useState('apes')
+  const [stagedFilter, setStagedFilter] = useState('staged')
   const warnings = manifest.characters.flatMap((character) => character.source_quality_warnings.map((warning) => ({ character: character.character_id, warning })))
   const duelystExtensionCounts = duelystAudit
     ? Object.entries(duelystAudit.extension_counts)
         .sort((left, right) => right[1] - left[1])
         .slice(0, 6)
     : []
+  const duelystFilterOptions = useMemo(() => {
+    const candidates = duelystAudit?.candidate_units ?? []
+    return {
+      bodyClasses: uniqueLabels(candidates, 'body_class'),
+      sourceFamilies: uniqueLabels(candidates, 'source_family'),
+      trainingRoles: uniqueLabels(candidates, 'training_role'),
+    }
+  }, [duelystAudit])
+  const filteredDuelystCandidates = useMemo(() => {
+    const search = duelystSearch.trim().toLowerCase()
+    return (duelystAudit?.candidate_units ?? []).filter((candidate) => {
+      const labels = candidate.labels ?? {}
+      const bodyClass = typeof labels.body_class === 'string' ? labels.body_class : 'unknown'
+      const sourceFamily = typeof labels.source_family === 'string' ? labels.source_family : 'unknown'
+      const trainingRole = typeof labels.training_role === 'string' ? labels.training_role : 'unknown'
+      const matchesSearch = !search || [
+        candidate.unit_id,
+        candidate.display_name,
+        candidate.sheet_source_path,
+        bodyClass,
+        sourceFamily,
+        trainingRole,
+      ].some((value) => value.toLowerCase().includes(search))
+
+      return matchesSearch
+        && (bodyFilter === 'all' || bodyClass === bodyFilter)
+        && (sourceFilter === 'all' || sourceFamily === sourceFilter)
+        && (trainingFilter === 'all' || (trainingFilter === 'apes' ? trainingRole.startsWith('apes_') : trainingRole === trainingFilter))
+        && (stagedFilter === 'all' || (stagedFilter === 'staged' ? candidate.staged : !candidate.staged))
+    })
+  }, [bodyFilter, duelystAudit, duelystSearch, sourceFilter, stagedFilter, trainingFilter])
+  const batchableDuelystCandidates = filteredDuelystCandidates.filter((candidate) => candidate.staged && candidate.stage_character_id && getStringLabel(candidate, 'training_role').startsWith('apes_'))
 
   return (
     <section className="panel wide-panel">
@@ -73,6 +113,13 @@ export function AssetAuditPanel({
           >
             {duelystBusy ? 'Working on Duelyst assets...' : 'Rebuild and stage 64'}
           </button>
+          <button
+            data-testid="create-duelyst-apes-jobs"
+            onClick={() => createDuelystApesJobs(batchableDuelystCandidates.map((candidate) => candidate.stage_character_id))}
+            disabled={batchableDuelystCandidates.length === 0}
+          >
+            Queue APES jobs ({batchableDuelystCandidates.length})
+          </button>
         </div>
       </div>
 
@@ -105,8 +152,52 @@ export function AssetAuditPanel({
             ))}
           </div>
 
+          <div className="duelyst-filter-bar">
+            <label>
+              <span>Search</span>
+              <input
+                data-testid="duelyst-search"
+                type="search"
+                value={duelystSearch}
+                onChange={(event) => setDuelystSearch(event.target.value)}
+                placeholder="unit, faction, role"
+              />
+            </label>
+            <label>
+              <span>Body</span>
+              <select value={bodyFilter} onChange={(event) => setBodyFilter(event.target.value)}>
+                <option value="all">All</option>
+                {duelystFilterOptions.bodyClasses.map((value) => <option key={value} value={value}>{slugLabel(value)}</option>)}
+              </select>
+            </label>
+            <label>
+              <span>Source</span>
+              <select value={sourceFilter} onChange={(event) => setSourceFilter(event.target.value)}>
+                <option value="all">All</option>
+                {duelystFilterOptions.sourceFamilies.map((value) => <option key={value} value={value}>{slugLabel(value)}</option>)}
+              </select>
+            </label>
+            <label>
+              <span>Training</span>
+              <select value={trainingFilter} onChange={(event) => setTrainingFilter(event.target.value)}>
+                <option value="apes">APES review</option>
+                <option value="all">All</option>
+                {duelystFilterOptions.trainingRoles.map((value) => <option key={value} value={value}>{slugLabel(value)}</option>)}
+              </select>
+            </label>
+            <label>
+              <span>Stage</span>
+              <select value={stagedFilter} onChange={(event) => setStagedFilter(event.target.value)}>
+                <option value="staged">Staged</option>
+                <option value="all">All</option>
+                <option value="unstaged">Unstaged</option>
+              </select>
+            </label>
+            <p>{filteredDuelystCandidates.length} shown · {batchableDuelystCandidates.length} queueable</p>
+          </div>
+
           <div data-testid="duelyst-candidate-list" className="duelyst-candidate-list">
-            {duelystAudit.candidate_units.map((candidate) => (
+            {filteredDuelystCandidates.map((candidate) => (
               <article key={candidate.unit_id} className="duelyst-candidate">
                 <img className="duelyst-preview" src={candidate.preview_url} alt={candidate.display_name} />
                 <div className="duelyst-copy">
@@ -148,4 +239,13 @@ export function AssetAuditPanel({
       ) : null}
     </section>
   )
+}
+
+function uniqueLabels(candidates: DuelystPackageCandidate[], key: string) {
+  return Array.from(new Set(candidates.map((candidate) => getStringLabel(candidate, key)))).filter(Boolean).sort()
+}
+
+function getStringLabel(candidate: DuelystPackageCandidate, key: string) {
+  const value = candidate.labels?.[key]
+  return typeof value === 'string' ? value : 'unknown'
 }

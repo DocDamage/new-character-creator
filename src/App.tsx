@@ -457,6 +457,40 @@ function App() {
     setScreen('apes')
   }
 
+  function createDuelystApesJobs(characterIds: string[]) {
+    const stagedCharacters = duelystAudit?.staged_manifest.characters ?? []
+    const requestedIds = new Set(characterIds)
+    const existingCharacterIds = new Set(apesJobs.map((job) => job.character_id))
+    const now = Date.now()
+    const jobs = stagedCharacters
+      .filter((character) => requestedIds.has(character.character_id) && !existingCharacterIds.has(character.character_id))
+      .map((character, index) => {
+        const job = makeApesJob(character, ['idle'], ['south'], apesCoreLabels, [0, 0])
+        const jobId = `apes_${character.character_id}_${now}_${index + 1}`
+        return {
+          ...job,
+          job_id: jobId,
+          output_root: `data/apes/output/${jobId}`,
+          logs: [
+            'Prepared APES input manifest from staged Duelyst review crop.',
+            ...job.logs,
+          ],
+        }
+      })
+      .filter((job) => job.input_frames.length > 0)
+
+    if (jobs.length === 0) {
+      setDuelystStatus('No new Duelyst APES jobs were queued. The filtered staged entries may already have jobs or may not contain frame references.')
+      setScreen('apes')
+      return
+    }
+
+    setApesJobs((current) => [...jobs, ...current])
+    setApesBridgeStatus(`Queued ${jobs.length} Duelyst APES review job(s). Run them from APES Lab, then import/review the masks before using them for training.`)
+    setDuelystStatus(`Queued ${jobs.length} Duelyst APES review job(s). Existing jobs for the same staged character were skipped.`)
+    setScreen('apes')
+  }
+
   function toggleApesAnimation(name: AnimationName) {
     setApesAnimations((current) => (current.includes(name) ? current.filter((item) => item !== name) : [...current, name]))
   }
@@ -1320,6 +1354,7 @@ function App() {
               runDuelystAudit={runDuelystAudit}
               loadPrivateDuelystManifest={() => loadPrivateDuelystManifest()}
               openDuelystStageCharacter={openDuelystStageCharacter}
+              createDuelystApesJobs={createDuelystApesJobs}
             />
           ) : null}
           {screen === 'apes' ? (

@@ -976,6 +976,37 @@ input {
   gap: 12px;
 }
 
+.duelyst-filter-bar {
+  display: grid;
+  grid-template-columns: minmax(180px, 1.4fr) repeat(4, minmax(130px, 1fr)) auto;
+  gap: 10px;
+  align-items: end;
+  margin: 14px 0;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: var(--panel-soft);
+}
+
+.duelyst-filter-bar label {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+}
+
+.duelyst-filter-bar span,
+.duelyst-filter-bar p {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.duelyst-filter-bar input,
+.duelyst-filter-bar select {
+  width: 100%;
+  min-width: 0;
+}
+
 .duelyst-candidate {
   display: grid;
   grid-template-columns: 112px minmax(0, 1fr);
@@ -1023,6 +1054,10 @@ input {
 }
 
 @media (max-width: 720px) {
+  .duelyst-filter-bar {
+    grid-template-columns: 1fr;
+  }
+
   .duelyst-candidate {
     grid-template-columns: 1fr;
   }
