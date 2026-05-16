@@ -4,7 +4,6 @@ import type { AnimationName, ApesJob, CharacterManifest, Direction, ExtractedPar
 import {
   buildAsepriteReference,
   buildExportManifest,
-  buildGodotSpriteFrames,
   buildRpgMakerMzMetadata,
   buildUnity2DMetadata,
   downloadBlob,
@@ -184,19 +183,27 @@ export async function buildFullPackageManifest(
         scene_file: `${recipe.character_id}.tscn`,
         scene_text: buildGodotSceneText(recipe),
         sprite_frames_file: `${recipe.character_id}_sprite_frames.tres`,
-        sprite_frames_text: buildGodotSpriteFrames(character, recipe),
+        sprite_frames_text: buildGodotSpriteFramesResource(recipe, resolvedRenderedFrameSet, 'rendered/frames'),
       },
       unity_2d: {
         file: `${recipe.character_id}_unity_2d.json`,
         metadata: buildUnity2DMetadata(character, recipe),
+        importer_file: `${recipe.character_id}_PixelCreatorImporter.cs`,
+        importer_text: buildUnityEditorImporter(recipe),
+        animation_specs_file: `${recipe.character_id}_animation_clips.json`,
+        animation_specs: buildUnityAnimationSpecs(recipe, resolvedRenderedFrameSet),
       },
       rpg_maker_mz: {
         file: `${recipe.character_id}_rpg_maker_mz.json`,
         metadata: buildRpgMakerMzMetadata(character, recipe),
+        sheet_file: `$${recipe.character_id}.png`,
+        sheet_layout: 'single-character 3x4 walking sheet',
       },
       aseprite_reference: {
         file: `${recipe.character_id}_aseprite_reference.json`,
         metadata: buildAsepriteReference(character, recipe),
+        script_file: `${recipe.character_id}_aseprite_import.js`,
+        script_text: buildAsepriteImportScript(recipe, resolvedRenderedFrameSet),
       },
     },
     reusable_part_folders: buildReusablePartFolders(recipe, partLibrary),
@@ -265,10 +272,14 @@ export async function downloadFullPackageZip(
   zip.file(`${rootPath}/package_manifest.json`, JSON.stringify(makeFullPackageFileIndex(packageManifest, rootPath), null, 2))
   zip.file(`${rootPath}/exports/generic_manifest.json`, JSON.stringify(buildExportManifest(character, recipe, apesJobs), null, 2))
   zip.file(`${rootPath}/exports/godot/${recipe.character_id}.tscn`, buildGodotSceneText(recipe))
-  zip.file(`${rootPath}/exports/godot/${recipe.character_id}_sprite_frames.tres`, buildGodotSpriteFrames(character, recipe))
+  zip.file(`${rootPath}/exports/godot/${recipe.character_id}_sprite_frames.tres`, buildGodotSpriteFramesResource(recipe, renderedFrameSet, 'rendered/frames'))
   zip.file(`${rootPath}/exports/unity/${recipe.character_id}_unity_2d.json`, JSON.stringify(buildUnity2DMetadata(character, recipe), null, 2))
+  zip.file(`${rootPath}/exports/unity/${recipe.character_id}_animation_clips.json`, JSON.stringify(buildUnityAnimationSpecs(recipe, renderedFrameSet), null, 2))
+  zip.file(`${rootPath}/exports/unity/Editor/${recipe.character_id}_PixelCreatorImporter.cs`, buildUnityEditorImporter(recipe))
   zip.file(`${rootPath}/exports/rpg_maker/${recipe.character_id}_rpg_maker_mz.json`, JSON.stringify(buildRpgMakerMzMetadata(character, recipe), null, 2))
+  await addDataUrlFile(zip, `${rootPath}/exports/rpg_maker/$${recipe.character_id}.png`, await renderRpgMakerCharacterSheetToDataUrl(renderedFrameSet))
   zip.file(`${rootPath}/exports/aseprite/${recipe.character_id}_aseprite_reference.json`, JSON.stringify(buildAsepriteReference(character, recipe), null, 2))
+  zip.file(`${rootPath}/exports/aseprite/${recipe.character_id}_aseprite_import.js`, buildAsepriteImportScript(recipe, renderedFrameSet))
   zip.file(`${rootPath}/rendered/rendered_frame_set.json`, JSON.stringify(makeRenderedFrameSetFileIndex(renderedFrameSet, rootPath), null, 2))
 
   for (const frame of renderedFrameSet.frames) {
@@ -302,6 +313,123 @@ export async function downloadFullPackageZip(
 
 export function buildGodotSceneText(recipe: KitbashRecipe) {
   return `[gd_scene load_steps=2 format=3]\n\n[ext_resource type="SpriteFrames" path="res://${recipe.character_id}_sprite_frames.tres" id="1"]\n\n[node name="${recipe.character_id}" type="AnimatedSprite2D"]\nsprite_frames = ExtResource("1")\nanimation = "idle_south"\ncentered = true\n`
+}
+
+function buildGodotSpriteFramesResource(recipe: KitbashRecipe, renderedFrameSet: RenderedFrameSet, frameBasePath: string) {
+  const extResources: string[] = []
+  const atlasResources: string[] = []
+  const animations = renderedFrameSet.spritesheets.map((sheet) => {
+    const frames = renderedFrameSet.frames
+      .filter((frame) => frame.animation === sheet.animation && frame.direction === sheet.direction)
+      .sort((left, right) => left.frame_index - right.frame_index)
+      .map((frame) => {
+        const resourceId = `tex_${extResources.length + 1}`
+        const atlasId = `atlas_${extResources.length + 1}`
+        extResources.push(`[ext_resource type="Texture2D" path="res://${frameBasePath}/${frame.file_name}" id="${resourceId}"]`)
+        atlasResources.push(`[sub_resource type="AtlasTexture" id="${atlasId}"]\natlas = ExtResource("${resourceId}")\nregion = Rect2(0, 0, 64, 64)`)
+        return {
+          duration: 1.0,
+          texture: `SubResource("${atlasId}")`,
+        }
+      })
+
+    return {
+      frames,
+      loop: sheet.animation !== 'attack',
+      name: `&"${sheet.animation}_${sheet.direction}"`,
+      speed: sheet.animation === 'attack' ? 10.0 : 7.0,
+    }
+  })
+
+  const serializedAnimations = JSON.stringify(animations)
+    .replaceAll('"texture":"', '"texture":')
+    .replaceAll(')"}', ')}')
+    .replaceAll('"name":"&\\"', '"name": &"')
+    .replaceAll('\\""', '"')
+
+  return `[gd_resource type="SpriteFrames" load_steps=${extResources.length + atlasResources.length + 1} format=3]\n\n${extResources.join('\n')}\n\n${atlasResources.join('\n\n')}\n\n[resource]\nmetadata/provenance = "${recipe.character_id}"\nanimations = ${serializedAnimations}\n`
+}
+
+function buildUnityAnimationSpecs(recipe: KitbashRecipe, renderedFrameSet: RenderedFrameSet) {
+  return {
+    format: 'pixel_creator_unity_animation_specs',
+    version: 1,
+    character_id: recipe.character_id,
+    import_root: `Assets/${recipe.character_id}`,
+    sprites_folder: 'Sprites',
+    clips_folder: 'Animations',
+    clips: renderedFrameSet.spritesheets.map((sheet) => ({
+      clip_name: `${sheet.animation}_${sheet.direction}`,
+      loop_time: sheet.animation !== 'attack',
+      sample_rate: sheet.animation === 'attack' ? 10 : 7,
+      sprite_files: renderedFrameSet.frames
+        .filter((frame) => frame.animation === sheet.animation && frame.direction === sheet.direction)
+        .sort((left, right) => left.frame_index - right.frame_index)
+        .map((frame) => `Sprites/${frame.file_name}`),
+    })),
+  }
+}
+
+function buildUnityEditorImporter(recipe: KitbashRecipe) {
+  return `// Place this file under Assets/${recipe.character_id}/Editor, then run Tools/Pixel Creator/Import ${recipe.character_id}.\nusing System.IO;\nusing UnityEditor;\nusing UnityEditor.Animations;\nusing UnityEngine;\n\npublic static class ${toPascalIdentifier(recipe.character_id)}PixelCreatorImporter\n{\n    [MenuItem("Tools/Pixel Creator/Import ${recipe.character_id}")]\n    public static void Import()\n    {\n        var root = "Assets/${recipe.character_id}";\n        var spriteRoot = root + "/Sprites";\n        var clipRoot = root + "/Animations";\n        Directory.CreateDirectory(clipRoot);\n        foreach (var png in Directory.GetFiles(spriteRoot, "*.png"))\n        {\n            var importer = AssetImporter.GetAtPath(png) as TextureImporter;\n            if (importer == null) continue;\n            importer.textureType = TextureImporterType.Sprite;\n            importer.spritePixelsPerUnit = 64;\n            importer.filterMode = FilterMode.Point;\n            importer.textureCompression = TextureImporterCompression.Uncompressed;\n            importer.SaveAndReimport();\n        }\n        Debug.Log("Pixel Creator sprites imported for ${recipe.character_id}. Use ${recipe.character_id}_animation_clips.json to create AnimationClips or wire clips through your local controller generator.");\n    }\n}\n`
+}
+
+async function renderRpgMakerCharacterSheetToDataUrl(renderedFrameSet: RenderedFrameSet) {
+  const directions: Direction[] = [
+    'south',
+    'west',
+    'east',
+    'north',
+  ]
+  const canvas = document.createElement('canvas')
+  canvas.width = 64 * 3
+  canvas.height = 64 * 4
+  const context = canvas.getContext('2d')
+  if (!context) throw new Error('Canvas is unavailable.')
+  context.imageSmoothingEnabled = false
+  context.clearRect(0, 0, canvas.width, canvas.height)
+
+  for (const [row, direction] of directions.entries()) {
+    const frames = selectRpgMakerFrames(renderedFrameSet, direction)
+    const images = await Promise.all(frames.map((frame) => loadImage(frame.data_url)))
+    for (const [column, image] of images.entries()) {
+      context.drawImage(image, column * 64, row * 64, 64, 64)
+    }
+  }
+
+  return canvas.toDataURL('image/png')
+}
+
+function selectRpgMakerFrames(renderedFrameSet: RenderedFrameSet, direction: Direction) {
+  const preferredAnimation = renderedFrameSet.frames.some((frame) => frame.animation === 'walk' && frame.direction === direction)
+    ? 'walk'
+    : renderedFrameSet.frames.some((frame) => frame.animation === 'idle' && frame.direction === direction)
+      ? 'idle'
+      : renderedFrameSet.frames.find((frame) => frame.direction === direction)?.animation
+  const frames = renderedFrameSet.frames
+    .filter((frame) => frame.animation === preferredAnimation && frame.direction === direction)
+    .sort((left, right) => left.frame_index - right.frame_index)
+  const fallback = frames[0] ?? renderedFrameSet.frames[0]
+  if (!fallback) {
+    throw new Error('No rendered frames are available for RPG Maker export.')
+  }
+  return [frames[0] ?? fallback, frames[1] ?? fallback, frames[2] ?? frames[0] ?? fallback]
+}
+
+function buildAsepriteImportScript(recipe: KitbashRecipe, renderedFrameSet: RenderedFrameSet) {
+  const tags = renderedFrameSet.spritesheets.map((sheet) => ({
+    name: `${sheet.animation}_${sheet.direction}`,
+    frame_count: sheet.frame_count,
+    frame_rate: sheet.animation === 'attack' ? 10 : 7,
+    loop: sheet.animation !== 'attack',
+  }))
+  return `-- Aseprite import helper for ${recipe.character_id}\n-- Open the rendered PNG sequence folder, then use these tags as the authoritative timing map.\nlocal tags = ${JSON.stringify(tags, null, 2)}\nprint("Pixel Creator package: ${recipe.character_id}")\nfor _, tag in ipairs(tags) do\n  print(tag.name .. " frames=" .. tag.frame_count .. " fps=" .. tag.frame_rate)\nend\n`
+}
+
+function toPascalIdentifier(value: string) {
+  const cleaned = value.replace(/[^a-zA-Z0-9]+/g, ' ').trim()
+  const pascal = cleaned.split(/\s+/).map((part) => `${part.charAt(0).toUpperCase()}${part.slice(1)}`).join('')
+  return pascal || 'GeneratedCharacter'
 }
 
 function buildReusablePartFolders(recipe: KitbashRecipe, partLibrary: ExtractedPart[]) {

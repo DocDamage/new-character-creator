@@ -70,7 +70,7 @@ export async function inspectDuelystPackage(appRoot, options = {}) {
 function clampStageCount(value) {
   const parsed = Number(value)
   if (!Number.isFinite(parsed)) return 8
-  return Math.max(1, Math.min(16, Math.floor(parsed)))
+  return Math.max(1, Math.min(256, Math.floor(parsed)))
 }
 
 function ensurePackageExtraction(appRoot, packagePath) {

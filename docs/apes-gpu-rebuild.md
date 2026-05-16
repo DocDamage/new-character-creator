@@ -121,6 +121,35 @@ npm run build
 npm run test:browser
 ```
 
+## Private Duelyst And Fine-Tune Prep
+
+After the runtime is ready, prepare the private Duelyst manifest and APES fine-tuning inventory:
+
+```powershell
+npm run duelyst:private-manifest -- --stage-count 64
+npm run apes:prepare-finetune
+```
+
+Expected local-only outputs:
+
+```text
+public/data/manifests/duelyst.private.json
+data/training/apes_finetune/finetune_manifest.json
+data/training/apes_finetune/duelyst_sheets/
+```
+
+Verify the Duelyst review dataset can be used by APES preflight:
+
+```powershell
+micromamba run -n apes-gpu-modern python tools\apes_bridge\check_apes_env.py --test-folder "data\training\apes_finetune\duelyst_sheets" --json
+```
+
+Expected result:
+
+- `ready: true`
+- `character_count: 64`
+- `torch.cuda_available: true`
+
 ## Notes For Future Rebuilds
 
 - Do not install `pytorch3d` from conda on Windows for this env; it can silently drag the runtime back to CPU.

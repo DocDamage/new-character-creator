@@ -29,6 +29,8 @@ Latest verified local app state:
 - dev server verified at `http://127.0.0.1:8002/`
 - Duelyst audit scanned 7145 assets, found 696 sprite sheets, staged candidates, and opened `duelyst_f1_elyxstormblade` in the workstation
 - APES env preflight is ready in `apes-gpu-modern`
+- Private Duelyst manifest generation stages 64 local candidates with `npm run duelyst:private-manifest -- --stage-count 64`
+- Fine-tune prep writes `data/training/apes_finetune/finetune_manifest.json` and 64 Duelyst review folders
 
 ## Export Panel
 
@@ -129,3 +131,20 @@ Confirm:
    - repair, reindex, and sample export commands
    - `npm run test:browser`
    - `.\tools\apes_bridge\setup_home_pc.ps1`
+
+## Export Package Contents
+
+1. Open `Exports`.
+2. Click `Download full package zip`.
+3. Confirm the package includes:
+   - `rendered/frames/*.png`
+   - `rendered/sheets/*.png`
+   - `exports/godot/*.tscn`
+   - `exports/godot/*_sprite_frames.tres`
+   - `exports/unity/*_unity_2d.json`
+   - `exports/unity/*_animation_clips.json`
+   - `exports/unity/Editor/*_PixelCreatorImporter.cs`
+   - `exports/rpg_maker/$*.png`
+   - `exports/rpg_maker/*_rpg_maker_mz.json`
+   - `exports/aseprite/*_aseprite_reference.json`
+   - `exports/aseprite/*_aseprite_import.js`

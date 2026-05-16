@@ -16,6 +16,8 @@ Local Vite + React + TypeScript app for building a kitbash-oriented pixel charac
 ```bash
 npm install
 npm run index:assets
+npm run duelyst:private-manifest
+npm run apes:prepare-finetune
 npm run export:character -- 1-warrior-woman
 npm run dev -- --host 127.0.0.1 --port 8002 --strictPort
 npm run build
@@ -70,6 +72,7 @@ The `Settings` screen now also exposes a `Copy browser regression command` actio
 - Asset Audit with class counts, source warnings, and Duelyst unitypackage inspection/staging.
 - APES Lab with first-class job creation, local preflight/bridge actions, a one-click local QA harness generator, logs, job config export, failure surfacing, file import, pasted JSON import, and APES-to-part-library conversion.
 - Export panel for generic manifests, rendered frame/package downloads, Godot scene stubs, SpriteFrames stubs, and batch queues.
+- Production-oriented full package zip with rendered PNGs, Godot 4 `SpriteFrames` resources, Unity import settings and Editor importer script, RPG Maker MZ single-character sheet, Aseprite import script/spec, and extraction provenance.
 - Browser-side spritesheet downloads for the current animation/direction and all directions of the current action.
 - CLI character export under `data/exports/<character_id>/` with `package_manifest.json`, rendered frames/sheets, engine metadata, and source-frame references.
 - APES bridge contract under `tools/apes_bridge/`.
@@ -97,6 +100,54 @@ The APES runtime expects historical paths under the repo root. On this machine t
 checkpoints -> assets/checkpoints
 training data/okaysamurai_sheets -> assets/okaysamurai_sheets
 ```
+
+## Private Duelyst manifest
+
+Duelyst package extraction is local/private. Generate the private manifest with:
+
+```bash
+npm run duelyst:private-manifest -- --stage-count 64
+```
+
+This writes ignored local data:
+
+```text
+public/data/manifests/duelyst.private.json
+data/cache/duelyst-package/
+data/cache/duelyst-stage/
+```
+
+The manifest records candidate unit sheets, staged review frames, source paths, and warnings. It is meant for local review, APES extraction, and private experimentation only; the extracted assets and private manifest are not committed.
+
+## Training and fine-tuning path
+
+Prepare the APES fine-tune manifest and Duelyst review dataset with:
+
+```bash
+npm run apes:prepare-finetune
+```
+
+This writes ignored local data under:
+
+```text
+data/training/apes_finetune/
+```
+
+Current local inventory:
+
+- Okay Samurai supervised APES data: 3000 train pairs, 700 val pairs, 900 test pairs, with split HDF5 files present.
+- Creative Flow supervised corrnet data: 8058 train pairs, 1165 val pairs, 1078 test pairs.
+- Okay Samurai sheet runtime data: 20 character folders for APES inference/preflight.
+- Duelyst private runtime data: 64 staged character folders generated from the private manifest.
+
+The generated `finetune_manifest.json` includes ready-to-run commands for:
+
+- Creative Flow corrnet fine-tuning
+- Okay Samurai corrnet fine-tuning
+- Okay Samurai fullnet fine-tuning from existing checkpoints
+- Duelyst APES pseudo-label/review preparation
+
+Duelyst staged frames do not include ground-truth correspondence labels, so they are not supervised training data by themselves. Use them for APES inference, review, and pseudo-label promotion before mixing them into supervised fine-tuning.
 
 ## APES bridge
 

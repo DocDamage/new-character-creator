@@ -66,6 +66,31 @@ For older CUDA-capable setup attempts, these helper files remain available:
 
 The current known-good setup is newer than the original APES target and is documented in `docs/apes-gpu-rebuild.md`.
 
+## Fine-tuning data preparation
+
+Run this from the repo root:
+
+```text
+npm run duelyst:private-manifest -- --stage-count 64
+npm run apes:prepare-finetune
+```
+
+The prep command writes:
+
+```text
+data/training/apes_finetune/finetune_manifest.json
+data/training/apes_finetune/duelyst_sheets/
+```
+
+The manifest inventories the local supervised datasets and emits quoted Windows-safe commands for APES training:
+
+- `creative_flow` corrnet fine-tuning from `assets/creative_flow/{train,val,test}`
+- `okay_samurai` corrnet fine-tuning from `assets/okay_samurai/{train,val,test}`
+- `okay_samurai` fullnet fine-tuning from existing corrnet/fullnet checkpoints
+- Duelyst pseudo-label review using the private staged sheet dataset
+
+Important: Duelyst staged frames are private local inputs and currently only provide image/mask pairs from alpha silhouettes. They should be used for inference, reviewed APES masks, and pseudo-label generation before being treated as supervised training examples.
+
 The app treats APES as a core extraction path, not a side experiment: every report includes provenance, semantic labels, review status, warnings, and editable mask paths.
 
 Reports can be imported from the APES Lab with the `Import APES report JSON` control. Imported masks are converted into the same `ExtractedPart` records as preset, connected-pixel, and manual cleanup outputs, preserving APES confidence and warnings for review.

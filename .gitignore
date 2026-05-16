@@ -18,6 +18,7 @@ dist-ssr
 output/
 data/apes/
 data/cache/
+data/training/
 data/exports/*/exports/
 data/exports/*/rendered/
 data/exports/*/package_manifest.json
@@ -25,6 +26,7 @@ data/exports/*/export_warnings.json
 test-results/
 tools/apes_bridge/__pycache__/
 public/data/manifests/characters.local.json
+public/data/manifests/duelyst.private.json
 /????????????????????????????????/
 /assets/Animated-Pixel-Pack-Characters-V1/
 /assets/Duelyst-Unit-Animations.unitypackage

@@ -8,6 +8,8 @@
     "index:assets": "node tools/index-assets.js",
     "repair:manifest-paths": "node tools/repair-manifest-paths.js",
     "export:character": "node tools/export-character.js",
+    "duelyst:private-manifest": "node tools/build-duelyst-private-manifest.js",
+    "apes:prepare-finetune": "micromamba run -n apes-gpu-modern python tools/apes_bridge/prepare_finetune_data.py",
     "qa:apes-harness": "node tools/generate-apes-qa-harness.js",
     "test:browser": "playwright test",
     "test:browser:headed": "playwright test --headed",

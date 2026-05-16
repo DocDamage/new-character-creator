@@ -8,9 +8,11 @@
 
 **Tech Stack:** Vite, React, TypeScript, browser Canvas APIs, localStorage for UI/session state, downloadable JSON/PNG artifacts, Python APES bridge contracts under `tools/apes_bridge`.
 
-**Implementation Status:** Completed and extended. Composite rendering, persistent extracted payloads, manual mask cleanup, deterministic batch recipe previews/package manifests, APES report import/status bridge support, Duelyst package staging, Settings setup bundles, and APES GPU preflight support are implemented. Verified with `npm run build`, `npm run test:browser -- --reporter=line`, browser checks at `http://127.0.0.1:8002/`, Duelyst staging, and APES GPU preflight in `apes-gpu-modern`.
+**Implementation Status:** Completed and extended. Composite rendering, persistent extracted payloads, manual mask cleanup, deterministic batch recipe previews/package manifests, APES report import/status bridge support, Duelyst package staging/private manifests, production-oriented engine package exports, Settings setup bundles, APES GPU preflight support, and APES fine-tuning inventory prep are implemented. Verified with `npm run build`, `npm run test:browser -- --reporter=line`, browser checks at `http://127.0.0.1:8002/`, Duelyst staging, and APES GPU preflight in `apes-gpu-modern`.
 
 **APES GPU Status:** PyTorch3D is now fixed on the home RTX 3060 PC. The working env uses Python 3.10, PyTorch `2.5.1+cu124`, PyTorch3D `0.7.8`, matching PyG CUDA wheels, headless OpenCV, and NumPy `1.26.4`. Rebuild instructions are documented in `docs/apes-gpu-rebuild.md`.
+
+**Training/Fine-Tuning Status:** `tools/apes_bridge/prepare_finetune_data.py` inventories the local Okay Samurai and Creative Flow supervised datasets, creates a local Duelyst APES review dataset from the private manifest, and writes `data/training/apes_finetune/finetune_manifest.json` with quoted Windows-safe training commands.
 
 ---
 
