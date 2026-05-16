@@ -8,6 +8,7 @@ Local Vite + React + TypeScript app for building a kitbash-oriented pixel charac
 - Browser regression harness passes with `npm run test:browser`.
 - Local dev server has been verified at `http://127.0.0.1:8002/`.
 - APES GPU preflight passes in `apes-gpu-modern` with CUDA PyTorch, PyTorch3D, PyG extensions, OpenCV, checkpoints, and okaysamurai test data available.
+- APES real bridge execution reaches the vendored network/deformer on the RTX 3060. Static duplicated Duelyst crops can complete with empty review reports because APES cannot select moving parts from identical frames.
 - The only APES preflight warning is that upstream APES originally targeted Python 3.7 while the working local environment uses Python 3.10.
 - Duelyst package unpacking, detector labeling, staging, and in-app browsing has been verified against `assets/Duelyst-Unit-Animations.unitypackage`: 7145 assets scanned, 696 sprite sheets labeled/viewable in Asset Audit, and 64 staged candidates openable in the workstation.
 
@@ -19,6 +20,7 @@ npm run index:assets
 npm run duelyst:private-manifest
 npm run apes:prepare-finetune
 npm run apes:prepare-duelyst-jobs
+npm run apes:run-duelyst-jobs
 npm run export:character -- 1-warrior-woman
 npm run dev -- --host 127.0.0.1 --port 8002 --strictPort
 npm run build
@@ -73,6 +75,7 @@ The `Settings` screen now also exposes a `Copy browser regression command` actio
 - Asset Audit with class counts, source warnings, and Duelyst unitypackage inspection/staging.
 - Duelyst Asset Audit filters for search, body class, source family, training role, and staged state, plus batch APES job creation for staged review candidates.
 - APES Lab with first-class job creation, local preflight/bridge actions, a one-click local QA harness generator, logs, job config export, failure surfacing, file import, pasted JSON import, and APES-to-part-library conversion.
+- APES CLI bridge tools for preparing and running private Duelyst review job batches from `data/apes/input/`.
 - Export panel for generic manifests, rendered frame/package downloads, Godot scene stubs, SpriteFrames stubs, and batch queues.
 - Production-oriented full package zip with rendered PNGs, Godot 4 `SpriteFrames` resources, Unity import settings and Editor importer script, RPG Maker MZ single-character sheet, Aseprite import script/spec, and extraction provenance.
 - Browser-side spritesheet downloads for the current animation/direction and all directions of the current action.
@@ -168,6 +171,10 @@ data/apes/output/
 
 - real bridge mode for a CUDA-capable APES machine: prepares a temporary APES dataset from job frames, runs the vendored `inference_os.py`, and writes `status.json`, `preflight.json`, and `apes_report.json`
 - placeholder mode for local harness work on this machine when `--allow-placeholder` is explicitly enabled
+
+The Windows APES bridge includes compatibility fixes for the modern `apes-gpu-modern` environment: Vite `/@fs/` path resolution, absolute runtime output paths, 256x256 APES runtime normalization, `torch_batch_svd` fallback via `torch.linalg.svd`, `torch.symeig` replacement with `torch.linalg.eigh`, current scikit-image `slic` arguments, and Windows-safe APES character path handling. `tensorboard` is required because APES imports training utilities during inference startup.
+
+If APES runs but selects no masks, the bridge writes a completed empty review report with warnings instead of treating it as an environment failure. That is expected for duplicated single-crop Duelyst jobs.
 
 For a non-GPU Windows machine, the useful workflow is in the app:
 

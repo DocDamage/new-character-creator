@@ -33,6 +33,8 @@ Latest verified local app state:
 - Asset Audit auto-loads the private Duelyst manifest when present, renders 696 labeled candidates, and exposes 64 staged `Open in workstation` actions
 - Default Duelyst filters show the staged APES-review subset, and `Queue APES jobs` creates APES Lab jobs for those filtered staged candidates
 - Queued Duelyst APES jobs persist across reloads and APES Lab exposes `Run Duelyst queue` for prepared Duelyst jobs
+- CLI Duelyst APES queue writes 60 ignored jobs with `npm run apes:prepare-duelyst-jobs`
+- Real APES execution reaches vendored network/deformer on the RTX 3060; duplicated static Duelyst crops may produce completed empty review reports
 - Fine-tune prep writes `data/training/apes_finetune/finetune_manifest.json` and 64 Duelyst review folders
 
 ## Export Panel
@@ -110,7 +112,7 @@ micromamba run -n apes-gpu-modern python tools\apes_bridge\check_apes_env.py --j
 Confirm:
 
 - `ready` is `true`
-- `pytorch3d`, `torch_cluster`, and `torch_scatter` are `true`
+- `pytorch3d`, `torch_cluster`, `torch_scatter`, and `tensorboard` are `true`
 - `torch.cuda_available` is `true`
 - the checkpoint path points at `checkpoints/train_cluster/model_best.pth.tar`
 - the test folder points at `training data/okaysamurai_sheets`

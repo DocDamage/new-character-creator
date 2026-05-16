@@ -24,9 +24,12 @@ data/apes/output/<job_id>/
 `run_apes_extract.py` now has a real bridge path. In default mode it:
 
 - prepares a temporary APES test folder from the job's selected sprite frames and alpha silhouettes
+- resolves app paths including Vite `/@fs/...` references from staged local assets
+- normalizes runtime APES inputs to 256x256, which the vendored model expects
 - runs `vendor/APES/inference/inference_os.py`
 - writes `status.json`, `preflight.json`, and `apes_report.json`
 - relabels APES part masks back onto the creator's core semantic labels with a preset-bounds heuristic
+- writes a completed empty review report when APES runs but selects zero usable parts
 
 Use placeholder masks only when you explicitly opt in for harness work:
 
@@ -72,8 +75,10 @@ The vendored APES runtime has compatibility shims for the modern Windows GPU env
 
 - `torch_batch_svd` is optional; APES falls back to `torch.linalg.svd` when the native extension is unavailable.
 - Removed `torch.symeig` calls are routed through `torch.linalg.eigh`.
+- Current scikit-image uses `max_num_iter` for SLIC; the vendored APES call has been updated.
 - The inference loader uses Windows-safe path basename handling.
 - The bridge normalizes runtime APES frames to 256x256, which the vendored model expects.
+- APES bridge output paths are resolved to absolute repo paths before launching vendored inference, avoiding `vendor/APES` cwd surprises.
 
 ## Fine-tuning data preparation
 
@@ -109,6 +114,8 @@ The manifest inventories the local supervised datasets and emits quoted Windows-
 Important: Duelyst staged frames are private local inputs. Their labels are produced from Duelyst path/name/animation metadata plus a lightweight alpha-silhouette detector, not from human-reviewed APES correspondence labels. They should be used for filtering, inference, reviewed APES masks, and pseudo-label generation before being treated as supervised training examples.
 
 `npm run apes:prepare-duelyst-jobs` writes ignored APES job JSON files for the staged APES-review Duelyst candidates. `npm run apes:run-duelyst-jobs` runs those jobs immediately. Current staged Duelyst jobs duplicate a single representative crop to satisfy APES' two-frame minimum; APES may complete with an empty report when no moving parts can be selected. That empty report is expected for some static crops and is not an environment failure.
+
+Known limitation: the private Duelyst package is currently staged as one representative crop per unit. APES works best with true multi-frame motion pairs, so the next quality step is staging actual Duelyst animation frames from the atlas rather than duplicating one crop.
 
 The app treats APES as a core extraction path, not a side experiment: every report includes provenance, semantic labels, review status, warnings, and editable mask paths.
 

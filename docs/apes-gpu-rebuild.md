@@ -16,6 +16,7 @@ This is the reproducible setup that fixed the local PyTorch3D/APES runtime on a 
 - `torch-cluster 1.6.3+pt25cu124`
 - `opencv-python-headless 4.10.0.84`
 - `numpy 1.26.4`
+- `tensorboard 2.20.0`
 
 The repo preflight currently reports `ready: true` with only a warning that upstream APES originally targeted Python 3.7.
 
@@ -69,6 +70,14 @@ micromamba run -n apes-gpu-modern python -m pip install --force-reinstall torch-
 micromamba run -n apes-gpu-modern python -m pip install --force-reinstall "numpy==1.26.4"
 ```
 
+Install TensorBoard for APES inference startup:
+
+```powershell
+micromamba run -n apes-gpu-modern python -m pip install tensorboard
+```
+
+`torch_batch_svd` is intentionally not required on this Windows setup. The upstream package currently passes a GCC-only flag to MSVC, so the vendored APES code falls back to `torch.linalg.svd`.
+
 ## Asset Links
 
 The APES bridge expects the historical paths below. On this machine they are junctions into ignored asset folders:
@@ -91,7 +100,7 @@ New-Item -ItemType Junction -Path "training data\okaysamurai_sheets" -Target ass
 Run the import smoke check:
 
 ```powershell
-micromamba run -n apes-gpu-modern python -c "import torch, torchvision, cv2, numpy, pytorch3d, torch_scatter, torch_cluster; print(torch.__version__, torch.version.cuda, torch.cuda.is_available()); print(cv2.__version__, numpy.__version__, pytorch3d.__version__)"
+micromamba run -n apes-gpu-modern python -c "import torch, torchvision, cv2, numpy, pytorch3d, torch_scatter, torch_cluster, tensorboard; print(torch.__version__, torch.version.cuda, torch.cuda.is_available()); print(cv2.__version__, numpy.__version__, pytorch3d.__version__)"
 ```
 
 Expected result includes:
@@ -113,6 +122,16 @@ Expected result:
 - all required modules set to `true`
 - `torch.cuda_available: true`
 - only warning is the upstream APES Python 3.7 target note
+
+APES runtime compatibility fixes tracked in the repo:
+
+- Vite `/@fs/...` staged frame paths resolve in the bridge.
+- Bridge runtime inputs are resized to 256x256 for the vendored APES model.
+- Bridge output/runtime paths are absolute before launching `vendor/APES/inference/inference_os.py`.
+- Vendored APES uses `torch.linalg.svd` when `torch_batch_svd` is missing.
+- Vendored APES uses `torch.linalg.eigh` instead of removed `torch.symeig`.
+- Vendored APES uses current scikit-image `slic(max_num_iter=...)`.
+- Vendored APES uses Windows-safe path basename handling.
 
 Run the frontend checks:
 
