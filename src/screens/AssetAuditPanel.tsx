@@ -67,7 +67,7 @@ export function AssetAuditPanel({
         </div>
       </div>
 
-      <div className={`settings-card ${duelystAudit && duelystAudit.staged_manifest.character_count > 0 ? '' : 'settings-card-warning'}`}>
+      <div data-testid="duelyst-status" className={`settings-card ${duelystAudit && duelystAudit.staged_manifest.character_count > 0 ? '' : 'settings-card-warning'}`}>
         <strong>Duelyst status</strong>
         <span>{duelystStatus}</span>
         {duelystAudit ? <code>{duelystAudit.summary}\n{duelystAudit.findings.join('\n')}</code> : null}
@@ -96,7 +96,7 @@ export function AssetAuditPanel({
             ))}
           </div>
 
-          <div className="duelyst-candidate-list">
+          <div data-testid="duelyst-candidate-list" className="duelyst-candidate-list">
             {duelystAudit.candidate_units.map((candidate) => (
               <article key={candidate.unit_id} className="duelyst-candidate">
                 <img className="duelyst-preview" src={candidate.preview_url} alt={candidate.display_name} />
@@ -124,7 +124,7 @@ export function AssetAuditPanel({
                   ) : null}
                   <div className="audit-actions">
                     {candidate.staged ? (
-                      <button onClick={() => openDuelystStageCharacter(candidate.stage_character_id)}>Open in workstation</button>
+                      <button data-testid={`open-duelyst-stage-${candidate.stage_character_id}`} onClick={() => openDuelystStageCharacter(candidate.stage_character_id)}>Open in workstation</button>
                     ) : null}
                     <code>{candidate.sheet_source_path}</code>
                   </div>

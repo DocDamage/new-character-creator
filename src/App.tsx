@@ -157,14 +157,31 @@ function App() {
       : ['/data/manifests/characters.json']
 
     let lastStatus: number | null = null
-    for (const manifestUrl of manifestUrls) {
+    for (const [index, manifestUrl] of manifestUrls.entries()) {
+      const isLastManifestUrl = index === manifestUrls.length - 1
       const response = await fetch(manifestUrl)
       if (response.ok) {
-        return await response.json() as AssetManifest
+        const contentType = response.headers.get('content-type') || ''
+        const responseText = await response.text()
+
+        try {
+          const parsed = JSON.parse(responseText) as AssetManifest
+          if (!parsed.characters || !Array.isArray(parsed.characters)) {
+            throw new Error('Manifest payload is missing a characters array.')
+          }
+          return parsed
+        } catch (error) {
+          const looksLikeHtml = contentType.includes('text/html') || responseText.trimStart().startsWith('<!DOCTYPE html') || responseText.trimStart().startsWith('<html')
+          if (looksLikeHtml && !isLastManifestUrl) {
+            continue
+          }
+
+          throw new Error(`Failed to parse manifest ${manifestUrl}: ${error instanceof Error ? error.message : String(error)}`)
+        }
       }
 
       lastStatus = response.status
-      if (response.status !== 404 || manifestUrl === manifestUrls[manifestUrls.length - 1]) {
+      if (response.status !== 404 || isLastManifestUrl) {
         throw new Error(`Failed to load manifest: ${response.status}`)
       }
     }
@@ -566,7 +583,7 @@ function App() {
     }
   }
 
-  function importApesReport(report: ApesReport, options: { replaceQaHarnessExisting?: boolean } = {}) {
+  function importApesReport(report: ApesReport, options: ImportApesReportOptions = {}) {
     const job = apesJobs.find((item) => item.job_id === report.job_id)
     const fallbackInput = job?.input_frames[0]
     const characterId = job?.character_id ?? selectedCharacter?.character_id ?? 'unknown_character'
@@ -630,6 +647,69 @@ function App() {
           : item,
       ),
     )
+
+    if (options.statusSource === 'pasted-json') {
+      setApesBridgeStatus(`Imported APES report from pasted JSON with ${importedParts.length} mask(s).`)
+    } else if (options.statusSource === 'file-import') {
+      setApesBridgeStatus(`Imported APES report file with ${importedParts.length} mask(s).`)
+    }
+
+    return importedParts.length
+  }
+
+  function downloadLocalSetupBundle() {
+    const normalizedAssetRoot = assetRootInput.trim() || manifest?.asset_root || ''
+    const normalizedPythonPath = apesPythonPath.trim()
+    const escapedAssetRoot = normalizedAssetRoot.replaceAll('"', '\\"')
+    const escapedPythonPath = normalizedPythonPath.replaceAll('"', '\\"')
+    const repairCommand = normalizedAssetRoot ? `npm run repair:manifest-paths -- --asset-root "${escapedAssetRoot}"` : 'npm run repair:manifest-paths -- --asset-root "<path-to-sprite-pack>"'
+    const reindexCommand = normalizedAssetRoot ? `npm run index:assets -- --asset-root "${escapedAssetRoot}"` : 'npm run index:assets -- --asset-root "<path-to-sprite-pack>"'
+    const exportCommand = normalizedAssetRoot ? `npm run export:character -- 1-warrior-woman --asset-root "${escapedAssetRoot}"` : 'npm run export:character -- 1-warrior-woman --asset-root "<path-to-sprite-pack>"'
+    const preflightCommand = normalizedPythonPath
+      ? `"${escapedPythonPath}" tools/apes_bridge/check_apes_env.py --json`
+      : 'python tools/apes_bridge/check_apes_env.py --json'
+    const bundleText = [
+      '# Pixel Creator local setup bundle',
+      '',
+      `Generated: ${new Date().toISOString()}`,
+      '',
+      '## Paths',
+      '',
+      `- Asset root: ${normalizedAssetRoot || '<set this before running repair, reindex, or export>'}`,
+      `- APES Python: ${normalizedPythonPath || 'use the Python interpreter that starts npm run dev'}`,
+      '',
+      '## First-time setup',
+      '',
+      '```powershell',
+      'npm install',
+      repairCommand,
+      reindexCommand,
+      'npm run dev -- --host 127.0.0.1 --port 8002 --strictPort',
+      '```',
+      '',
+      '## Validation',
+      '',
+      '```powershell',
+      exportCommand,
+      'npm run test:browser',
+      '```',
+      '',
+      '## APES machine checks',
+      '',
+      '```powershell',
+      '.\\tools\\apes_bridge\\setup_home_pc.ps1',
+      preflightCommand,
+      '```',
+      '',
+      '## Notes',
+      '',
+      '- Direct repair, reindex, Duelyst audit, and APES bridge actions only work while the app is running through the local Vite dev server.',
+      '- The APES QA harness is available in-app from APES Lab and is safe to use on non-GPU machines.',
+      '- If the manifest asset root and your target asset root differ, use Settings to repair or reindex before exporting.',
+    ].join('\n')
+
+    downloadText('pixel_creator_local_setup.md', `${bundleText}\n`, 'text/markdown')
+    setSettingsStatus('Local setup bundle downloaded with the current asset and APES settings.')
   }
 
   function clearApesQaHarnessParts() {
@@ -1180,6 +1260,7 @@ function App() {
               settingsStatus={settingsStatus}
               settingsBusy={settingsBusy}
               copyCommand={copyCommand}
+              downloadLocalSetupBundle={downloadLocalSetupBundle}
               runLocalAssetTool={runLocalAssetTool}
               apesPythonPath={apesPythonPath}
               setApesPythonPath={setApesPythonPath}

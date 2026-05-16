@@ -31,6 +31,11 @@ The `Settings` screen now also exposes a `Copy browser regression command` actio
 - manual mask save persistence after reload
 - recipe save/load state
 - Part Library bulk review actions
+- APES QA harness generation plus report reload and pasted JSON import
+- Duelyst audit behavior, including the no-package warning path and staged-workstation opening path when the local unitypackage is available
+- portable local setup bundle export from `Settings`
+
+`Settings` also exposes a `Download local setup bundle` action. It writes a machine-ready markdown checklist with your current asset root, APES interpreter, setup commands, and browser regression command filled in so you can move the workflow to another PC without rebuilding the commands by hand.
 
 ## What is implemented
 
@@ -91,6 +96,15 @@ The first run may require the Playwright browser install:
 ```bash
 npm run test:browser:install
 ```
+
+The browser harness now covers:
+
+- manual cleanup save persistence after reload
+- rendered frame and full-package export downloads
+- recipe save/load and bulk review actions
+- APES QA harness generation, reload, and pasted JSON import
+- Duelyst package audit status and staged source opening when available
+- portable setup bundle download from `Settings`
 
 ## Source assets
 

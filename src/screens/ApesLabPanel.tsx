@@ -23,7 +23,7 @@ type ApesLabPanelProps = {
   toggleApesAnimation: (name: AnimationName) => void
   toggleApesDirection: (name: Direction) => void
   toggleApesLabel: (name: PartLabel) => void
-  importApesReport: (report: ApesReport) => void
+  importApesReport: (report: ApesReport, options?: { replaceQaHarnessExisting?: boolean; statusSource?: 'pasted-json' | 'file-import' }) => number
   apesPythonPath: string
   apesAllowPlaceholder: boolean
   apesBridgeBusy: boolean
@@ -191,18 +191,19 @@ export function ApesLabPanel({
         </fieldset>
       </div>
       <div className="status-strip">
-        <button className="primary" onClick={createApesJob}>Create APES job</button>
-        <button className="primary" onClick={() => void runApesPreflight()} disabled={apesBridgeBusy || !import.meta.env.DEV}>Run APES preflight</button>
-        <button onClick={() => void generateApesQaHarness()} disabled={apesBridgeBusy || !import.meta.env.DEV}>Generate local QA harness</button>
-        <button onClick={clearApesQaHarnessParts} disabled={qaHarnessParts.length === 0}>Clear QA harness parts</button>
-        <button onClick={() => void loadApesQaHarnessReport()}>
+        <button className="primary" data-testid="create-apes-job" onClick={createApesJob}>Create APES job</button>
+        <button className="primary" data-testid="run-apes-preflight" onClick={() => void runApesPreflight()} disabled={apesBridgeBusy || !import.meta.env.DEV}>Run APES preflight</button>
+        <button data-testid="generate-apes-qa-harness" onClick={() => void generateApesQaHarness()} disabled={apesBridgeBusy || !import.meta.env.DEV}>Generate local QA harness</button>
+        <button data-testid="clear-apes-qa-harness-parts" onClick={clearApesQaHarnessParts} disabled={qaHarnessParts.length === 0}>Clear QA harness parts</button>
+        <button data-testid="load-apes-qa-report" onClick={() => void loadApesQaHarnessReport()}>
           Load and replace QA sample report
         </button>
         <button
+          data-testid="import-apes-report-json"
           onClick={() => {
             if (!reportText.trim()) return
             try {
-              importApesReport(JSON.parse(reportText) as ApesReport)
+              importApesReport(JSON.parse(reportText) as ApesReport, { statusSource: 'pasted-json' })
               setReportText('')
             } catch (error) {
               window.alert(`Could not import APES report: ${error instanceof Error ? error.message : String(error)}`)
@@ -222,7 +223,7 @@ export function ApesLabPanel({
               if (!file) return
               file
                 .text()
-                .then((text) => importApesReport(JSON.parse(text) as ApesReport))
+                .then((text) => importApesReport(JSON.parse(text) as ApesReport, { statusSource: 'file-import' }))
                 .catch((error) => {
                   window.alert(`Could not import APES report: ${error instanceof Error ? error.message : String(error)}`)
                 })
@@ -231,7 +232,7 @@ export function ApesLabPanel({
           />
         </label>
       </div>
-      <div className={`settings-card ${apesPreflight && !apesPreflight.ready ? 'settings-card-warning' : ''}`}>
+      <div data-testid="apes-bridge-status" className={`settings-card ${apesPreflight && !apesPreflight.ready ? 'settings-card-warning' : ''}`}>
         <strong>Bridge status</strong>
         <span>{apesBridgeStatus}</span>
         {apesPreflight ? <code>{apesPreflight.findings.length > 0 ? apesPreflight.findings.join('\n') : `Ready with ${apesPreflight.python.executable}`}</code> : null}
@@ -250,6 +251,7 @@ export function ApesLabPanel({
       <label className="field apes-import">
         <span>Paste APES report JSON</span>
         <textarea
+          data-testid="apes-report-json-input"
           value={reportText}
           onChange={(event) => setReportText(event.target.value)}
           placeholder={JSON.stringify(

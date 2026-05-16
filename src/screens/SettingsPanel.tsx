@@ -8,6 +8,7 @@ type SettingsPanelProps = {
   settingsStatus: string
   settingsBusy: boolean
   copyCommand: (command: string, successMessage: string) => Promise<void>
+  downloadLocalSetupBundle: () => void
   runLocalAssetTool: (action: 'repair' | 'reindex') => Promise<void>
   apesPythonPath: string
   setApesPythonPath: (value: string) => void
@@ -23,6 +24,7 @@ export function SettingsPanel({
   settingsStatus,
   settingsBusy,
   copyCommand,
+  downloadLocalSetupBundle,
   runLocalAssetTool,
   apesPythonPath,
   setApesPythonPath,
@@ -64,14 +66,14 @@ export function SettingsPanel({
           <strong>Target asset root</strong>
           <label className="field">
             <span>Asset pack folder</span>
-            <input value={assetRootInput} onChange={(event) => setAssetRootInput(event.target.value)} placeholder="Paste the local asset-pack path" />
+            <input data-testid="settings-asset-root-input" value={assetRootInput} onChange={(event) => setAssetRootInput(event.target.value)} placeholder="Paste the local asset-pack path" />
           </label>
         </article>
         <article className="settings-card">
           <strong>APES Python path</strong>
           <label className="field">
             <span>Interpreter on the APES machine</span>
-            <input value={apesPythonPath} onChange={(event) => setApesPythonPath(event.target.value)} placeholder="C:\\Users\\you\\miniconda3\\envs\\apes-gpu\\python.exe" />
+            <input data-testid="settings-apes-python-input" value={apesPythonPath} onChange={(event) => setApesPythonPath(event.target.value)} placeholder="C:\\Users\\you\\miniconda3\\envs\\apes-gpu\\python.exe" />
           </label>
           <span>Leave blank to use the Python running npm run dev. Set this to the dedicated APES env on your home GPU PC.</span>
         </article>
@@ -93,7 +95,13 @@ export function SettingsPanel({
         <button className="primary" onClick={() => void copyCommand(apesSetupCommand, 'APES setup command copied. Run it on the home GPU PC to build the APES environment.')}>Copy APES setup command</button>
         <button onClick={() => void copyCommand(apesPreflightCommand, 'APES preflight command copied. Run it with the configured interpreter to verify the APES machine.')}>Copy APES preflight command</button>
         <button data-testid="copy-browser-regression-command" onClick={() => void copyCommand(browserRegressionCommand, 'Browser regression command copied. Run it to validate exports and manual mask persistence.')}>Copy browser regression command</button>
+        <button data-testid="download-local-setup-bundle" onClick={downloadLocalSetupBundle}>Download local setup bundle</button>
         <button onClick={() => setAssetRootInput(manifestAssetRoot)}>Use indexed root</button>
+      </div>
+
+      <div className="settings-card">
+        <strong>Portable setup bundle</strong>
+        <span>Download a machine-ready markdown checklist with the current asset root, APES interpreter, setup commands, and browser regression command filled in.</span>
       </div>
 
       <div className="settings-card">

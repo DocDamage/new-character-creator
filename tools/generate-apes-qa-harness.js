@@ -7,7 +7,6 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const appRoot = path.resolve(__dirname, '..')
 const publicRoot = path.resolve(appRoot, 'public')
 const jobId = 'apes_harness_job'
-const sourceFrame = path.resolve(appRoot, 'data', 'exports', '1-warrior-woman', 'rendered', 'frames', 'idle', 'south', 'frame_000.png')
 const harnessRoot = path.resolve(publicRoot, 'data', 'qa', jobId)
 const masksRoot = path.resolve(harnessRoot, 'masks')
 const partsRoot = path.resolve(harnessRoot, 'parts')
@@ -102,13 +101,56 @@ function writePart(source, rect, targetPath) {
   writePng(targetPath, png)
 }
 
-function main() {
-  if (!fs.existsSync(sourceFrame)) {
-    throw new Error(`Missing source frame for APES QA harness: ${sourceFrame}`)
+function getActiveManifestPath() {
+  const localManifestPath = path.resolve(publicRoot, 'data', 'manifests', 'characters.local.json')
+  if (fs.existsSync(localManifestPath)) {
+    return localManifestPath
+  }
+  return path.resolve(publicRoot, 'data', 'manifests', 'characters.json')
+}
+
+function resolveManifestFramePath(framePath) {
+  if (!framePath) {
+    throw new Error('APES QA harness manifest did not include a source frame path.')
   }
 
+  if (framePath.startsWith('/@fs/')) {
+    return framePath.slice('/@fs/'.length)
+  }
+
+  if (framePath.startsWith('/')) {
+    return path.resolve(appRoot, framePath.slice(1))
+  }
+
+  if (path.isAbsolute(framePath)) {
+    return framePath
+  }
+
+  return path.resolve(appRoot, framePath)
+}
+
+function resolveHarnessSourceFrame() {
+  const manifestPath = getActiveManifestPath()
+  const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'))
+  const harnessCharacter = manifest.characters.find((character) => character.character_id === '1-warrior-woman') ?? manifest.characters[0]
+  if (!harnessCharacter) {
+    throw new Error(`No characters were found in the manifest at ${manifestPath}.`)
+  }
+
+  const idleSouthFrames = harnessCharacter.animations.find((animation) => animation.name === 'idle')?.directions?.south
+  const sourceFrame = idleSouthFrames?.[0]?.path ?? harnessCharacter.representative_frame
+  const resolvedSourceFrame = resolveManifestFramePath(sourceFrame)
+  if (!fs.existsSync(resolvedSourceFrame)) {
+    throw new Error(`Missing source frame for APES QA harness: ${resolvedSourceFrame}`)
+  }
+
+  return resolvedSourceFrame
+}
+
+function main() {
   ensureDir(masksRoot)
   ensureDir(partsRoot)
+  const sourceFrame = resolveHarnessSourceFrame()
   const source = readPng(sourceFrame)
 
   const report = {

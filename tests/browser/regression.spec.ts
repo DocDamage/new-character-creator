@@ -110,6 +110,64 @@ test('recipe save-load and bulk review actions stay usable', async ({ page }) =>
   await expect(page.getByRole('button', { name: 'Mark reviewed' }).first()).toBeVisible()
 })
 
+test('APES harness generation, reload, and pasted import stay usable', async ({ page }) => {
+  await page.getByTestId('nav-apes').click()
+  await page.getByTestId('generate-apes-qa-harness').click()
+  await expect(page.getByTestId('apes-bridge-status')).toContainText(/Generated and imported the local APES QA harness/i, { timeout: 30_000 })
+
+  await page.getByTestId('nav-library').click()
+  await page.getByTestId('part-library-method-filter').selectOption('apes')
+  await expect(page.getByText(/qa harness/i).first()).toBeVisible()
+  await expect(page.getByText(/confidence/i).first()).toBeVisible()
+
+  await page.getByTestId('nav-apes').click()
+  await page.getByTestId('load-apes-qa-report').click()
+  await expect(page.getByTestId('apes-bridge-status')).toContainText(/Loaded and replaced the APES QA sample report/i)
+
+  const harnessText = await page.evaluate(async () => {
+    const response = await fetch('/data/qa/apes_report_harness.json')
+    if (!response.ok) {
+      throw new Error(`Harness request failed with status ${response.status}`)
+    }
+    return response.text()
+  })
+  await page.getByTestId('apes-report-json-input').fill(harnessText)
+  await page.getByTestId('import-apes-report-json').click()
+  await expect(page.getByTestId('apes-bridge-status')).toContainText(/Imported APES report from pasted JSON/i)
+})
+
+test('Duelyst audit stays usable with or without the local package', async ({ page }) => {
+  await page.getByTestId('nav-audit').click()
+  await page.getByTestId('run-duelyst-audit').click()
+  await expect(page.getByTestId('duelyst-status')).not.toContainText(/Analyzing Duelyst package/i, { timeout: 120_000 })
+
+  const duelystStatus = await page.getByTestId('duelyst-status').innerText()
+  if (/package not found/i.test(duelystStatus)) {
+    await expect(page.getByTestId('duelyst-status')).toContainText(/Package not found at/i)
+    return
+  }
+
+  const stagedButtons = page.locator('[data-testid^="open-duelyst-stage-"]')
+  await expect(stagedButtons.first()).toBeVisible({ timeout: 120_000 })
+  await stagedButtons.first().click()
+  await expect(page.locator('#character')).toHaveValue(/duelyst_/, { timeout: 30_000 })
+})
+
+test('settings can export a portable local setup bundle', async ({ page }) => {
+  await page.getByTestId('nav-settings').click()
+  await page.getByTestId('settings-asset-root-input').fill('D:\\sprite-packs\\Animated-Pixel-Pack-Characters-V1')
+  await page.getByTestId('settings-apes-python-input').fill('C:\\APES\\python.exe')
+
+  const bundleText = await readTextDownload(page, async () => {
+    await page.getByTestId('download-local-setup-bundle').click()
+  })
+  expect(bundleText).toContain('# Pixel Creator local setup bundle')
+  expect(bundleText).toContain('D:\\sprite-packs\\Animated-Pixel-Pack-Characters-V1')
+  expect(bundleText).toContain('C:\\APES\\python.exe')
+  expect(bundleText).toContain('npm run test:browser')
+  expect(bundleText).toContain('.\\tools\\apes_bridge\\setup_home_pc.ps1')
+})
+
 async function readJsonDownload<T>(page: Parameters<typeof test>[0]['page'], trigger: () => Promise<void>) {
   const downloadPromise = page.waitForEvent('download')
   await trigger()
@@ -135,4 +193,16 @@ async function readZipEntries(page: Parameters<typeof test>[0]['page'], trigger:
   const buffer = await readFile(filePath)
   const zip = await JSZip.loadAsync(buffer)
   return Object.keys(zip.files)
+}
+
+async function readTextDownload(page: Parameters<typeof test>[0]['page'], trigger: () => Promise<void>) {
+  const downloadPromise = page.waitForEvent('download')
+  await trigger()
+  const download = await downloadPromise
+  const filePath = await download.path()
+  if (!filePath) {
+    throw new Error(`Download path unavailable for ${download.suggestedFilename()}`)
+  }
+
+  return readFile(filePath, 'utf8')
 }

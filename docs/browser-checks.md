@@ -18,6 +18,8 @@ npm run test:browser
 
 That harness covers export/package downloads, manual mask save persistence, recipe save/load, and Part Library bulk review actions.
 
+It now also covers APES QA harness generation and import, Duelyst audit behavior, and the portable local setup bundle download from `Settings`.
+
 ## Export Panel
 
 1. Open the `Fast Creator` screen and keep the default recipe or save a new one with at least one reviewed part selected.
@@ -81,3 +83,23 @@ That harness covers export/package downloads, manual mask save persistence, reci
 8. Click `Load and replace QA sample report` and confirm it still imports cleanly from `public/data/qa/apes_report_harness.json`.
 9. Paste the contents of `public/data/qa/apes_report_harness.json` into the textarea and click `Import pasted JSON`.
 10. Confirm the import succeeds without console errors and APES parts remain selectable in `Fast Creator` and editable in `Art Workstation`.
+
+## Duelyst Audit
+
+1. Open `Asset Audit`.
+2. Click `Analyze and stage Duelyst package`.
+3. If `assets/Duelyst-Unit-Animations.unitypackage` is present, confirm candidate sheets appear with cropped previews and `Open in workstation` actions for staged entries.
+4. Open one staged candidate and confirm the source character switches to a `duelyst_*` entry in the workstation.
+5. If the package is not present on the machine, confirm the status card reports that the package was not found instead of failing silently.
+
+## Settings Bundle
+
+1. Open `Settings`.
+2. Enter a target asset root and, if relevant, an APES Python path.
+3. Click `Download local setup bundle`.
+4. Confirm the downloaded markdown includes:
+   - the asset root you entered
+   - the APES interpreter you entered
+   - repair, reindex, and sample export commands
+   - `npm run test:browser`
+   - `.\tools\apes_bridge\setup_home_pc.ps1`
