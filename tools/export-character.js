@@ -6,13 +6,19 @@ import { PNG } from 'pngjs';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const appRoot = path.resolve(__dirname, '..');
 const manifestPath = path.resolve(appRoot, 'public', 'data', 'manifests', 'characters.json');
+const localManifestPath = path.resolve(appRoot, 'public', 'data', 'manifests', 'characters.local.json');
 const exportRoot = path.resolve(appRoot, 'data', 'exports');
 const directions = ['south', 'east', 'north', 'west'];
 const cliArgs = process.argv.slice(2);
 
 function fromFsUrl(url) {
-  if (!url.startsWith('/@fs/')) return url;
-  return decodeURI(url.slice('/@fs/'.length));
+  if (url.startsWith('/@fs/')) {
+    return path.resolve(decodeURI(url.slice('/@fs/'.length)));
+  }
+  if (url.startsWith('/')) {
+    return path.resolve(appRoot, `.${url}`);
+  }
+  return url;
 }
 
 function getOptionValue(name) {
@@ -30,6 +36,14 @@ function getCharacterId() {
 function getConfiguredAssetRoot() {
   const override = getOptionValue('--asset-root') ?? process.env.PIXEL_CREATOR_ASSET_ROOT;
   return override ? path.resolve(override) : undefined;
+}
+
+function resolveManifestAssetRoot(assetRoot) {
+  return path.isAbsolute(assetRoot) ? path.resolve(assetRoot) : path.resolve(appRoot, assetRoot.replaceAll('/', path.sep));
+}
+
+function getActiveManifestPath() {
+  return fs.existsSync(localManifestPath) ? localManifestPath : manifestPath;
 }
 
 function resolveSourcePath(url, recordedAssetRoot, configuredAssetRoot) {
@@ -50,6 +64,14 @@ function ensureDir(folder) {
 function resetDir(folder) {
   fs.rmSync(folder, { recursive: true, force: true });
   ensureDir(folder);
+}
+
+function resetGeneratedExportTargets(outRoot) {
+  ensureDir(outRoot);
+  resetDir(path.resolve(outRoot, 'exports'));
+  resetDir(path.resolve(outRoot, 'rendered'));
+  fs.rmSync(path.resolve(outRoot, 'package_manifest.json'), { force: true });
+  fs.rmSync(path.resolve(outRoot, 'export_warnings.json'), { force: true });
 }
 
 function buildGenericManifest(character, frameRecords, warnings, resolveFrameSourcePath, exportContext) {
@@ -240,7 +262,7 @@ function copyRenderedFrames(character, outRoot, resolveFrameSourcePath) {
   };
 }
 
-function buildPackageManifest(character, renderedFrameSet, warnings, exportContext) {
+function buildPackageManifest(character, renderedFrameSet, warnings, exportContext, resolveFrameSourcePath) {
   return {
     format: 'pixel_creator_cli_package',
     version: 1,
@@ -278,7 +300,7 @@ function buildPackageManifest(character, renderedFrameSet, warnings, exportConte
         frames: (animation.directions[direction] ?? []).map((frame) => ({
           file_name: frame.file_name,
           source_path: frame.path,
-          source_fs_path: fromFsUrl(frame.path),
+          source_fs_path: resolveFrameSourcePath(frame.path),
         })),
       })),
     ),
@@ -352,20 +374,22 @@ function main() {
     throw new Error(`Configured asset root not found: ${configuredAssetRoot}`);
   }
 
-  const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
+  const activeManifestPath = getActiveManifestPath();
+  const manifest = JSON.parse(fs.readFileSync(activeManifestPath, 'utf8'));
   const character = manifest.characters.find((item) => item.character_id === id);
   if (!character) {
     throw new Error(`Unknown character "${id}". Run npm run index:assets first.`);
   }
 
+  const resolvedManifestAssetRoot = resolveManifestAssetRoot(manifest.asset_root);
   const resolveFrameSourcePath = (framePath) => resolveSourcePath(framePath, manifest.asset_root, configuredAssetRoot);
   const exportContext = {
     manifestAssetRoot: manifest.asset_root,
-    resolvedAssetRoot: configuredAssetRoot ?? manifest.asset_root,
+    resolvedAssetRoot: configuredAssetRoot ?? resolvedManifestAssetRoot,
   };
 
   const outRoot = path.resolve(exportRoot, character.character_id);
-  resetDir(outRoot);
+  resetGeneratedExportTargets(outRoot);
   ensureDir(path.resolve(outRoot, 'exports', 'godot'));
   ensureDir(path.resolve(outRoot, 'exports', 'unity'));
   ensureDir(path.resolve(outRoot, 'exports', 'rpg_maker'));
@@ -376,7 +400,7 @@ function main() {
   const exportWarnings = [...frameWarnings, ...sheetWarnings];
   const renderedFrameSet = buildRenderedFrameSet(character, frameRecords, sheetRecords, exportWarnings);
 
-  fs.writeFileSync(path.resolve(outRoot, 'package_manifest.json'), JSON.stringify(buildPackageManifest(character, renderedFrameSet, exportWarnings, exportContext), null, 2) + '\n');
+  fs.writeFileSync(path.resolve(outRoot, 'package_manifest.json'), JSON.stringify(buildPackageManifest(character, renderedFrameSet, exportWarnings, exportContext, resolveFrameSourcePath), null, 2) + '\n');
   fs.writeFileSync(path.resolve(outRoot, 'rendered', 'rendered_frame_set.json'), JSON.stringify(renderedFrameSet, null, 2) + '\n');
   fs.writeFileSync(path.resolve(outRoot, 'exports', 'generic_manifest.json'), JSON.stringify(buildGenericManifest(character, frameRecords, exportWarnings, resolveFrameSourcePath, exportContext), null, 2) + '\n');
   fs.writeFileSync(path.resolve(outRoot, 'exports', 'godot', `${character.character_id}.tscn`), buildGodotScene(character));

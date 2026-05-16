@@ -152,12 +152,24 @@ function App() {
   const [apesHarnessGeneratedAt, setApesHarnessGeneratedAt] = useState(() => loadStoredString(apesHarnessGeneratedAtStorageKey))
 
   async function fetchManifest() {
-    const response = await fetch('/data/manifests/characters.json')
-    if (!response.ok) {
-      throw new Error(`Failed to load manifest: ${response.status}`)
+    const manifestUrls = import.meta.env.DEV
+      ? ['/data/manifests/characters.local.json', '/data/manifests/characters.json']
+      : ['/data/manifests/characters.json']
+
+    let lastStatus: number | null = null
+    for (const manifestUrl of manifestUrls) {
+      const response = await fetch(manifestUrl)
+      if (response.ok) {
+        return await response.json() as AssetManifest
+      }
+
+      lastStatus = response.status
+      if (response.status !== 404 || manifestUrl === manifestUrls[manifestUrls.length - 1]) {
+        throw new Error(`Failed to load manifest: ${response.status}`)
+      }
     }
 
-    return await response.json() as AssetManifest
+    throw new Error(`Failed to load manifest: ${lastStatus ?? 'unknown'}`)
   }
 
   function applyManifest(data: AssetManifest, preferredCharacterId?: string) {

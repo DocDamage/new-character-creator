@@ -7,6 +7,7 @@ const appRoot = path.resolve(__dirname, '..');
 const projectRoot = path.resolve(appRoot, '..');
 const manifestDir = path.resolve(appRoot, 'public', 'data', 'manifests');
 const manifestPath = path.resolve(manifestDir, 'characters.json');
+const localManifestPath = path.resolve(manifestDir, 'characters.local.json');
 const cliArgs = process.argv.slice(2);
 
 const directionAliases = new Map([
@@ -52,11 +53,37 @@ function getOptionValue(name) {
 
 function resolveAssetRoot() {
   const override = getOptionValue('--asset-root') ?? process.env.PIXEL_CREATOR_ASSET_ROOT;
-  return path.resolve(override ?? path.resolve(projectRoot, 'Animated-Pixel-Pack-Characters-V1'));
+  if (override) {
+    return path.resolve(override);
+  }
+
+  const candidates = [
+    path.resolve(appRoot, 'assets', 'Animated-Pixel-Pack-Characters-V1'),
+    path.resolve(projectRoot, 'Animated-Pixel-Pack-Characters-V1'),
+  ];
+  return candidates.find((candidate) => fs.existsSync(candidate)) ?? candidates[0];
 }
 
 function fsUrl(filePath) {
   return `/@fs/${filePath.replaceAll(path.sep, '/')}`;
+}
+
+function isWithinRoot(filePath, rootPath) {
+  const relativePath = path.relative(rootPath, filePath);
+  return relativePath === '' || (!relativePath.startsWith('..') && !path.isAbsolute(relativePath));
+}
+
+function serializeAssetRoot(assetRoot, mode) {
+  return mode === 'repo' && isWithinRoot(assetRoot, appRoot)
+    ? path.relative(appRoot, assetRoot).replaceAll(path.sep, '/')
+    : assetRoot;
+}
+
+function manifestUrl(filePath, mode) {
+  if (mode === 'repo' && isWithinRoot(filePath, appRoot)) {
+    return `/${path.relative(appRoot, filePath).replaceAll(path.sep, '/')}`;
+  }
+  return fsUrl(filePath);
 }
 
 function readPngSize(filePath) {
@@ -119,16 +146,16 @@ function classify(folderName) {
   return cleaned.replaceAll('-', '_');
 }
 
-function collectGifs(characterPath, rawAnimationName) {
+function collectGifs(characterPath, rawAnimationName, mode) {
   const gifRoot = path.resolve(characterPath, 'gifs', rawAnimationName);
   if (!fs.existsSync(gifRoot)) return [];
   return fs
     .readdirSync(gifRoot, { withFileTypes: true })
     .filter((entry) => entry.isFile() && entry.name.toLowerCase().endsWith('.gif'))
-    .map((entry) => fsUrl(path.resolve(gifRoot, entry.name)));
+    .map((entry) => manifestUrl(path.resolve(gifRoot, entry.name), mode));
 }
 
-function buildCharacter(folderName, assetRoot) {
+function buildCharacter(folderName, assetRoot, mode) {
   const characterPath = path.resolve(assetRoot, folderName);
   const warnings = [];
   const directions = {};
@@ -146,11 +173,14 @@ function buildCharacter(folderName, assetRoot) {
     };
 
     animations[animationName].source_names.push(rawAnimation);
-    animations[animationName].preview_gifs.push(...collectGifs(characterPath, rawAnimation));
+    animations[animationName].preview_gifs.push(...collectGifs(characterPath, rawAnimation, mode));
 
     for (const rawDirection of listDirs(animationPath)) {
       const directionName = directionAliases.get(rawDirection) ?? rawDirection.replaceAll('-', '');
-      const frames = listPngFrames(path.resolve(animationPath, rawDirection));
+      const frames = listPngFrames(path.resolve(animationPath, rawDirection)).map((frame) => ({
+        ...frame,
+        path: manifestUrl(path.resolve(animationPath, rawDirection, frame.file_name), mode),
+      }));
       animations[animationName].directions[directionName] = frames;
       directions[directionName] ??= {};
       directions[directionName][animationName] = {
@@ -185,7 +215,7 @@ function buildCharacter(folderName, assetRoot) {
         .filter((entry) => entry.isFile() && entry.name.toLowerCase().endsWith('.png'))
         .map((entry) => ({
           direction: directionAliases.get(path.basename(entry.name, '.png')) ?? path.basename(entry.name, '.png'),
-          path: fsUrl(path.resolve(rotationPath, entry.name)),
+          path: manifestUrl(path.resolve(rotationPath, entry.name), mode),
         }))
     : [];
 
@@ -197,7 +227,7 @@ function buildCharacter(folderName, assetRoot) {
     character_id: folderName,
     display_name: `${folderName.split('-')[0]} ${titleize(folderName)}`,
     class_type: classify(folderName),
-    source_folder: fsUrl(characterPath),
+    source_folder: manifestUrl(characterPath, mode),
     canvas_size: { width: 64, height: 64 },
     directions,
     animations: Object.values(animations),
@@ -228,18 +258,28 @@ function main() {
   }
 
   fs.mkdirSync(manifestDir, { recursive: true });
-  const characters = listDirs(assetRoot).map(name => buildCharacter(name, assetRoot));
+  const mode = isWithinRoot(assetRoot, appRoot) ? 'repo' : 'local';
+  const characters = listDirs(assetRoot).map(name => buildCharacter(name, assetRoot, mode));
   const manifest = {
     generated_at: new Date().toISOString(),
-    asset_root: assetRoot,
+    asset_root: serializeAssetRoot(assetRoot, mode),
     total_characters: characters.length,
     canonical_directions: canonicalDirections,
     canonical_animations: expectedAnimations,
     characters,
   };
 
-  fs.writeFileSync(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`);
-  console.log(`Indexed ${characters.length} characters -> ${manifestPath}`);
+  const outputPath = mode === 'repo' ? manifestPath : localManifestPath;
+  fs.writeFileSync(outputPath, `${JSON.stringify(manifest, null, 2)}\n`);
+
+  if (mode === 'repo') {
+    fs.rmSync(localManifestPath, { force: true });
+    console.log(`Indexed ${characters.length} characters -> ${manifestPath}`);
+    return;
+  }
+
+  console.log(`Indexed ${characters.length} characters -> ${localManifestPath}`);
+  console.log(`Left ${manifestPath} untouched because ${assetRoot} is outside the repository root.`);
 }
 
 main();

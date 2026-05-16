@@ -16,6 +16,16 @@ dist-ssr
 .apes/
 .playwright-cli/
 output/
+data/apes/
+data/cache/
+data/exports/*/exports/
+data/exports/*/rendered/
+data/exports/*/package_manifest.json
+data/exports/*/export_warnings.json
+test-results/
+tools/apes_bridge/__pycache__/
+public/data/manifests/characters.local.json
+/????????????????????????????????/
 
 # Vendored source is tracked without its original repository metadata.
 vendor/**/.git/
