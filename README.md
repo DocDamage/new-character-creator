@@ -9,7 +9,7 @@ Local Vite + React + TypeScript app for building a kitbash-oriented pixel charac
 - Local dev server has been verified at `http://127.0.0.1:8002/`.
 - APES GPU preflight passes in `apes-gpu-modern` with CUDA PyTorch, PyTorch3D, PyG extensions, OpenCV, checkpoints, and okaysamurai test data available.
 - The only APES preflight warning is that upstream APES originally targeted Python 3.7 while the working local environment uses Python 3.10.
-- Duelyst package unpacking, detector labeling, and staging has been verified against `assets/Duelyst-Unit-Animations.unitypackage`: 7145 assets scanned, 696 sprite sheets labeled, and 64 staged candidates prepared for review.
+- Duelyst package unpacking, detector labeling, staging, and in-app browsing has been verified against `assets/Duelyst-Unit-Animations.unitypackage`: 7145 assets scanned, 696 sprite sheets labeled/viewable in Asset Audit, and 64 staged candidates openable in the workstation.
 
 ## Commands
 
@@ -116,6 +116,8 @@ public/data/manifests/duelyst.private.json
 data/cache/duelyst-package/
 data/cache/duelyst-stage/
 ```
+
+The app auto-loads this private manifest when it exists. The Asset Audit screen shows all labeled candidate sheets and exposes staged entries with `Open in workstation`.
 
 The manifest records every candidate unit sheet, staged review frames, source paths, warnings, and detector labels. The labels combine Duelyst path/name/animation metadata with a lightweight alpha-silhouette detector that measures the representative crop's bounds, fill, mass distribution, edge contact, and color footprint. Those labels are meant for filtering and review triage; they are not APES ground-truth body-part correspondence labels. The extracted assets and private manifest are not committed.
 

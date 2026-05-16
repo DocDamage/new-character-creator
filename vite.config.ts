@@ -169,6 +169,7 @@ function localAssetToolsPlugin() {
             const duelyst = await inspectDuelystPackage(appRoot, {
               packagePath: typeof body.packagePath === 'string' ? body.packagePath.trim() : undefined,
               stageTopCount: typeof body.stageTopCount === 'number' ? body.stageTopCount : 8,
+              candidateLimit: body.candidateLimit === 'all' ? 'all' : undefined,
             })
             res.statusCode = 200
             res.setHeader('Content-Type', 'application/json')

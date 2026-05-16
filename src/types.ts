@@ -21,6 +21,7 @@ export type CharacterManifest = {
   character_id: string
   display_name: string
   class_type: string
+  labels?: Record<string, unknown>
   source_folder: string
   canvas_size: { width: number; height: number }
   directions: Partial<Record<Direction, Record<AnimationName, { frame_count: number; frames: FrameRef[] }>>>
@@ -56,6 +57,7 @@ export type DuelystPackageCandidate = {
   plist_source_path: string
   estimated_frame_size: { width: number; height: number; occurrences: number; frame_count: number } | null
   animation_names: string[]
+  labels?: Record<string, unknown>
   animation_clip_count: number
   controller_count: number
   preview_url: string
@@ -76,6 +78,8 @@ export type DuelystStagedManifest = {
 }
 
 export type DuelystPackageAudit = {
+  format?: string
+  version?: number
   generated_at: string
   package_path: string
   available: boolean
@@ -86,6 +90,8 @@ export type DuelystPackageAudit = {
   staged_manifest: DuelystStagedManifest
   findings: string[]
   summary: string
+  warnings?: string[]
+  label_schema?: Record<string, unknown>
 }
 
 export type PartLabel =

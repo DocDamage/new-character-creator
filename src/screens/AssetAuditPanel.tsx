@@ -8,6 +8,7 @@ type AssetAuditPanelProps = {
   duelystBusy: boolean
   duelystStatus: string
   runDuelystAudit: () => Promise<void>
+  loadPrivateDuelystManifest: () => Promise<void>
   openDuelystStageCharacter: (characterId: string) => void
 }
 
@@ -18,6 +19,7 @@ export function AssetAuditPanel({
   duelystBusy,
   duelystStatus,
   runDuelystAudit,
+  loadPrivateDuelystManifest,
   openDuelystStageCharacter,
 }: AssetAuditPanelProps) {
   const warnings = manifest.characters.flatMap((character) => character.source_quality_warnings.map((warning) => ({ character: character.character_id, warning })))
@@ -57,12 +59,19 @@ export function AssetAuditPanel({
         </div>
         <div className="audit-actions">
           <button
+            data-testid="load-duelyst-private-manifest"
+            onClick={() => void loadPrivateDuelystManifest()}
+            disabled={duelystBusy}
+          >
+            Load private manifest
+          </button>
+          <button
             className="primary"
             data-testid="run-duelyst-audit"
             onClick={() => void runDuelystAudit()}
             disabled={!import.meta.env.DEV || duelystBusy}
           >
-            {duelystBusy ? 'Analyzing Duelyst package...' : 'Analyze and stage Duelyst package'}
+            {duelystBusy ? 'Working on Duelyst assets...' : 'Rebuild and stage 64'}
           </button>
         </div>
       </div>
@@ -110,6 +119,9 @@ export function AssetAuditPanel({
                   </div>
                   <p>{candidate.reasons.join(' · ')}</p>
                   <div className="part-meta">
+                    {typeof candidate.labels?.body_class === 'string' ? <span>{candidate.labels.body_class}</span> : null}
+                    {typeof candidate.labels?.source_family === 'string' ? <span>{candidate.labels.source_family}</span> : null}
+                    {typeof candidate.labels?.training_role === 'string' ? <span>{candidate.labels.training_role}</span> : null}
                     <span>{candidate.animation_clip_count} clips</span>
                     <span>{candidate.controller_count} controllers</span>
                     <span>{candidate.animation_names.slice(0, 4).join(', ') || 'no animation names'}</span>

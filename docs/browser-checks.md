@@ -30,6 +30,7 @@ Latest verified local app state:
 - Duelyst audit scanned 7145 assets, found 696 sprite sheets, staged candidates, and opened `duelyst_f1_elyxstormblade` in the workstation
 - APES env preflight is ready in `apes-gpu-modern`
 - Private Duelyst manifest generation stages 64 local candidates with `npm run duelyst:private-manifest -- --stage-count 64`
+- Asset Audit auto-loads the private Duelyst manifest when present, renders 696 labeled candidates, and exposes 64 staged `Open in workstation` actions
 - Fine-tune prep writes `data/training/apes_finetune/finetune_manifest.json` and 64 Duelyst review folders
 
 ## Export Panel

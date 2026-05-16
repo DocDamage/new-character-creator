@@ -37,6 +37,7 @@ async function main() {
     candidate_units: duelyst.candidate_units,
     staged_manifest: duelyst.staged_manifest,
     findings: duelyst.findings,
+    summary: duelyst.summary,
     warnings: [
       'Private local manifest only. Do not commit or redistribute extracted Duelyst assets unless you have the rights to do so.',
       'Staged frames are whole-unit crops intended for local review, APES extraction, and private experimentation.',

@@ -100,6 +100,22 @@ type LocalAssetToolPayload = {
   duelyst?: DuelystPackageAudit | null
 }
 
+function normalizeDuelystAudit(payload: DuelystPackageAudit): DuelystPackageAudit {
+  const stagedCount = payload.staged_manifest?.character_count ?? payload.staged_manifest?.characters?.length ?? 0
+  const candidateCount = payload.candidate_units?.length ?? 0
+  return {
+    ...payload,
+    candidate_units: payload.candidate_units ?? [],
+    findings: payload.findings ?? [],
+    summary: payload.summary || `Loaded ${candidateCount} Duelyst candidate sheet(s) and ${stagedCount} staged review frame(s).`,
+    staged_manifest: {
+      ...payload.staged_manifest,
+      character_count: stagedCount,
+      characters: payload.staged_manifest?.characters ?? [],
+    },
+  }
+}
+
 type ImportApesReportOptions = {
   replaceQaHarnessExisting?: boolean
   statusSource?: 'pasted-json' | 'file-import'
@@ -151,7 +167,7 @@ function App() {
   const [settingsBusy, setSettingsBusy] = useState(false)
   const [duelystBusy, setDuelystBusy] = useState(false)
   const [duelystAudit, setDuelystAudit] = useState<DuelystPackageAudit | null>(null)
-  const [duelystStatus, setDuelystStatus] = useState('Analyze the Duelyst unitypackage to preview candidate sheets and stage cropped frames into the current workstation flow.')
+  const [duelystStatus, setDuelystStatus] = useState('Loading the private Duelyst manifest if it exists. You can also rebuild it from the local unitypackage.')
   const [apesPythonPath, setApesPythonPath] = useState(() => loadStoredString(apesPythonPathStorageKey))
   const [apesAllowPlaceholder, setApesAllowPlaceholder] = useState(() => loadStoredBoolean(apesAllowPlaceholderStorageKey))
   const [apesBridgeStatus, setApesBridgeStatus] = useState('Set the APES Python path in Settings, then run preflight from APES Lab.')
@@ -242,6 +258,14 @@ function App() {
       controller.abort()
     }
   }, [loadManifest])
+
+  useEffect(() => {
+    const controller = new AbortController()
+    void loadPrivateDuelystManifest(controller.signal)
+    return () => {
+      controller.abort()
+    }
+  }, [])
 
   useEffect(() => {
     storeJson(partLibraryStorageKey, partLibrary)
@@ -1042,24 +1066,49 @@ function App() {
     }
 
     setDuelystBusy(true)
-    setDuelystStatus('Analyzing the Duelyst unitypackage and staging cropped review frames...')
+    setDuelystStatus('Analyzing the Duelyst unitypackage, labeling candidates, and staging 64 review frames...')
     try {
       const response = await fetch('/__local/asset-tools', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'duelyst-audit', stageTopCount: 8 }),
+        body: JSON.stringify({ action: 'duelyst-audit', stageTopCount: 64, candidateLimit: 'all' }),
       })
       const payload = await response.json() as LocalAssetToolPayload
       if (!response.ok || !payload.duelyst) {
         throw new Error(payload.error || payload.stderr || `Duelyst audit failed with status ${response.status}`)
       }
 
-      setDuelystAudit(payload.duelyst)
-      setDuelystStatus(`${payload.duelyst.summary} Staged candidates now appear in the source-character picker and can be opened directly in the workstation.`)
+      const duelyst = normalizeDuelystAudit(payload.duelyst)
+      setDuelystAudit(duelyst)
+      setDuelystStatus(`${duelyst.summary} Staged candidates now appear in the source-character picker and can be opened directly in the workstation.`)
     } catch (error) {
       setDuelystStatus(`Duelyst audit failed. ${error instanceof Error ? error.message : String(error)}`)
     } finally {
       setDuelystBusy(false)
+    }
+  }
+
+  async function loadPrivateDuelystManifest(signal?: AbortSignal) {
+    setDuelystBusy(true)
+    try {
+      const response = await fetch('/data/manifests/duelyst.private.json', { signal, cache: 'no-store' })
+      if (signal?.aborted) return
+      if (response.status === 404) {
+        setDuelystStatus('No private Duelyst manifest found yet. Run the local audit or `npm run duelyst:private-manifest -- --stage-count 64`.')
+        return
+      }
+      if (!response.ok) {
+        throw new Error(`Private manifest request failed with status ${response.status}`)
+      }
+
+      const payload = normalizeDuelystAudit(await response.json() as DuelystPackageAudit)
+      setDuelystAudit(payload)
+      setDuelystStatus(`${payload.summary} Loaded from private manifest; staged entries are available in the picker and workstation.`)
+    } catch (error) {
+      if (signal?.aborted || (error instanceof DOMException && error.name === 'AbortError')) return
+      setDuelystStatus(`Private Duelyst manifest could not be loaded. ${error instanceof Error ? error.message : String(error)}`)
+    } finally {
+      if (!signal?.aborted) setDuelystBusy(false)
     }
   }
 
@@ -1269,6 +1318,7 @@ function App() {
               duelystBusy={duelystBusy}
               duelystStatus={duelystStatus}
               runDuelystAudit={runDuelystAudit}
+              loadPrivateDuelystManifest={() => loadPrivateDuelystManifest()}
               openDuelystStageCharacter={openDuelystStageCharacter}
             />
           ) : null}
