@@ -24,6 +24,8 @@ type FastCreatorPanelProps = {
   layerSettings: Partial<Record<PartLabel, ComposerLayerSettings>>
   updateLayerSetting: (label: PartLabel, patch: Partial<ComposerLayerSettings>) => void
   partLibrary: ExtractedPart[]
+  activePartLabel: PartLabel
+  setActivePartLabel: (label: PartLabel) => void
   recipeId: string
   recipeName: string
   setRecipeName: (name: string) => void
@@ -81,6 +83,8 @@ export function FastCreatorPanel({
   layerSettings,
   updateLayerSetting,
   partLibrary,
+  activePartLabel,
+  setActivePartLabel,
   recipeId,
   recipeName,
   setRecipeName,
@@ -118,6 +122,20 @@ export function FastCreatorPanel({
   const selectedReviewedParts = layerOrder
     .map((label) => reviewedParts.find((part) => part.part_id === selectedPartIds[label]))
     .filter(Boolean)
+  const reviewedPartsForActiveLabel = reviewedParts.filter((part) => part.label === activePartLabel)
+  const selectedActivePart = selectedPartIds[activePartLabel]
+
+  function selectActivePart(partId: string) {
+    setSelectedPartIds((current) => {
+      const next = { ...current }
+      if (partId) {
+        next[activePartLabel] = partId
+      } else {
+        delete next[activePartLabel]
+      }
+      return next
+    })
+  }
 
   return (
     <section className="panel wide-panel">
@@ -149,6 +167,42 @@ export function FastCreatorPanel({
         </label>
         <span className="recipe-id">{recipeId}</span>
       </div>
+      <section className="part-picker-panel compact-picker" aria-label="Live part picker">
+        <div>
+          <strong>Live part picker</strong>
+          <span>Select a reviewed layer part and see it in the composite preview below.</span>
+        </div>
+        <div className="part-picker-controls">
+          <label className="field">
+            <span>Layer</span>
+            <select
+              data-testid="fast-live-layer"
+              value={activePartLabel}
+              onChange={(event) => setActivePartLabel(event.target.value as PartLabel)}
+            >
+              {layerOrder.map((label) => (
+                <option key={label} value={label}>{slugLabel(label)}</option>
+              ))}
+            </select>
+          </label>
+          <label className="field">
+            <span>Reviewed part</span>
+            <select
+              data-testid="fast-live-part"
+              value={selectedActivePart ?? ''}
+              onChange={(event) => selectActivePart(event.target.value)}
+              disabled={reviewedPartsForActiveLabel.length === 0}
+            >
+              <option value="">{reviewedPartsForActiveLabel.length === 0 ? 'no reviewed parts for this layer' : 'use source character'}</option>
+              {reviewedPartsForActiveLabel.map((part) => (
+                <option key={part.part_id} value={part.part_id}>
+                  {part.part_id} / {slugLabel(part.extraction_method)}
+                </option>
+              ))}
+            </select>
+          </label>
+        </div>
+      </section>
       <section className="cockpit-panel" aria-label="Recipe readiness">
         <div className={`readiness-strip ${recipeReadiness.state}`}>
           <span>

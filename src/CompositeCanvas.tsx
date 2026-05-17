@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { humanoid64Preset } from './presets'
 import type { AnimationName, CharacterManifest, Direction, ExtractedPart, KitbashRecipe, Rect } from './types'
-import { getFramePath } from './utils'
+import { getFrameRef } from './utils'
 
 type CompositeCanvasProps = {
   recipe: KitbashRecipe
@@ -52,15 +52,15 @@ export function CompositeCanvas({
 
         const sourcePart = partLibrary.find((part) => part.part_id === layer.source_part_id)
         const bounds = sourcePart?.bounds ?? humanoid64Preset[layer.label]
-        const sourceFrame = sourcePart?.source_frame_path ?? getFramePath(sourceCharacter, animation, direction, frameIndex)
-        const source = sourcePart?.image_data_url ?? sourceFrame
+        const sourceFrame = getFrameRef(sourceCharacter, animation, direction, frameIndex)
+        const source = sourcePart?.image_data_url ?? sourceFrame?.path
         if (!source) continue
 
         const image = await loadImage(source)
         const maskImage = sourcePart?.mask_data_url ? await loadImage(sourcePart.mask_data_url) : undefined
         if (cancelled) return
 
-        drawLayer(drawContext, image, maskImage, bounds, layer.offset, scale, recipe, Boolean(sourcePart?.image_data_url))
+        drawLayer(drawContext, image, maskImage, bounds, layer.offset, scale, recipe, Boolean(sourcePart?.image_data_url), sourcePart ? undefined : sourceFrame?.source_rect)
       }
     }
 
@@ -93,12 +93,25 @@ function drawLayer(
   scale: number,
   recipe: KitbashRecipe,
   isExtractedPart: boolean,
+  frameSourceRect?: Rect,
 ) {
   context.save()
   context.imageSmoothingEnabled = false
   context.filter = `hue-rotate(${recipe.palette.hue_shift}deg) saturate(${recipe.palette.saturation}%) brightness(${recipe.palette.brightness}%)`
   if (isExtractedPart) {
     drawExtractedLayer(context, image, maskImage, bounds, offset, scale)
+  } else if (frameSourceRect) {
+    context.drawImage(
+      image,
+      frameSourceRect.x + bounds.x,
+      frameSourceRect.y + bounds.y,
+      bounds.w,
+      bounds.h,
+      (bounds.x + offset[0]) * scale,
+      (bounds.y + offset[1]) * scale,
+      bounds.w * scale,
+      bounds.h * scale,
+    )
   } else {
     context.drawImage(
       image,

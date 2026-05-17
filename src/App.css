@@ -668,6 +668,11 @@ input {
   height: 160px;
 }
 
+.part-picker-panel.compact-picker {
+  grid-template-columns: minmax(180px, 0.7fr) minmax(220px, 1fr);
+  margin-top: 0;
+}
+
 .status-strip button:disabled {
   cursor: not-allowed;
   opacity: 0.5;

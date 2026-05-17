@@ -38,6 +38,7 @@ import { defaultFilenameTemplate } from './filenameTemplates'
 import { buildGenerationManifest } from './generationManifest'
 import { layerBundleToExtractedParts, lpcSheetsToExtractedParts, parseLayerBundleManifest, type LpcSheetImportOptions } from './layerBundle'
 import { buildManualMaskPart } from './manualParts'
+import { buildLpcCharacterManifests } from './lpcCharacters'
 import { hydratePartLibraryAssets, persistPartLibraryAssets } from './partAssetStore'
 import { PixelCanvas } from './PixelCanvas'
 import { humanoid64Preset, layerOrder, palettePresets } from './presets'
@@ -49,7 +50,7 @@ import { FastCreatorPanel } from './screens/FastCreatorPanel'
 import { PartLibraryPanel } from './screens/PartLibraryPanel'
 import { SettingsPanel } from './screens/SettingsPanel'
 import { WorkstationPanel } from './screens/WorkstationPanel'
-import type { AnimationName, ApesBridgeStatus, ApesFinetuneManifest, ApesJob, ApesOutputInventory, ApesPreflightReport, ApesReport, AssetManifest, ComposerLayerSettings, Direction, DuelystApesJobBatch, DuelystPackageAudit, ExtractedPart, ExtractionMethod, LpcAssetInventory, PaletteRules, PartLabel, Rect, VariationPreset } from './types'
+import type { AnimationName, ApesBridgeStatus, ApesFinetuneManifest, ApesJob, ApesOutputInventory, ApesPreflightReport, ApesReport, AssetManifest, CharacterManifest, ComposerLayerSettings, Direction, DuelystApesJobBatch, DuelystPackageAudit, ExtractedPart, ExtractionMethod, LpcAssetInventory, PaletteRules, PartLabel, Rect, VariationPreset } from './types'
 import {
   buildExportManifest,
   buildAsepriteReference,
@@ -62,6 +63,7 @@ import {
   downloadRegionMask,
   downloadSpriteSheet,
   downloadText,
+  getFrameRef,
   getFramePath,
   getFrames,
   makeApesJob,
@@ -119,6 +121,8 @@ type LocalAssetToolPayload = {
   lpcInventory?: LpcAssetInventory | null
 }
 
+type SourcePackFilter = 'all' | 'sprite' | 'duelyst' | 'lpc'
+
 function normalizeDuelystAudit(payload: DuelystPackageAudit): DuelystPackageAudit {
   const stagedCount = payload.staged_manifest?.character_count ?? payload.staged_manifest?.characters?.length ?? 0
   const candidateCount = payload.candidate_units?.length ?? 0
@@ -168,6 +172,12 @@ function toBrowserAssetUrl(assetPath: string | undefined) {
 function isLocalApesOutputPath(assetPath: string | undefined) {
   if (!assetPath) return false
   return assetPath.replaceAll('\\', '/').includes('data/apes/output/') || assetPath.startsWith('/__local/apes-output/')
+}
+
+function getSourcePackFilter(character: CharacterManifest): SourcePackFilter {
+  if (character.class_type === 'lpc_character' || character.character_id.startsWith('lpc-')) return 'lpc'
+  if (character.character_id.startsWith('duelyst-') || character.source_folder.includes('/__local/duelyst')) return 'duelyst'
+  return 'sprite'
 }
 
 function fileNameFromAssetPath(assetPath: string | undefined, fallback: string) {
@@ -238,6 +248,7 @@ function App() {
     return isExportTargetProfileId(stored) ? stored : defaultExportTargetProfileId
   })
   const [generationStyleNotes, setGenerationStyleNotes] = useState('Readable 64x64 RPG character parts with clean alpha, consistent floor contact, and reusable layer boundaries.')
+  const [sourcePackFilter, setSourcePackFilter] = useState<SourcePackFilter>('all')
 
   async function fetchManifest(signal?: AbortSignal) {
     const manifestUrls = import.meta.env.DEV
@@ -344,6 +355,25 @@ function App() {
 
   useEffect(() => {
     const controller = new AbortController()
+    fetch('/data/lpc/lpc_asset_inventory.json', { signal: controller.signal, cache: 'no-store' })
+      .then(async (response) => {
+        if (!response.ok) return
+        const payload = await response.json() as LpcAssetInventory
+        if (payload?.format === 'pixel_creator_lpc_asset_inventory') {
+          setLpcInventory(payload)
+          setLpcStatus(
+            `Loaded ${payload.summary.png_count} LPC PNG sheet(s), including ${payload.summary.lpc_grid_count} 64x64 grid sheet(s).`,
+          )
+        }
+      })
+      .catch(() => {})
+    return () => {
+      controller.abort()
+    }
+  }, [])
+
+  useEffect(() => {
+    const controller = new AbortController()
     void loadPrivateDuelystManifest(controller.signal)
     return () => {
       controller.abort()
@@ -433,10 +463,17 @@ function App() {
     }
   }, [filenameTemplate])
 
-  const characters = useMemo(() => [...(manifest?.characters ?? []), ...(duelystAudit?.staged_manifest.characters ?? [])], [manifest, duelystAudit])
+  const lpcCharacters = useMemo(() => buildLpcCharacterManifests(lpcInventory), [lpcInventory])
+  const characters = useMemo(() => [...(manifest?.characters ?? []), ...(duelystAudit?.staged_manifest.characters ?? []), ...lpcCharacters], [manifest, duelystAudit, lpcCharacters])
   const selectedCharacter = characters.find((character) => character.character_id === selectedId) ?? characters[0]
-  const framePath = getFramePath(selectedCharacter, animation, direction, frameIndex)
-  const onionPath = getFramePath(selectedCharacter, animation, direction, Math.max(frameIndex - 1, 0))
+  const sourceCharacterOptions = useMemo(
+    () => characters.filter((character) => sourcePackFilter === 'all' || getSourcePackFilter(character) === sourcePackFilter),
+    [characters, sourcePackFilter],
+  )
+  const frame = getFrameRef(selectedCharacter, animation, direction, frameIndex)
+  const onionFrame = getFrameRef(selectedCharacter, animation, direction, Math.max(frameIndex - 1, 0))
+  const framePath = frame?.path ?? getFramePath(selectedCharacter, animation, direction, frameIndex)
+  const onionPath = onionFrame?.path ?? getFramePath(selectedCharacter, animation, direction, Math.max(frameIndex - 1, 0))
   const frames = getFrames(selectedCharacter, animation, direction)
   const recipe = selectedCharacter ? makeRecipe(selectedCharacter, { ...selectedParts, [selectedRegion]: selectedId }, partLibrary, selectedPartIds, layerSettings, recipeId, palette, paletteRules) : null
   const recipeReadiness = useMemo(
@@ -452,6 +489,15 @@ function App() {
     }
     setFrameIndex(0)
   }, [selectedCharacter, animation])
+
+  useEffect(() => {
+    if (sourcePackFilter === 'all' || sourceCharacterOptions.length === 0) return
+    if (!sourceCharacterOptions.some((character) => character.character_id === selectedCharacter?.character_id)) {
+      setSelectedId(sourceCharacterOptions[0].character_id)
+      setDirection('south')
+      setFrameIndex(0)
+    }
+  }, [selectedCharacter, sourceCharacterOptions, sourcePackFilter])
 
   useEffect(() => {
     if (!playing) return
@@ -1746,6 +1792,18 @@ function App() {
         </nav>
 
         <section className="sidebar-block">
+          <label htmlFor="source-pack">Source pack</label>
+          <select
+            id="source-pack"
+            data-testid="source-pack-filter"
+            value={sourcePackFilter}
+            onChange={(event) => setSourcePackFilter(event.target.value as SourcePackFilter)}
+          >
+            <option value="all">All packs</option>
+            <option value="sprite">Sprite pack</option>
+            <option value="duelyst">Duelyst</option>
+            <option value="lpc">LPC</option>
+          </select>
           <label htmlFor="character">Source character</label>
           <select
             id="character"
@@ -1756,12 +1814,13 @@ function App() {
               setFrameIndex(0)
             }}
           >
-            {characters.map((character) => (
+            {sourceCharacterOptions.map((character) => (
               <option key={character.character_id} value={character.character_id}>
                 {character.display_name}
               </option>
             ))}
           </select>
+          {sourceCharacterOptions.length === 0 ? <span>No sources in this pack yet.</span> : null}
         </section>
 
         <section className="sidebar-block stats">
@@ -1788,7 +1847,9 @@ function App() {
           <section className="preview-panel">
             <PixelCanvas
               src={framePath}
+              sourceRect={frame?.source_rect}
               onionSrc={screen === 'workstation' ? onionPath : undefined}
+              onionSourceRect={screen === 'workstation' ? onionFrame?.source_rect : undefined}
               region={screen === 'workstation' ? regions[selectedRegion] : undefined}
               seed={screen === 'workstation' ? connectedSeed : undefined}
               onPixelClick={screen === 'workstation' ? setConnectedSeed : undefined}
@@ -1825,6 +1886,8 @@ function App() {
               layerSettings={layerSettings}
               updateLayerSetting={updateLayerSetting}
               partLibrary={partLibrary}
+              activePartLabel={selectedRegion}
+              setActivePartLabel={setSelectedRegion}
               recipeId={recipeId}
               recipeName={recipeName}
               setRecipeName={setRecipeName}

@@ -1,6 +1,16 @@
 import type { AnimationName, ApesJob, CharacterManifest, ComposerLayerSettings, Direction, ExtractedPart, KitbashRecipe, PaletteRules, PartLabel, Rect } from './types'
 import { layerOrder, palettePresets } from './presets'
 
+export function getFrameRef(
+  character: CharacterManifest | undefined,
+  animation: AnimationName,
+  direction: Direction,
+  frameIndex: number,
+) {
+  const frames = getFrames(character, animation, direction)
+  return frames.length > 0 ? frames[frameIndex % frames.length] : undefined
+}
+
 export function getFrames(character: CharacterManifest | undefined, animation: AnimationName, direction: Direction) {
   if (!character) return []
   const animationSet = character.animations.find((item) => item.name === animation)
@@ -13,8 +23,7 @@ export function getFramePath(
   direction: Direction,
   frameIndex: number,
 ) {
-  const frames = getFrames(character, animation, direction)
-  return frames.length > 0 ? frames[frameIndex % frames.length].path : character?.representative_frame ?? ''
+  return getFrameRef(character, animation, direction, frameIndex)?.path ?? character?.representative_frame ?? ''
 }
 
 export function slugLabel(value: string) {

@@ -5,13 +5,15 @@ type PixelCanvasProps = {
   src: string
   scale?: number
   region?: Rect
+  sourceRect?: Rect
   onionSrc?: string
+  onionSourceRect?: Rect
   label?: string
   seed?: { x: number; y: number }
   onPixelClick?: (point: { x: number; y: number }) => void
 }
 
-export function PixelCanvas({ src, scale = 5, region, onionSrc, label, seed, onPixelClick }: PixelCanvasProps) {
+export function PixelCanvas({ src, scale = 5, region, sourceRect, onionSrc, onionSourceRect, label, seed, onPixelClick }: PixelCanvasProps) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null)
   const [loadError, setLoadError] = useState<{ src: string; message: string } | null>(null)
   const visibleLoadError = src ? (loadError?.src === src ? loadError.message : '') : 'No frame is available for this character, animation, and direction.'
@@ -50,9 +52,9 @@ export function PixelCanvas({ src, scale = 5, region, onionSrc, label, seed, onP
         onion.onload = () => {
           if (cancelled) return
           context.globalAlpha = 0.22
-          context.drawImage(onion, 0, 0, 64 * scale, 64 * scale)
+          drawFrameImage(context, onion, scale, onionSourceRect)
           context.globalAlpha = 1
-          context.drawImage(image, 0, 0, 64 * scale, 64 * scale)
+          drawFrameImage(context, image, scale, sourceRect)
           drawRegion(context, scale, region)
           drawSeed(context, scale, seed)
         }
@@ -60,7 +62,7 @@ export function PixelCanvas({ src, scale = 5, region, onionSrc, label, seed, onP
         return
       }
 
-      context.drawImage(image, 0, 0, 64 * scale, 64 * scale)
+      drawFrameImage(context, image, scale, sourceRect)
       drawRegion(context, scale, region)
       drawSeed(context, scale, seed)
     }
@@ -75,7 +77,7 @@ export function PixelCanvas({ src, scale = 5, region, onionSrc, label, seed, onP
     return () => {
       cancelled = true
     }
-  }, [src, scale, region, onionSrc, seed])
+  }, [src, scale, region, sourceRect, onionSrc, onionSourceRect, seed])
 
   function handleClick(event: React.MouseEvent<HTMLCanvasElement>) {
     if (!onPixelClick) return
@@ -93,6 +95,25 @@ export function PixelCanvas({ src, scale = 5, region, onionSrc, label, seed, onP
       {label ? <figcaption>{label}</figcaption> : null}
       {visibleLoadError ? <span className="canvas-error" role="status">{visibleLoadError}</span> : null}
     </figure>
+  )
+}
+
+function drawFrameImage(context: CanvasRenderingContext2D, image: HTMLImageElement, scale: number, sourceRect?: Rect) {
+  if (!sourceRect) {
+    context.drawImage(image, 0, 0, 64 * scale, 64 * scale)
+    return
+  }
+
+  context.drawImage(
+    image,
+    sourceRect.x,
+    sourceRect.y,
+    sourceRect.w,
+    sourceRect.h,
+    0,
+    0,
+    64 * scale,
+    64 * scale,
   )
 }
 

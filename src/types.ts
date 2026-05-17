@@ -8,6 +8,7 @@ export type FrameRef = {
   file_name: string
   width: number
   height: number
+  source_rect?: Rect
   source_name?: string
 }
 

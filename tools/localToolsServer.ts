@@ -9,6 +9,7 @@ export function createLocalAssetToolsPlugin(appRoot: string) {
     path.resolve(appRoot, 'assets'),
     path.resolve(appRoot, 'data', 'apes', 'output'),
     path.resolve(appRoot, 'data', 'cache'),
+    path.resolve(appRoot, 'data', 'lpc'),
     path.resolve(appRoot, 'public', 'data', 'qa'),
   ]
 
@@ -16,7 +17,7 @@ export function createLocalAssetToolsPlugin(appRoot: string) {
     name: 'local-asset-tools',
     configurePreviewServer(server: PreviewServer) {
       server.middlewares.use(async (req: IncomingMessage, res: ServerResponse, next: Connect.NextFunction) => {
-        if (serveLocalAssetRequest(req, res, next, appRoot) || serveLocalFsRequest(req, res, next, allowedFsRoots) || serveApesOutputRequest(req, res, next, appRoot)) {
+        if (serveLocalAssetRequest(req, res, next, appRoot) || serveLocalDataRequest(req, res, next, appRoot) || serveLocalFsRequest(req, res, next, allowedFsRoots) || serveApesOutputRequest(req, res, next, appRoot)) {
           return
         }
         if (await serveLocalToolRequest(req, res, appRoot)) {
@@ -27,7 +28,7 @@ export function createLocalAssetToolsPlugin(appRoot: string) {
     },
     configureServer(server: ViteDevServer) {
       server.middlewares.use(async (req: IncomingMessage, res: ServerResponse, next: Connect.NextFunction) => {
-        if (serveLocalAssetRequest(req, res, next, appRoot) || serveLocalFsRequest(req, res, next, allowedFsRoots) || serveApesOutputRequest(req, res, next, appRoot)) {
+        if (serveLocalAssetRequest(req, res, next, appRoot) || serveLocalDataRequest(req, res, next, appRoot) || serveLocalFsRequest(req, res, next, allowedFsRoots) || serveApesOutputRequest(req, res, next, appRoot)) {
           return
         }
 
@@ -50,6 +51,24 @@ function serveLocalAssetRequest(req: IncomingMessage, res: ServerResponse, next:
   const assetsRoot = path.resolve(appRoot, 'assets')
   const localPath = path.resolve(appRoot, `.${requestPath}`)
   if (!isPathInside(localPath, assetsRoot)) {
+    res.statusCode = 403
+    res.end('Forbidden')
+    return true
+  }
+
+  serveFile(localPath, res, next)
+  return true
+}
+
+function serveLocalDataRequest(req: IncomingMessage, res: ServerResponse, next: Connect.NextFunction, appRoot: string) {
+  const requestPath = getRequestPath(req.url)
+  if (!requestPath?.startsWith('/data/lpc/')) {
+    return false
+  }
+
+  const lpcRoot = path.resolve(appRoot, 'data', 'lpc')
+  const localPath = path.resolve(appRoot, `.${requestPath}`)
+  if (!isPathInside(localPath, lpcRoot)) {
     res.statusCode = 403
     res.end('Forbidden')
     return true

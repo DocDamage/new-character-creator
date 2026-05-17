@@ -4,6 +4,7 @@ import assert from 'node:assert/strict'
 import { renderExportFilenameTemplate } from '../../src/filenameTemplates.ts'
 import { buildGenerationManifest } from '../../src/generationManifest.ts'
 import { layerBundleToExtractedParts, lpcSheetsToExtractedParts, parseLayerBundleManifest } from '../../src/layerBundle.ts'
+import { buildLpcCharacterManifests } from '../../src/lpcCharacters.ts'
 import { analyzeAlphaData } from '../../src/sourceAnalysis.ts'
 import {
   buildRecipeReadiness,
@@ -211,6 +212,49 @@ test('LPC inventory import supports selected sheets, explicit labels, and review
   assert.equal(parts[0].reviewed, true)
   assert.ok(parts[0].tags.includes('lpc_source_weapon_sword_png'))
   assert.ok(parts[0].warnings.some((warning) => warning.includes('credit/license')))
+})
+
+test('LPC inventory sheets can be exposed as cropped source characters', () => {
+  const characters = buildLpcCharacterManifests({
+    format: 'pixel_creator_lpc_asset_inventory',
+    generated_at: '2026-05-17T00:00:00.000Z',
+    source: {
+      kind: 'local_lpc_asset_dump',
+      asset_root: 'C:/repo/assets/lpc sprite generator stuff',
+      upstream_repo: 'https://example.test/lpc',
+      upstream_reference: { available: false, root: 'C:/repo/cache' },
+    },
+    summary: {
+      png_count: 1,
+      lpc_grid_count: 1,
+      non_lpc_grid_count: 0,
+      categories: { 'Adult Female': 1 },
+      frame_grids: { '5x4': 1 },
+      credit_file_count: 0,
+    },
+    credit_files: [],
+    sheets: [
+      {
+        path: 'Adult Female/Base, Adult Female.png',
+        category: 'Adult Female',
+        file_name: 'Base, Adult Female.png',
+        width: 320,
+        height: 256,
+        frame_width: 64,
+        frame_height: 64,
+        frame_columns: 5,
+        frame_rows: 4,
+        lpc_grid: true,
+        tags: ['adult_female', 'base'],
+      },
+    ],
+  })
+
+  assert.equal(characters.length, 1)
+  assert.equal(characters[0].class_type, 'lpc_character')
+  assert.equal(characters[0].directions.south.idle.frame_count, 5)
+  assert.deepEqual(characters[0].directions.east.idle.frames[0].source_rect, { x: 0, y: 128, w: 64, h: 64 })
+  assert.equal(characters[0].representative_frame, '/assets/lpc sprite generator stuff/Adult Female/Base, Adult Female.png')
 })
 
 test('creator cockpit readiness summarizes selected reviewed parts and warnings', () => {
