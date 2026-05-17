@@ -26,7 +26,8 @@
     "test:browser:install": "playwright install chromium",
     "test:browser:install-all": "playwright install chromium firefox webkit",
     "build": "tsc -b && vite build",
-    "release:check": "npm run lint && npm run check:source-hygiene && npm run test:tools && npm run build && npm run validate:release-package && npm run test:preview-tools && npm run test:browser",
+    "build:release": "tsc -b && vite build --mode release",
+    "release:check": "npm run lint && npm run check:source-hygiene && npm run test:tools && npm run build:release && npm run validate:release-package && npm run test:preview-tools && npm run test:browser",
     "lint": "eslint .",
     "preview": "vite preview"
   },

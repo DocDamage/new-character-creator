@@ -121,11 +121,15 @@ function listPngFiles(folder: string) {
 }
 
 // https://vite.dev/config/
-export default defineConfig({
-  plugins: [react(), createLocalAssetToolsPlugin(appRoot), releasePackagePlugin()],
+export default defineConfig(({ mode }) => ({
+  plugins: [
+    react(),
+    createLocalAssetToolsPlugin(appRoot),
+    ...(mode === 'release' ? [releasePackagePlugin()] : []),
+  ],
   server: {
     fs: {
       allow: [__dirname, path.resolve(__dirname, '..')],
     },
   },
-})
+}))
