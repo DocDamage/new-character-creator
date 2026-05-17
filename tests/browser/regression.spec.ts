@@ -142,6 +142,38 @@ test('recipe save-load and bulk review actions stay usable', async ({ page }) =>
   await expect(page.getByRole('button', { name: 'Mark reviewed' }).first()).toBeVisible()
 })
 
+test('creator cockpit filters parts and persists export target profile', async ({ page }) => {
+  await page.getByTestId('nav-workstation').click()
+  await page.getByRole('button', { name: 'Pause' }).click()
+  await page.getByRole('button', { name: /Preset regions/i }).click()
+  await page.getByTestId('extract-current-region').click()
+
+  await page.getByTestId('nav-library').click()
+  await page.getByTestId('part-library-method-filter').selectOption('preset_region')
+  await page.getByTestId('mark-visible-reviewed').click()
+
+  await page.getByTestId('nav-fast').click()
+  await expect(page.getByRole('region', { name: 'Recipe readiness' })).toBeVisible()
+  await expect(page.getByTestId('fast-part-search')).toBeVisible()
+  await page.getByTestId('fast-part-method-filter').selectOption('preset_region')
+  await page.getByTestId('fast-part-search').fill('manual-only-no-match')
+  await expect(page.getByText(/Approved part \(0\/1\)/).first()).toBeVisible()
+  await page.getByTestId('fast-part-search').fill('preset')
+  await expect(page.getByText(/Approved part \(1\/1\)/).first()).toBeVisible()
+
+  await page.getByTestId('export-target-profile').selectOption('rpg_maker_mz')
+  await page.getByRole('button', { name: /Open RPG Maker MZ/i }).click()
+  await expect(page.getByTestId('exports-target-profile')).toHaveValue('rpg_maker_mz')
+  await expect(page.getByTestId('export-rpg-maker-metadata')).toBeVisible()
+  await expect(page.getByTestId('export-rpg-maker-metadata')).toHaveClass(/recommended-export/)
+  await expect(page.getByTestId('export-full-package-zip')).toBeVisible()
+
+  await page.reload()
+  await page.locator('#character').waitFor()
+  await page.getByTestId('nav-exports').click()
+  await expect(page.getByTestId('exports-target-profile')).toHaveValue('rpg_maker_mz')
+})
+
 test('workstation APES mode does not create fake rectangular APES parts', async ({ page }) => {
   await page.getByTestId('nav-workstation').click()
   await page.getByRole('button', { name: 'Pause' }).click()
