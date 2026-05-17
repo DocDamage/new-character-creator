@@ -1,5 +1,11 @@
 import type { Direction, ExtractedPart, LayerBundleManifest, LpcAssetInventory, PartLabel, Rect } from './types'
 
+export type LpcSheetImportOptions = {
+  sheetPaths?: string[]
+  labelOverride?: PartLabel | 'infer'
+  reviewed?: boolean
+}
+
 const defaultBounds: Rect = { x: 0, y: 0, w: 64, h: 64 }
 const validPartLabels = new Set<string>([
   'shadow',
@@ -139,9 +145,17 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null
 }
 
-export function lpcSheetsToExtractedParts(inventory: LpcAssetInventory, limit = 12): ExtractedPart[] {
-  return inventory.sheets.slice(0, limit).map((sheet, index) => {
-    const label = inferPartLabel([sheet.category, sheet.file_name, ...sheet.tags].join(' '))
+export function lpcSheetsToExtractedParts(inventory: LpcAssetInventory, limitOrOptions: number | LpcSheetImportOptions = 12): ExtractedPart[] {
+  const options: LpcSheetImportOptions = typeof limitOrOptions === 'number' ? {} : limitOrOptions
+  const requestedPaths = new Set(options.sheetPaths ?? [])
+  const sourceSheets = requestedPaths.size > 0
+    ? inventory.sheets.filter((sheet) => requestedPaths.has(sheet.path))
+    : inventory.sheets.slice(0, typeof limitOrOptions === 'number' ? limitOrOptions : 12)
+
+  return sourceSheets.map((sheet, index) => {
+    const label = options.labelOverride && options.labelOverride !== 'infer'
+      ? options.labelOverride
+      : inferLpcPartLabel(sheet)
     const imagePath = buildLpcSheetUrl(inventory, sheet.path) ?? sheet.path
     const creditTag = `credit_files_${inventory.summary.credit_file_count}`
     return {
@@ -157,8 +171,8 @@ export function lpcSheetsToExtractedParts(inventory: LpcAssetInventory, limit = 
       bounds: { x: 0, y: 0, w: Math.min(sheet.frame_width || 64, 64), h: Math.min(sheet.frame_height || 64, 64) },
       extraction_method: 'manual',
       compatibility: { animations: ['idle', 'walk'], directions: ['south', 'east', 'north', 'west'] },
-      reviewed: false,
-      tags: ['lpc', sheet.category, sheet.lpc_grid ? 'lpc_grid' : 'non_lpc_grid', creditTag, ...sheet.tags],
+      reviewed: options.reviewed === true,
+      tags: ['lpc', sheet.category, `lpc_source_${slugPath(sheet.path)}`, sheet.lpc_grid ? 'lpc_grid' : 'non_lpc_grid', creditTag, ...sheet.tags],
       warnings: [
         'Imported from an LPC sheet; select/review the intended frame and credit/license metadata before production export.',
         inventory.summary.credit_file_count > 0 ? `${inventory.summary.credit_file_count} LPC credit/license file(s) are present in the inventory; verify attribution before release.` : 'No LPC credit/license files were found in the inventory; verify attribution before release.',
@@ -168,7 +182,7 @@ export function lpcSheetsToExtractedParts(inventory: LpcAssetInventory, limit = 
   })
 }
 
-function buildLpcSheetUrl(inventory: LpcAssetInventory, sheetPath: string) {
+export function buildLpcSheetUrl(inventory: LpcAssetInventory, sheetPath: string) {
   const assetRoot = inventory.source.asset_root.replaceAll('\\', '/')
   const assetsIndex = assetRoot.toLowerCase().lastIndexOf('/assets/')
   if (assetsIndex < 0) return undefined
@@ -176,8 +190,8 @@ function buildLpcSheetUrl(inventory: LpcAssetInventory, sheetPath: string) {
   return `/assets/${assetsRelativeRoot}/${sheetPath.replaceAll('\\', '/')}`.replaceAll('//', '/')
 }
 
-function inferPartLabel(value: string): PartLabel {
-  const normalized = value.toLowerCase()
+export function inferLpcPartLabel(sheet: LpcAssetInventory['sheets'][number]): PartLabel {
+  const normalized = [sheet.category, sheet.file_name, ...sheet.tags].join(' ').toLowerCase()
   return labelHints.find(([, hints]) => hints.some((hint) => normalized.includes(hint)))?.[0] ?? 'accessory'
 }
 

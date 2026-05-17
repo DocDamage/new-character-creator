@@ -56,7 +56,7 @@ npm run export:character -- 1-warrior-woman --asset-root 'D:\sprite-packs\Animat
 
 `npm run index:assets` writes `public/data/manifests/characters.local.json` for ignored in-repo asset packs and external asset roots so local scans do not overwrite the checked-in fallback manifest. To intentionally refresh `public/data/manifests/characters.json`, pass `--public-manifest`.
 
-`npm run lpc:inventory` scans the ignored local LPC asset dump at `assets/lpc sprite generator stuff`, records 64x64 sheet-grid metadata, credit/license files, and cached upstream Universal LPC reference data into `data/lpc/lpc_asset_inventory.json`. The Asset Audit screen can run the same inventory through the local dev server. LPC art is mixed-license, so keep that inventory for local reference and do not copy the raw dump into the release bundle.
+`npm run lpc:inventory` scans the ignored local LPC asset dump at `assets/lpc sprite generator stuff`, records 64x64 sheet-grid metadata, credit/license files, and cached upstream Universal LPC reference data into `data/lpc/lpc_asset_inventory.json`. The Asset Audit screen can run the same inventory through the local dev server, browse sheets with search/category/grid filters, select visible or individual sheets, choose inferred or explicit part labels, and import them into the Part Library as reviewed or unreviewed manual parts. LPC art is mixed-license, so keep that inventory for local reference and do not copy the raw dump into the release bundle.
 
 If you prefer not to remember the commands, open the `Settings` screen in the app. It has buttons that copy the repair, reindex, and sample export commands with your chosen asset-pack path filled in.
 
@@ -96,8 +96,9 @@ The release gate also runs `npm run test:preview-tools`, which starts the produc
 - IndexedDB-backed imported part asset persistence that keeps large imported data URLs out of localStorage while hydrating them back into the app on reload.
 - Batch Generator with deterministic seeded variants.
 - Asset Audit with class counts, source warnings, and Duelyst unitypackage inspection/staging.
+- Asset Audit LPC browser with sheet previews, search/category/grid filters, selected/visible import, inferred or explicit part labels, reviewed-on-import, and credit/license provenance warnings.
 - Duelyst Asset Audit filters for search, body class, source family, training role, and staged state, plus batch APES job creation for staged candidates.
-- APES Lab with first-class job creation, local preflight/bridge actions, a one-click local QA harness generator, logs, job config export, explicit placeholder-mode provenance in exports, failed-output surfacing, file import, pasted JSON import, inventory import, and APES-to-part-library conversion.
+- APES Lab with first-class job creation, local preflight/bridge actions, one-click fine-tune prep, one-click Duelyst job-batch prep, a local QA harness generator, logs, job config export, explicit placeholder-mode provenance in exports, failed-output surfacing, file import, pasted JSON import, inventory import, and APES-to-part-library conversion.
 - APES CLI bridge tools for preparing and running private Duelyst job batches from `data/apes/input/`, including partial-failure recording and strict opt-in failure mode.
 - Export panel for generic manifests, rendered frame/package downloads, Godot scenes, SpriteFrames resources, and batch queues.
 - Production-oriented full package zip with rendered PNGs, Godot 4 `SpriteFrames` resources, Unity import settings and Editor importer script, RPG Maker MZ single-character sheet, Aseprite import script/spec, and useful local metadata.
@@ -180,7 +181,7 @@ The generated `finetune_manifest.json` includes ready-to-run commands for:
 
 Duelyst staged frames now include detector/metadata labels such as `source_family`, `body_class`, `detector_class`, `combat_role`, `training_role`, `animation_labels`, and detector metrics. In Asset Audit, the default Duelyst filters show staged APES candidates and the `Queue APES jobs` action creates persisted APES Lab jobs for the filtered staged set. APES Lab includes `Run Duelyst queue` to run the prepared Duelyst jobs one at a time. The queue now uses real staged idle atlas frames when available and only falls back to duplication for one-frame sources.
 
-For a repeatable command-line queue, run `npm run apes:prepare-duelyst-jobs`. It writes ignored job configs under `data/apes/input/`. `npm run apes:run-duelyst-jobs` executes that batch through the APES bridge and records content-specific APES rejects in `data/apes/input/duelyst_job_batch.json`; add `-- --fail-on-job-error` when you need strict non-zero behavior. The latest full local run attempted 60 Duelyst jobs, produced 57 successful job results, and recorded 3 APES segmentation rejects: `apes_duelyst_neutral_mercsongweaver_010`, `apes_duelyst_neutral_mercarcanelimiter_038`, and `apes_duelyst_neutral_mercsightlessfarseer_048`. `npm run apes:summarize-outputs` scans completed ignored reports plus failed output statuses and writes `data/apes/output/apes_output_inventory.json` for review triage. In APES Lab, `Inventory APES outputs` shows the same inventory, highlights failed outputs, and can import non-empty local reports into the Part Library.
+For a repeatable command-line queue, run `npm run apes:prepare-duelyst-jobs`. It writes ignored job configs under `data/apes/input/`. The APES Lab `Prepare Duelyst jobs` button runs the same prep path through the local tool server and loads the generated job configs into the in-browser queue. `npm run apes:run-duelyst-jobs` executes that batch through the APES bridge and records content-specific APES rejects in `data/apes/input/duelyst_job_batch.json`; add `-- --fail-on-job-error` when you need strict non-zero behavior. The latest full local run attempted 60 Duelyst jobs, produced 57 successful job results, and recorded 3 APES segmentation rejects: `apes_duelyst_neutral_mercsongweaver_010`, `apes_duelyst_neutral_mercarcanelimiter_038`, and `apes_duelyst_neutral_mercsightlessfarseer_048`. `npm run apes:summarize-outputs` scans completed ignored reports plus failed output statuses and writes `data/apes/output/apes_output_inventory.json` for review triage. In APES Lab, `Inventory APES outputs` shows the same inventory, highlights failed outputs, and can import non-empty local reports into the Part Library.
 
 ## APES bridge
 
@@ -206,8 +207,9 @@ For a non-GPU Windows machine, the useful workflow is in the app:
 1. Start `npm run dev`.
 2. Open `Settings` and set the APES Python path only if you are pointing at a dedicated APES environment on another machine.
 3. Open `APES Lab`.
-4. Click `Generate local QA harness` to regenerate and import the static sample APES parts without using the terminal.
-5. Click `Run APES preflight` to see why the full runtime is unavailable on that machine, or to validate the home GPU machine.
+4. Click `Prepare fine-tune data` or `Prepare Duelyst jobs` to run the ignored local prep scripts without leaving the app.
+5. Click `Generate local QA harness` to regenerate and import the static sample APES parts without using the terminal.
+6. Click `Run APES preflight` to see why the full runtime is unavailable on that machine, or to validate the home GPU machine.
 
 For the home GPU PC, the APES runtime is now verified. Use:
 

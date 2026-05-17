@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { apesQaHarnessJobId } from '../appPersistence'
 import { clampFrameInput } from '../inputUtils'
 import { humanoid64Preset } from '../presets'
-import type { AnimationName, ApesJob, ApesOutputInventory, ApesPreflightReport, CharacterManifest, Direction, ExtractedPart, PartLabel } from '../types'
+import type { AnimationName, ApesFinetuneManifest, ApesJob, ApesOutputInventory, ApesPreflightReport, CharacterManifest, Direction, DuelystApesJobBatch, ExtractedPart, PartLabel } from '../types'
 import { downloadJson, getFrames, slugLabel } from '../utils'
 
 type ApesLabPanelProps = {
@@ -12,6 +12,8 @@ type ApesLabPanelProps = {
   runApesJob: (jobId: string) => Promise<void>
   runPreparedDuelystJobs: () => Promise<void>
   summarizeApesOutputs: () => Promise<void>
+  prepareApesFinetuneData: () => Promise<void>
+  prepareDuelystApesJobs: () => Promise<void>
   importApesInventoryReport: (reportPath: string) => Promise<void>
   generateApesQaHarness: () => Promise<void>
   loadApesQaHarnessReport: () => Promise<void>
@@ -33,6 +35,8 @@ type ApesLabPanelProps = {
   apesBridgeStatus: string
   apesPreflight: ApesPreflightReport | null
   apesOutputInventory: ApesOutputInventory | null
+  apesFinetuneManifest: ApesFinetuneManifest | null
+  duelystApesJobBatch: DuelystApesJobBatch | null
   apesHarnessGeneratedAt: string
   mainDirections: Direction[]
   apesCoreLabels: PartLabel[]
@@ -49,6 +53,8 @@ export function ApesLabPanel({
   runApesJob,
   runPreparedDuelystJobs,
   summarizeApesOutputs,
+  prepareApesFinetuneData,
+  prepareDuelystApesJobs,
   importApesInventoryReport,
   generateApesQaHarness,
   loadApesQaHarnessReport,
@@ -70,6 +76,8 @@ export function ApesLabPanel({
   apesBridgeStatus,
   apesPreflight,
   apesOutputInventory,
+  apesFinetuneManifest,
+  duelystApesJobBatch,
   apesHarnessGeneratedAt,
   mainDirections,
   apesCoreLabels,
@@ -96,6 +104,9 @@ export function ApesLabPanel({
   const totalModules = apesPreflight ? Object.keys(apesPreflight.modules).length : 0
   const envToolAvailable = Boolean(apesPreflight?.tools.conda || apesPreflight?.tools.mamba || apesPreflight?.tools.micromamba)
   const harnessLabel = apesHarnessGeneratedAt ? new Date(apesHarnessGeneratedAt).toLocaleString() : 'not generated in this browser yet'
+  const finetuneDatasetCount = Object.keys(apesFinetuneManifest?.datasets ?? {}).length
+  const finetuneCommandCount = Object.keys(apesFinetuneManifest?.commands ?? {}).length
+  const duelystBatchQueuedCount = duelystApesJobBatch?.job_configs?.length ?? 0
   const preflightChecks = apesPreflight
     ? [
         { label: 'Python', value: apesPreflight.python.version, status: apesPreflight.python.version.startsWith('3.7') ? 'pass' : 'warn' },
@@ -155,6 +166,14 @@ export function ApesLabPanel({
           <strong>Harness parts</strong>
           <span>{qaHarnessParts.length} imported</span>
         </article>
+        <article>
+          <strong>Fine-tune prep</strong>
+          <span>{apesFinetuneManifest ? `${finetuneDatasetCount} dataset section(s)` : 'not prepared in this browser yet'}</span>
+        </article>
+        <article>
+          <strong>Duelyst batch</strong>
+          <span>{duelystApesJobBatch ? `${duelystApesJobBatch.job_count} disk job(s), ${duelystBatchQueuedCount} loaded` : 'not prepared in this browser yet'}</span>
+        </article>
       </div>
 
       <div className="apes-config">
@@ -213,6 +232,8 @@ export function ApesLabPanel({
         <button data-testid="run-prepared-duelyst-apes-jobs" onClick={() => void runPreparedDuelystJobs()} disabled={apesBridgeBusy || !localToolsAvailable || preparedDuelystJobs.length === 0}>
           Run Duelyst queue ({preparedDuelystJobs.length})
         </button>
+        <button data-testid="prepare-apes-finetune" onClick={() => void prepareApesFinetuneData()} disabled={apesBridgeBusy || !localToolsAvailable}>Prepare fine-tune data</button>
+        <button data-testid="prepare-duelyst-apes-jobs" onClick={() => void prepareDuelystApesJobs()} disabled={apesBridgeBusy || !localToolsAvailable}>Prepare Duelyst jobs</button>
         <button data-testid="summarize-apes-outputs" onClick={() => void summarizeApesOutputs()} disabled={apesBridgeBusy || !localToolsAvailable}>Inventory APES outputs</button>
         <button data-testid="generate-apes-qa-harness" onClick={() => void generateApesQaHarness()} disabled={apesBridgeBusy || !localToolsAvailable}>Generate local QA harness</button>
         <button data-testid="clear-apes-qa-harness-parts" onClick={clearApesQaHarnessParts} disabled={qaHarnessParts.length === 0}>Clear QA harness parts</button>
@@ -263,6 +284,22 @@ export function ApesLabPanel({
         {apesPreflight ? <code>{apesPreflight.findings.length > 0 ? apesPreflight.findings.join('\n') : `Ready with ${apesPreflight.python.executable}`}</code> : null}
         {apesAllowPlaceholder ? <span>Placeholder fallback is enabled for this machine. Leave it off on the home GPU PC unless you are testing the UI only.</span> : null}
       </div>
+      {(apesFinetuneManifest || duelystApesJobBatch) ? (
+        <div className="settings-card" data-testid="apes-prep-artifacts">
+          <strong>APES prep artifacts</strong>
+          {apesFinetuneManifest ? (
+            <span>
+              Fine-tune manifest: {finetuneDatasetCount} dataset section(s), {finetuneCommandCount} command(s), {apesFinetuneManifest.warnings?.length ?? 0} warning(s)
+            </span>
+          ) : null}
+          {duelystApesJobBatch ? (
+            <span>
+              Duelyst job batch: {duelystApesJobBatch.job_count} job(s), {duelystApesJobBatch.failure_count ?? 0} recorded failure(s), {duelystBatchQueuedCount} config(s) loaded into this browser
+            </span>
+          ) : null}
+          {duelystApesJobBatch?.warnings?.length ? <code>{duelystApesJobBatch.warnings.join('\n')}</code> : null}
+        </div>
+      ) : null}
       {apesPreflight ? (
         <div className="apes-health-grid">
           {preflightChecks.map((item) => (

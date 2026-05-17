@@ -163,6 +163,99 @@ test('APES harness generation, reload, and pasted import stay usable', async ({ 
   await expect(page.getByTestId('apes-bridge-status')).toContainText(/Imported APES report from pasted JSON/i)
 })
 
+test('APES prep actions surface fine-tune artifacts and queue Duelyst jobs', async ({ page }) => {
+  const fixtureJob = {
+    job_id: 'apes_duelyst_fixture_001',
+    character_id: 'duelyst_fixture_unit',
+    animations: ['idle'],
+    directions: ['south'],
+    frame_range: [0, 1],
+    output_labels: ['head', 'torso', 'front_arm', 'back_arm', 'front_leg', 'back_leg'],
+    status: 'prepared',
+    created_at: '2026-05-17T00:00:00.000Z',
+    input_frames: [
+      { animation: 'idle', direction: 'south', frame_index: 0, path: '/data/qa/apes_harness_job/source.png' },
+      { animation: 'idle', direction: 'south', frame_index: 1, path: '/data/qa/apes_harness_job/source.png' },
+    ],
+    output_root: 'data/apes/output/apes_duelyst_fixture_001',
+    logs: ['Prepared from private Duelyst staged atlas frames.'],
+  }
+
+  await page.route('**/__local/apes-tools', async (route) => {
+    const payload = route.request().postDataJSON() as { action?: string }
+    if (payload.action === 'prepare-finetune') {
+      await route.fulfill({
+        contentType: 'application/json',
+        body: JSON.stringify({
+          action: 'prepare-finetune',
+          pythonPath: 'python',
+          statusCode: 0,
+          stdout: 'Wrote APES fine-tune manifest',
+          stderr: '',
+          finetuneManifest: {
+            format: 'pixel_creator_apes_finetune_manifest',
+            output_root: 'data/training/apes_finetune',
+            datasets: {
+              okay_samurai_supervised: {},
+              duelyst_private_runtime: {},
+            },
+            commands: {
+              corrnet: 'python train_corrnet.py',
+            },
+            warnings: ['fixture warning'],
+          },
+        }),
+      })
+      return
+    }
+    if (payload.action === 'prepare-duelyst-jobs') {
+      await route.fulfill({
+        contentType: 'application/json',
+        body: JSON.stringify({
+          action: 'prepare-duelyst-jobs',
+          pythonPath: 'python',
+          statusCode: 0,
+          stdout: 'Wrote 1 Duelyst APES job(s)',
+          stderr: '',
+          duelystJobBatch: {
+            format: 'pixel_creator_duelyst_apes_job_batch',
+            input_root: 'data/apes/input',
+            job_count: 1,
+            success_count: 0,
+            failure_count: 0,
+            filters: { role: 'apes', body_class: 'all', limit: null },
+            jobs: [
+              {
+                job_id: fixtureJob.job_id,
+                character_id: fixtureJob.character_id,
+                job_path: 'data/apes/input/apes_duelyst_fixture_001/job.json',
+                output_root: fixtureJob.output_root,
+                training_role: 'apes_unit',
+                body_class: 'humanoid',
+              },
+            ],
+            job_configs: [fixtureJob],
+            warnings: ['Review generated masks before using them in generated character parts.'],
+          },
+        }),
+      })
+      return
+    }
+    await route.continue()
+  })
+
+  await page.getByTestId('nav-apes').click()
+  await page.getByTestId('prepare-apes-finetune').click()
+  await expect(page.getByTestId('apes-bridge-status')).toContainText(/Prepared APES fine-tune manifest with 2 dataset section/i)
+  await expect(page.getByTestId('apes-prep-artifacts')).toContainText(/Fine-tune manifest: 2 dataset section/i)
+
+  await page.getByTestId('prepare-duelyst-apes-jobs').click()
+  await expect(page.getByTestId('apes-bridge-status')).toContainText(/Prepared 1 Duelyst APES job/i)
+  await expect(page.getByTestId('apes-prep-artifacts')).toContainText(/Duelyst job batch: 1 job/i)
+  await expect(page.getByTestId('run-prepared-duelyst-apes-jobs')).toContainText('Run Duelyst queue (1)')
+  await expect(page.getByText('apes_duelyst_fixture_001')).toBeVisible()
+})
+
 test('imported APES parts include image and mask files in full package exports', async ({ page }) => {
   const localReport = await writeLocalApesAssetReport()
   try {
@@ -309,6 +402,96 @@ test('harvest workflows are exposed and produce usable app artifacts', async ({ 
   await page.getByTestId('nav-audit').click()
   await expect(page.getByText('Source alpha analysis')).toBeVisible()
   await expect(page.getByText(/alpha bounds/i)).toBeVisible({ timeout: 30_000 })
+})
+
+test('LPC inventory browser can filter, select, label, and import sheets', async ({ page }) => {
+  const qaPng = await readFile(path.join(repoRoot, 'public', 'data', 'qa', 'apes_harness_job', 'parts', 'head.png'))
+  const lpcInventory = {
+    format: 'pixel_creator_lpc_asset_inventory',
+    generated_at: '2026-05-17T00:00:00.000Z',
+    source: {
+      kind: 'local_lpc_asset_dump',
+      asset_root: 'C:/repo/assets/lpc sprite generator stuff',
+      upstream_repo: 'https://example.test/lpc',
+      upstream_reference: {
+        available: true,
+        root: 'C:/repo/data/cache/universal-lpc-generator',
+        commit: 'fixture',
+        sheet_definition_count: 2,
+        spritesheet_png_count: 2,
+        credits_csv_available: true,
+      },
+    },
+    summary: {
+      png_count: 2,
+      lpc_grid_count: 2,
+      non_lpc_grid_count: 0,
+      categories: { hair: 1, weapon: 1 },
+      frame_grids: { '1x1': 2 },
+      credit_file_count: 1,
+    },
+    credit_files: [{ path: 'CREDITS.txt', excerpt: 'fixture credit' }],
+    sheets: [
+      {
+        path: 'hair/long.png',
+        category: 'hair',
+        file_name: 'long.png',
+        width: 64,
+        height: 64,
+        frame_width: 64,
+        frame_height: 64,
+        frame_columns: 1,
+        frame_rows: 1,
+        lpc_grid: true,
+        tags: ['hair', 'long'],
+      },
+      {
+        path: 'weapon/sword.png',
+        category: 'weapon',
+        file_name: 'sword.png',
+        width: 64,
+        height: 64,
+        frame_width: 64,
+        frame_height: 64,
+        frame_columns: 1,
+        frame_rows: 1,
+        lpc_grid: true,
+        tags: ['weapon', 'sword'],
+      },
+    ],
+  }
+
+  await page.route('**/__local/asset-tools', async (route) => {
+    const payload = route.request().postDataJSON() as { action?: string }
+    if (payload.action === 'lpc-inventory') {
+      await route.fulfill({
+        contentType: 'application/json',
+        body: JSON.stringify({ ok: true, statusCode: 0, stdout: 'Indexed fixture LPC sheets', stderr: '', lpcInventory }),
+      })
+      return
+    }
+    await route.continue()
+  })
+  await page.route('**/assets/lpc%20sprite%20generator%20stuff/**', async (route) => {
+    await route.fulfill({ contentType: 'image/png', body: qaPng })
+  })
+
+  await page.getByTestId('nav-audit').click()
+  await page.getByTestId('run-lpc-inventory').click()
+  await expect(page.getByTestId('lpc-browser')).toBeVisible()
+  await page.getByTestId('lpc-search').fill('hair')
+  await expect(page.getByText(/1 shown \/ 1 matching/i)).toBeVisible()
+  await page.getByTestId('select-visible-lpc-sheets').click()
+  await page.getByTestId('lpc-label-override').selectOption('hair_hat_hood')
+  await page.getByTestId('lpc-reviewed-on-import').check()
+  await page.getByTestId('import-selected-lpc-sheets').click()
+
+  await expect(page.getByText(/Imported 1 LPC sheet part/i)).toBeVisible()
+  await page.getByTestId('part-library-method-filter').selectOption('manual')
+  const importedPart = page.locator('.part-library-list article').filter({ hasText: 'lpc_hair_long_png_001' })
+  await expect(importedPart).toBeVisible()
+  await expect(importedPart.getByText('hair hat hood')).toBeVisible()
+  await expect(importedPart.getByRole('button', { name: 'Mark unreviewed' })).toBeVisible()
 })
 
 test('large Part Library imports are paged instead of fully rendered', async ({ page }, testInfo) => {

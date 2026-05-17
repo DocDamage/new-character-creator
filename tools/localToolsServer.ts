@@ -151,7 +151,11 @@ async function handleApesToolRequest(req: IncomingMessage, res: ServerResponse, 
             ? 'summarize-outputs'
             : body.action === 'load-report'
               ? 'load-report'
-              : null
+              : body.action === 'prepare-finetune'
+                ? 'prepare-finetune'
+                : body.action === 'prepare-duelyst-jobs'
+                  ? 'prepare-duelyst-jobs'
+                  : null
   const pythonPath = typeof body.pythonPath === 'string' && body.pythonPath.trim() ? body.pythonPath.trim() : 'python'
   const allowPlaceholder = body.allowPlaceholder === true
   const job = body.job && typeof body.job === 'object' ? body.job : null
@@ -188,13 +192,17 @@ async function handleApesToolRequest(req: IncomingMessage, res: ServerResponse, 
         ? [path.resolve(appRoot, 'tools', 'generate-apes-qa-harness.js')]
         : action === 'summarize-outputs'
           ? [path.resolve(bridgeRoot, 'summarize_apes_outputs.py')]
-          : [
-              path.resolve(bridgeRoot, 'run_apes_extract.py'),
-              tempJobPath!,
-              '--output',
-              outputDir,
-              ...(allowPlaceholder ? ['--allow-placeholder'] : []),
-            ]
+          : action === 'prepare-finetune'
+            ? [path.resolve(bridgeRoot, 'prepare_finetune_data.py')]
+            : action === 'prepare-duelyst-jobs'
+              ? [path.resolve(bridgeRoot, 'prepare_duelyst_apes_jobs.py')]
+              : [
+                  path.resolve(bridgeRoot, 'run_apes_extract.py'),
+                  tempJobPath!,
+                  '--output',
+                  outputDir,
+                  ...(allowPlaceholder ? ['--allow-placeholder'] : []),
+                ]
 
   const command = spawnSync(action === 'generate-harness' ? process.execPath : pythonPath, commandArgs, {
     cwd: appRoot,
@@ -327,6 +335,8 @@ async function collectApesToolPayload(
   let status: unknown = null
   let report: unknown = null
   let inventory: unknown = null
+  let finetuneManifest: unknown = null
+  let duelystJobBatch: unknown = null
   if (action === 'preflight' && command.stdout) {
     try {
       preflight = JSON.parse(command.stdout)
@@ -349,6 +359,15 @@ async function collectApesToolPayload(
     inventory = await readJsonFileIfExists(path.resolve(outputRoot, 'apes_output_inventory.json'))
   }
 
+  if (action === 'prepare-finetune') {
+    finetuneManifest = await readJsonFileIfExists(path.resolve(appRoot, 'data', 'training', 'apes_finetune', 'finetune_manifest.json'))
+  }
+
+  if (action === 'prepare-duelyst-jobs') {
+    const batch = await readJsonFileIfExists(path.resolve(appRoot, 'data', 'apes', 'input', 'duelyst_job_batch.json'))
+    duelystJobBatch = await withDuelystJobConfigs(batch, appRoot)
+  }
+
   return {
     action,
     pythonPath,
@@ -359,7 +378,31 @@ async function collectApesToolPayload(
     status,
     report,
     inventory,
+    finetuneManifest,
+    duelystJobBatch,
     outputDir: action === 'run-job' ? outputDir : action === 'generate-harness' ? path.resolve(appRoot, 'public', 'data', 'qa') : action === 'summarize-outputs' ? outputRoot : null,
+  }
+}
+
+async function withDuelystJobConfigs(batch: unknown, appRoot: string) {
+  if (!batch || typeof batch !== 'object' || !Array.isArray((batch as { jobs?: unknown }).jobs)) {
+    return batch
+  }
+
+  const jobConfigs = []
+  for (const item of (batch as { jobs: Array<{ job_path?: unknown }> }).jobs) {
+    if (!item || typeof item.job_path !== 'string') continue
+    const jobPath = path.resolve(appRoot, item.job_path)
+    if (!isPathInside(jobPath, appRoot) || path.basename(jobPath) !== 'job.json') continue
+    const jobConfig = await readJsonFileIfExists(jobPath)
+    if (jobConfig) {
+      jobConfigs.push(jobConfig)
+    }
+  }
+
+  return {
+    ...batch,
+    job_configs: jobConfigs,
   }
 }
 

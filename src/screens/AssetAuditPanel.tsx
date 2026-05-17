@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
+import { buildLpcSheetUrl, inferLpcPartLabel, type LpcSheetImportOptions } from '../layerBundle'
+import { partLabels } from '../presets'
 import { analyzeImageSource } from '../sourceAnalysis'
 import type { AssetManifest, DuelystPackageAudit, DuelystPackageCandidate, LpcAssetInventory, SourceAlphaAnalysis } from '../types'
 import { slugLabel } from '../utils'
@@ -18,7 +20,7 @@ type AssetAuditPanelProps = {
   openDuelystStageCharacter: (characterId: string) => void
   createDuelystApesJobs: (characterIds: string[]) => void
   localToolsAvailable: boolean
-  importLpcSheetsAsParts: (limit: number) => void
+  importLpcSheetsAsParts: (sheetPaths: string[], options?: Omit<LpcSheetImportOptions, 'sheetPaths'>) => void
   lpcImportStatus: string
 }
 
@@ -45,6 +47,13 @@ export function AssetAuditPanel({
   const [sourceFilter, setSourceFilter] = useState('all')
   const [trainingFilter, setTrainingFilter] = useState('apes')
   const [stagedFilter, setStagedFilter] = useState('staged')
+  const [lpcSearch, setLpcSearch] = useState('')
+  const [lpcCategoryFilter, setLpcCategoryFilter] = useState('all')
+  const [lpcGridFilter, setLpcGridFilter] = useState<'all' | 'grid' | 'non_grid'>('grid')
+  const [lpcLabelOverride, setLpcLabelOverride] = useState<LpcSheetImportOptions['labelOverride']>('infer')
+  const [lpcReviewedOnImport, setLpcReviewedOnImport] = useState(false)
+  const [lpcVisibleLimit, setLpcVisibleLimit] = useState(24)
+  const [selectedLpcPaths, setSelectedLpcPaths] = useState<string[]>([])
   const warnings = manifest.characters.flatMap((character) => character.source_quality_warnings.map((warning) => ({ character: character.character_id, warning })))
   const duelystExtensionCounts = duelystAudit
     ? Object.entries(duelystAudit.extension_counts)
@@ -85,6 +94,19 @@ export function AssetAuditPanel({
   const batchableDuelystCandidates = filteredDuelystCandidates.filter((candidate) => candidate.staged && candidate.stage_character_id && getStringLabel(candidate, 'training_role').startsWith('apes_'))
   const lpcTopCategories = lpcInventory ? Object.entries(lpcInventory.summary.categories).slice(0, 8) : []
   const lpcTopFrameGrids = lpcInventory ? Object.entries(lpcInventory.summary.frame_grids).slice(0, 6) : []
+  const lpcCategoryOptions = useMemo(() => Object.keys(lpcInventory?.summary.categories ?? {}).sort(), [lpcInventory])
+  const filteredLpcSheets = useMemo(() => {
+    const search = lpcSearch.trim().toLowerCase()
+    return (lpcInventory?.sheets ?? []).filter((sheet) => {
+      const matchesSearch = !search || [sheet.path, sheet.file_name, sheet.category, ...sheet.tags].some((value) => value.toLowerCase().includes(search))
+      const matchesCategory = lpcCategoryFilter === 'all' || sheet.category === lpcCategoryFilter
+      const matchesGrid = lpcGridFilter === 'all' || (lpcGridFilter === 'grid' ? sheet.lpc_grid : !sheet.lpc_grid)
+      return matchesSearch && matchesCategory && matchesGrid
+    })
+  }, [lpcCategoryFilter, lpcGridFilter, lpcInventory, lpcSearch])
+  const visibleLpcSheets = filteredLpcSheets.slice(0, lpcVisibleLimit)
+  const visibleLpcPaths = visibleLpcSheets.map((sheet) => sheet.path)
+  const selectedVisibleCount = visibleLpcPaths.filter((path) => selectedLpcPaths.includes(path)).length
   const [sourceAnalysis, setSourceAnalysis] = useState<SourceAlphaAnalysis | null>(null)
   const [sourceAnalysisStatus, setSourceAnalysisStatus] = useState('Waiting for a representative source frame.')
 
@@ -216,9 +238,140 @@ export function AssetAuditPanel({
               {lpcTopFrameGrids.map(([grid, count]) => <span key={grid}>{grid}: {count}</span>)}
             </div>
             <div className="audit-actions">
-              <button data-testid="import-lpc-sheets" onClick={() => importLpcSheetsAsParts(12)}>Import first 12 sheets as parts</button>
+              <button
+                data-testid="import-visible-lpc-sheets"
+                onClick={() => importLpcSheetsAsParts(visibleLpcPaths, { labelOverride: lpcLabelOverride, reviewed: lpcReviewedOnImport })}
+                disabled={visibleLpcPaths.length === 0}
+              >
+                Import visible ({visibleLpcPaths.length})
+              </button>
+              <button
+                className="primary"
+                data-testid="import-selected-lpc-sheets"
+                onClick={() => importLpcSheetsAsParts(selectedLpcPaths, { labelOverride: lpcLabelOverride, reviewed: lpcReviewedOnImport })}
+                disabled={selectedLpcPaths.length === 0}
+              >
+                Import selected ({selectedLpcPaths.length})
+              </button>
               <span>{lpcImportStatus}</span>
             </div>
+          </div>
+          <div className="lpc-browser" data-testid="lpc-browser">
+            <div className="duelyst-filter-bar">
+              <label>
+                <span>Search LPC</span>
+                <input
+                  data-testid="lpc-search"
+                  type="search"
+                  value={lpcSearch}
+                  onChange={(event) => {
+                    setLpcSearch(event.target.value)
+                    setLpcVisibleLimit(24)
+                  }}
+                  placeholder="hair, armor, weapon, path"
+                />
+              </label>
+              <label>
+                <span>Category</span>
+                <select
+                  data-testid="lpc-category-filter"
+                  value={lpcCategoryFilter}
+                  onChange={(event) => {
+                    setLpcCategoryFilter(event.target.value)
+                    setLpcVisibleLimit(24)
+                  }}
+                >
+                  <option value="all">All</option>
+                  {lpcCategoryOptions.map((category) => <option key={category} value={category}>{category}</option>)}
+                </select>
+              </label>
+              <label>
+                <span>Grid</span>
+                <select
+                  data-testid="lpc-grid-filter"
+                  value={lpcGridFilter}
+                  onChange={(event) => {
+                    setLpcGridFilter(event.target.value as 'all' | 'grid' | 'non_grid')
+                    setLpcVisibleLimit(24)
+                  }}
+                >
+                  <option value="grid">64x64 LPC grids</option>
+                  <option value="all">All sheets</option>
+                  <option value="non_grid">Non-standard</option>
+                </select>
+              </label>
+              <label>
+                <span>Import label</span>
+                <select data-testid="lpc-label-override" value={lpcLabelOverride} onChange={(event) => setLpcLabelOverride(event.target.value as LpcSheetImportOptions['labelOverride'])}>
+                  <option value="infer">Infer from path</option>
+                  {partLabels.map((label) => <option key={label} value={label}>{slugLabel(label)}</option>)}
+                </select>
+              </label>
+              <label className="checkbox-field lpc-reviewed-toggle">
+                <input
+                  data-testid="lpc-reviewed-on-import"
+                  type="checkbox"
+                  checked={lpcReviewedOnImport}
+                  onChange={(event) => setLpcReviewedOnImport(event.target.checked)}
+                />
+                <span>Reviewed</span>
+              </label>
+              <p>{visibleLpcSheets.length} shown / {filteredLpcSheets.length} matching · {selectedLpcPaths.length} selected · {selectedVisibleCount} selected on page</p>
+            </div>
+            <div className="audit-actions lpc-selection-actions">
+              <button
+                data-testid="select-visible-lpc-sheets"
+                onClick={() => setSelectedLpcPaths((current) => Array.from(new Set([...current, ...visibleLpcPaths])))}
+                disabled={visibleLpcPaths.length === 0}
+              >
+                Select visible
+              </button>
+              <button
+                onClick={() => setSelectedLpcPaths((current) => current.filter((sheetPath) => !visibleLpcPaths.includes(sheetPath)))}
+                disabled={selectedVisibleCount === 0}
+              >
+                Unselect visible
+              </button>
+              <button onClick={() => setSelectedLpcPaths([])} disabled={selectedLpcPaths.length === 0}>Clear selection</button>
+              {visibleLpcSheets.length < filteredLpcSheets.length ? (
+                <button data-testid="show-more-lpc-sheets" onClick={() => setLpcVisibleLimit((current) => current + 24)}>Show 24 more</button>
+              ) : null}
+            </div>
+            <div className="lpc-sheet-grid">
+              {visibleLpcSheets.map((sheet) => {
+                const inferredLabel = inferLpcPartLabel(sheet)
+                const previewUrl = buildLpcSheetUrl(lpcInventory, sheet.path) ?? sheet.path
+                const selected = selectedLpcPaths.includes(sheet.path)
+                return (
+                  <article key={sheet.path} className={selected ? 'selected' : ''}>
+                    <label className="checkbox-field">
+                      <input
+                        data-testid={`select-lpc-sheet-${sheet.path.replace(/[^a-zA-Z0-9_-]+/g, '-')}`}
+                        type="checkbox"
+                        checked={selected}
+                        onChange={(event) => {
+                          setSelectedLpcPaths((current) =>
+                            event.target.checked
+                              ? Array.from(new Set([...current, sheet.path]))
+                              : current.filter((sheetPath) => sheetPath !== sheet.path),
+                          )
+                        }}
+                      />
+                      <span>{sheet.file_name}</span>
+                    </label>
+                    <img src={previewUrl} alt={sheet.file_name} />
+                    <div className="part-meta">
+                      <span>{sheet.category}</span>
+                      <span>{sheet.width}x{sheet.height}</span>
+                      <span>{sheet.frame_columns ?? '?'}x{sheet.frame_rows ?? '?'}</span>
+                      <span>{slugLabel(inferredLabel)}</span>
+                    </div>
+                    <code>{sheet.path}</code>
+                  </article>
+                )
+              })}
+            </div>
+            {filteredLpcSheets.length === 0 ? <p className="empty">No LPC sheets match the current filters.</p> : null}
           </div>
         </>
       ) : null}

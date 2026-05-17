@@ -17,11 +17,11 @@ Latest verification after the release hardening pass:
 
 - `npm run lint`: passed
 - `npm run check:source-hygiene`: passed
-- `npm run test:tools`: passed, 11 tests
+- `npm run test:tools`: passed, 12 tests
 - `npm run build`: passed
 - `npm run validate:release-package`: passed
 - `npm run test:preview-tools`: passed
-- `npm run test:browser`: passed, 11 tests
+- `npm run test:browser`: passed, 12 tests
 - `npm run release:check`: passed
 
 ```powershell
@@ -55,8 +55,9 @@ It also covers the GitHub sprite-parts harvest workflow surfaces: layer-bundle
 JSON import, saved variation presets, export filename templates, generation
 manifest download, and source alpha/floor/pivot analysis.
 The harness now also covers placeholder-mode export provenance, accessible
-release controls, and paged rendering for large layer-bundle imports in the Part
-Library, including page-scoped visible export and bulk review behavior. Private Duelyst package harvesting is available through
+release controls, a usable LPC inventory browser/import workflow, and paged
+rendering for large layer-bundle imports in the Part Library, including
+page-scoped visible export and bulk review behavior. Private Duelyst package harvesting is available through
 `npm run test:private-assets` and is intentionally opt-in outside the standard
 release gate.
 Browser regression is served from `npm run build && npx vite preview` so the
@@ -108,14 +109,17 @@ suite exercises the production bundle rather than the Vite dev transform path.
   release blocker.
 - GitHub sprite-parts harvest planning is now represented by app behavior:
   layer-bundle JSON files import into the Part Library, raw LPC sheets can be
-  promoted from the LPC inventory as selectable manual parts, source alpha
-  bounds/floor/pivot analysis is visible in Asset Audit, variation presets are
-  saved and applied by Batch Generator, export filename templates are editable,
-  and APES Lab downloads generation manifests.
+  browsed, filtered, selected, labeled, and promoted from the LPC inventory as
+  selectable manual parts, source alpha bounds/floor/pivot analysis is visible
+  in Asset Audit, variation presets are saved and applied by Batch Generator,
+  export filename templates are editable, and APES Lab downloads generation
+  manifests.
 - Local APES, Duelyst, LPC, repair, and reindex actions are no longer tied to
   `import.meta.env.DEV`; the app probes `/__local/health` and enables actions
   whenever the Vite local tool server is present, including `npm run preview`
-  after a production build.
+  after a production build. APES Lab also exposes the local fine-tune manifest
+  prep and Duelyst job-batch prep scripts through this path, then loads prepared
+  Duelyst job configs into the visible APES queue.
 - `npm run release:check` now includes a production-preview local-tool smoke
   that verifies `/__local/health`, `/__local/asset-tools`, and
   `/__local/apes-tools` are reachable from a built app served with Vite preview.
@@ -128,8 +132,10 @@ suite exercises the production bundle rather than the Vite dev transform path.
 - Layer-bundle import validation rejects unknown part labels, duplicate part
   IDs, unsafe local-tool paths, traversal paths, Windows absolute paths, and
   invalid extraction bounds before data reaches the Part Library.
-- LPC sheet promotion now preserves source/credit-file tags and exports cropped
-  source bounds instead of squeezing a whole spritesheet into one part image.
+- LPC sheet promotion now preserves source/credit-file tags, supports selected
+  or visible imports, inferred or explicit labels, reviewed-on-import, and
+  exports cropped source bounds instead of squeezing a whole spritesheet into
+  one part image.
 - Large imported part images and masks are persisted in IndexedDB by asset key
   so localStorage stores lightweight part metadata and reloads hydrate the real
   assets back into the app.

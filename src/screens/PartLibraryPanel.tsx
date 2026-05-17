@@ -181,7 +181,7 @@ export function PartLibraryPanel({
         {visibleParts.map((part) => (
           <article key={part.part_id} className={part.reviewed ? 'reviewed' : ''}>
             <div>
-              <strong>{part.label}</strong>
+              <strong>{slugLabel(part.label)}</strong>
               <span>{part.part_id}</span>
             </div>
             <div className="part-meta">

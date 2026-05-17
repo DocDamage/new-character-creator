@@ -223,6 +223,40 @@ export type ApesJob = {
   failure_details?: string
 }
 
+export type ApesFinetuneManifest = {
+  format: string
+  version?: number
+  output_root?: string
+  datasets?: Record<string, unknown>
+  commands?: Record<string, string>
+  warnings?: string[]
+}
+
+export type DuelystApesJobBatch = {
+  format: string
+  source_manifest?: string
+  input_root?: string
+  job_count: number
+  success_count?: number
+  failure_count?: number
+  filters?: {
+    role?: string
+    body_class?: string
+    limit?: number | null
+  }
+  jobs: Array<{
+    job_id: string
+    character_id: string
+    job_path: string
+    output_root: string
+    training_role?: string | null
+    body_class?: string | null
+  }>
+  run_results?: Array<Record<string, unknown>>
+  warnings?: string[]
+  job_configs?: ApesJob[]
+}
+
 export type ApesBridgeStatus = {
   status: ApesJob['status']
   logs: string[]

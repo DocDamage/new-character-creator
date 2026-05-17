@@ -19,7 +19,7 @@ If you want the automated smoke pass instead of stepping through the UI manually
 npm run test:browser
 ```
 
-That harness covers export/package downloads, standalone Godot SpriteFrames resources, manual mask save persistence, recipe save/load, Part Library bulk review actions, fake APES-part prevention, APES QA harness generation/import, APES local-output image/mask package assets, Duelyst audit behavior, placeholder-mode manifest provenance, paged large Part Library imports, page-scoped visible export/review actions, and the portable local setup bundle download from `Settings`.
+That harness covers export/package downloads, standalone Godot SpriteFrames resources, manual mask save persistence, recipe save/load, Part Library bulk review actions, fake APES-part prevention, APES QA harness generation/import, APES fine-tune prep and Duelyst job-batch queueing, APES local-output image/mask package assets, Duelyst audit behavior, LPC inventory browse/select/label/import, placeholder-mode manifest provenance, paged large Part Library imports, page-scoped visible export/review actions, and the portable local setup bundle download from `Settings`.
 
 Private Duelyst package harvesting is intentionally opt-in outside the release gate:
 
@@ -39,7 +39,7 @@ Latest verified automated run:
 - `npm run test:preview-tools`
 - `npm run test:browser`
 - `npm run release:check`
-- lint passed, source-hygiene passed, 11 tool tests passed, build passed, release package validation passed, preview local-tool smoke passed, and 11 browser tests passed
+- lint passed, source-hygiene passed, 12 tool tests passed, build passed, release package validation passed, preview local-tool smoke passed, and 13 browser tests passed
 
 Latest verified local app state:
 
@@ -54,7 +54,9 @@ Latest verified local app state:
 - CLI Duelyst APES queue writes 60 ignored jobs with `npm run apes:prepare-duelyst-jobs`
 - Real APES execution reaches vendored network/deformer on the RTX 3060. The latest full Duelyst APES run attempted 60 jobs, produced 57 successes, and recorded 3 sprite-specific APES segmentation rejects in the batch manifest.
 - APES Lab exposes `Inventory APES outputs`, backed by `npm run apes:summarize-outputs`, to summarize completed local reports, show failed outputs, and import non-empty reports
-- Fine-tune prep writes `data/training/apes_finetune/finetune_manifest.json` and 64 Duelyst review folders
+- APES Lab exposes `Prepare fine-tune data`, backed by `tools/apes_bridge/prepare_finetune_data.py`, and shows the loaded prep artifact summary.
+- APES Lab exposes `Prepare Duelyst jobs`, backed by `tools/apes_bridge/prepare_duelyst_apes_jobs.py`, and loads the generated job configs into `Run Duelyst queue`.
+- Fine-tune prep writes `data/training/apes_finetune/finetune_manifest.json` and 64 Duelyst review folders.
 - Source metadata is optional private debugging data and is not a browser-check release gate.
 
 ## Export Panel

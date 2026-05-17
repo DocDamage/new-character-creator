@@ -36,7 +36,7 @@ import {
 } from './exportPackage'
 import { defaultFilenameTemplate } from './filenameTemplates'
 import { buildGenerationManifest } from './generationManifest'
-import { layerBundleToExtractedParts, lpcSheetsToExtractedParts, parseLayerBundleManifest } from './layerBundle'
+import { layerBundleToExtractedParts, lpcSheetsToExtractedParts, parseLayerBundleManifest, type LpcSheetImportOptions } from './layerBundle'
 import { buildManualMaskPart } from './manualParts'
 import { hydratePartLibraryAssets, persistPartLibraryAssets } from './partAssetStore'
 import { PixelCanvas } from './PixelCanvas'
@@ -49,7 +49,7 @@ import { FastCreatorPanel } from './screens/FastCreatorPanel'
 import { PartLibraryPanel } from './screens/PartLibraryPanel'
 import { SettingsPanel } from './screens/SettingsPanel'
 import { WorkstationPanel } from './screens/WorkstationPanel'
-import type { AnimationName, ApesBridgeStatus, ApesJob, ApesOutputInventory, ApesPreflightReport, ApesReport, AssetManifest, ComposerLayerSettings, Direction, DuelystPackageAudit, ExtractedPart, ExtractionMethod, LpcAssetInventory, PaletteRules, PartLabel, Rect, VariationPreset } from './types'
+import type { AnimationName, ApesBridgeStatus, ApesFinetuneManifest, ApesJob, ApesOutputInventory, ApesPreflightReport, ApesReport, AssetManifest, ComposerLayerSettings, Direction, DuelystApesJobBatch, DuelystPackageAudit, ExtractedPart, ExtractionMethod, LpcAssetInventory, PaletteRules, PartLabel, Rect, VariationPreset } from './types'
 import {
   buildExportManifest,
   buildAsepriteReference,
@@ -88,7 +88,7 @@ const apesCoreLabels: PartLabel[] = ['head', 'torso', 'front_arm', 'back_arm', '
 const defaultPaletteRules: Omit<PaletteRules, 'team_color'> = { hue_shift: 0, saturation: 100, brightness: 100 }
 
 type LocalApesToolPayload = {
-  action: 'preflight' | 'run-job' | 'generate-harness' | 'summarize-outputs' | 'load-report'
+  action: 'preflight' | 'run-job' | 'generate-harness' | 'summarize-outputs' | 'load-report' | 'prepare-finetune' | 'prepare-duelyst-jobs'
   pythonPath: string
   statusCode: number
   stdout: string
@@ -97,6 +97,8 @@ type LocalApesToolPayload = {
   status?: ApesBridgeStatus | null
   report?: ApesReport | null
   inventory?: ApesOutputInventory | null
+  finetuneManifest?: ApesFinetuneManifest | null
+  duelystJobBatch?: DuelystApesJobBatch | null
   outputDir?: string | null
   error?: string
 }
@@ -218,6 +220,8 @@ function App() {
   const [apesBridgeBusy, setApesBridgeBusy] = useState(false)
   const [apesPreflight, setApesPreflight] = useState<ApesPreflightReport | null>(loadStoredApesPreflight)
   const [apesOutputInventory, setApesOutputInventory] = useState<ApesOutputInventory | null>(null)
+  const [apesFinetuneManifest, setApesFinetuneManifest] = useState<ApesFinetuneManifest | null>(null)
+  const [duelystApesJobBatch, setDuelystApesJobBatch] = useState<DuelystApesJobBatch | null>(null)
   const [apesHarnessGeneratedAt, setApesHarnessGeneratedAt] = useState(() => loadStoredString(apesHarnessGeneratedAtStorageKey))
   const [localToolsAvailable, setLocalToolsAvailable] = useState(false)
   const [variationPresets, setVariationPresets] = useState<VariationPreset[]>(loadStoredVariationPresets)
@@ -687,6 +691,30 @@ function App() {
     )
   }
 
+  function mergePreparedApesJobsFromBatch(batch: DuelystApesJobBatch | null | undefined) {
+    const batchJobs = batch?.job_configs ?? []
+    if (batchJobs.length === 0) return 0
+
+    let addedCount = 0
+    setApesJobs((current) => {
+      const existingIds = new Set(current.map((job) => job.job_id))
+      const newJobs = batchJobs
+        .filter((job) => !existingIds.has(job.job_id))
+        .map((job): ApesJob => {
+          const status: ApesJob['status'] = job.status === 'complete' || job.status === 'failed' || job.status === 'running' ? job.status : 'prepared'
+          return {
+            ...job,
+            status,
+            created_at: job.created_at || new Date().toISOString(),
+            logs: job.logs.length > 0 ? job.logs : ['Prepared from private Duelyst staged atlas frames.'],
+          }
+        })
+      addedCount = newJobs.length
+      return newJobs.length > 0 ? [...newJobs, ...current] : current
+    })
+    return addedCount
+  }
+
   async function runApesPreflight() {
     if (!localToolsAvailable) {
       setApesBridgeStatus('APES preflight needs the local tool server. Start with npm run dev or serve the built app with npm run preview on the APES machine.')
@@ -860,6 +888,75 @@ function App() {
       )
     } catch (error) {
       setApesBridgeStatus(`APES output inventory failed. ${error instanceof Error ? error.message : String(error)}`)
+    } finally {
+      setApesBridgeBusy(false)
+    }
+  }
+
+  async function prepareApesFinetuneData() {
+    if (!localToolsAvailable) {
+      setApesBridgeStatus('APES fine-tune prep needs the local tool server. Start with npm run dev or npm run preview on the APES machine.')
+      return
+    }
+
+    setApesBridgeBusy(true)
+    setApesBridgeStatus('Preparing APES fine-tune manifest and Duelyst review dataset...')
+    try {
+      const response = await fetch('/__local/apes-tools', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'prepare-finetune', pythonPath: apesPythonPath.trim() }),
+      })
+      const payload = await response.json() as LocalApesToolPayload
+      if (!response.ok) {
+        throw new Error(payload.stderr || payload.error || `APES fine-tune prep failed with status ${payload.statusCode}`)
+      }
+      if (!payload.finetuneManifest) {
+        setApesBridgeStatus('APES fine-tune prep ran, but the manifest could not be loaded back into the app.')
+        return
+      }
+
+      setApesFinetuneManifest(payload.finetuneManifest)
+      const datasetCount = Object.keys(payload.finetuneManifest.datasets ?? {}).length
+      const warningCount = payload.finetuneManifest.warnings?.length ?? 0
+      setApesBridgeStatus(`Prepared APES fine-tune manifest with ${datasetCount} dataset section(s) and ${warningCount} warning(s).`)
+    } catch (error) {
+      setApesBridgeStatus(`APES fine-tune prep failed. ${error instanceof Error ? error.message : String(error)}`)
+    } finally {
+      setApesBridgeBusy(false)
+    }
+  }
+
+  async function prepareDuelystApesJobs() {
+    if (!localToolsAvailable) {
+      setApesBridgeStatus('Duelyst APES job prep needs the local tool server. Start with npm run dev or npm run preview on the APES machine.')
+      return
+    }
+
+    setApesBridgeBusy(true)
+    setApesBridgeStatus('Preparing Duelyst APES jobs from the private staged manifest...')
+    try {
+      const response = await fetch('/__local/apes-tools', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'prepare-duelyst-jobs', pythonPath: apesPythonPath.trim() }),
+      })
+      const payload = await response.json() as LocalApesToolPayload
+      if (!response.ok) {
+        throw new Error(payload.stderr || payload.error || `Duelyst APES job prep failed with status ${payload.statusCode}`)
+      }
+      if (!payload.duelystJobBatch) {
+        setApesBridgeStatus('Duelyst APES job prep ran, but the job batch manifest could not be loaded back into the app.')
+        return
+      }
+
+      setDuelystApesJobBatch(payload.duelystJobBatch)
+      const addedCount = mergePreparedApesJobsFromBatch(payload.duelystJobBatch)
+      setApesBridgeStatus(
+        `Prepared ${payload.duelystJobBatch.job_count} Duelyst APES job(s) from disk and queued ${addedCount} new job(s) in APES Lab.`,
+      )
+    } catch (error) {
+      setApesBridgeStatus(`Duelyst APES job prep failed. ${error instanceof Error ? error.message : String(error)}`)
     } finally {
       setApesBridgeBusy(false)
     }
@@ -1184,19 +1281,24 @@ function App() {
     }
   }
 
-  function importLpcSheetsAsParts(limit: number) {
+  function importLpcSheetsAsParts(sheetPaths: string[], options: Omit<LpcSheetImportOptions, 'sheetPaths'> = {}) {
     if (!lpcInventory) {
       setLpcImportStatus('Run or load the LPC inventory before importing sheets.')
       return
     }
+    if (sheetPaths.length === 0) {
+      setLpcImportStatus('Choose at least one LPC sheet before importing.')
+      return
+    }
 
-    const importedParts = lpcSheetsToExtractedParts(lpcInventory, limit)
+    const importedParts = lpcSheetsToExtractedParts(lpcInventory, { ...options, sheetPaths })
     setPartLibrary((current) => [
       ...importedParts,
       ...current.filter((part) => !importedParts.some((imported) => imported.part_id === part.part_id)),
     ])
-    setLpcImportStatus(`Imported ${importedParts.length} LPC sheet part(s) into the Part Library.`)
-    setPartLibraryStatus(`Imported ${importedParts.length} LPC sheet part(s). Filter by manual or tag "lpc" to select them in the creator.`)
+    const labelNote = options.labelOverride && options.labelOverride !== 'infer' ? ` as ${options.labelOverride}` : ' with inferred labels'
+    setLpcImportStatus(`Imported ${importedParts.length} LPC sheet part(s)${labelNote} into the Part Library.`)
+    setPartLibraryStatus(`Imported ${importedParts.length} LPC sheet part(s). Filter by manual or tag "lpc" to select and review them in the creator.`)
     setScreen('library')
   }
 
@@ -1749,6 +1851,8 @@ function App() {
               runApesJob={runApesJob}
               runPreparedDuelystJobs={runPreparedDuelystJobs}
               summarizeApesOutputs={summarizeApesOutputs}
+              prepareApesFinetuneData={prepareApesFinetuneData}
+              prepareDuelystApesJobs={prepareDuelystApesJobs}
               importApesInventoryReport={importApesInventoryReport}
               generateApesQaHarness={generateApesQaHarness}
               loadApesQaHarnessReport={loadApesQaHarnessReport}
@@ -1770,6 +1874,8 @@ function App() {
               apesBridgeStatus={apesBridgeStatus}
               apesPreflight={apesPreflight}
               apesOutputInventory={apesOutputInventory}
+              apesFinetuneManifest={apesFinetuneManifest}
+              duelystApesJobBatch={duelystApesJobBatch}
               apesHarnessGeneratedAt={apesHarnessGeneratedAt}
               mainDirections={mainDirections}
               apesCoreLabels={apesCoreLabels}

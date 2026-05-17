@@ -140,6 +140,71 @@ test('LPC inventory sheets can be promoted into manual parts with browser asset 
   assert.equal(parts[0].label, 'hair_hat_hood')
   assert.equal(parts[0].image_data_url, '/assets/lpc sprite generator stuff/hair/long.png')
   assert.ok(parts[0].tags.includes('lpc'))
+  assert.ok(parts[0].tags.includes('lpc_source_hair_long_png'))
+  assert.equal(parts[0].reviewed, false)
+})
+
+test('LPC inventory import supports selected sheets, explicit labels, and reviewed state', () => {
+  const inventory = {
+    format: 'pixel_creator_lpc_asset_inventory',
+    generated_at: '2026-05-17T00:00:00.000Z',
+    source: {
+      kind: 'local_lpc_asset_dump',
+      asset_root: 'C:/repo/assets/lpc sprite generator stuff',
+      upstream_repo: 'https://example.test/lpc',
+      upstream_reference: { available: false, root: 'C:/repo/cache' },
+    },
+    summary: {
+      png_count: 2,
+      lpc_grid_count: 2,
+      non_lpc_grid_count: 0,
+      categories: { hair: 1, weapon: 1 },
+      frame_grids: { '13x21': 2 },
+      credit_file_count: 1,
+    },
+    credit_files: [{ path: 'CREDITS.txt', excerpt: 'credit text' }],
+    sheets: [
+      {
+        path: 'hair/long.png',
+        category: 'hair',
+        file_name: 'long.png',
+        width: 832,
+        height: 1344,
+        frame_width: 64,
+        frame_height: 64,
+        frame_columns: 13,
+        frame_rows: 21,
+        lpc_grid: true,
+        tags: ['hair', 'long'],
+      },
+      {
+        path: 'weapon/sword.png',
+        category: 'weapon',
+        file_name: 'sword.png',
+        width: 832,
+        height: 1344,
+        frame_width: 64,
+        frame_height: 64,
+        frame_columns: 13,
+        frame_rows: 21,
+        lpc_grid: true,
+        tags: ['weapon', 'sword'],
+      },
+    ],
+  }
+
+  const parts = lpcSheetsToExtractedParts(inventory, {
+    sheetPaths: ['weapon/sword.png'],
+    labelOverride: 'weapon',
+    reviewed: true,
+  })
+
+  assert.equal(parts.length, 1)
+  assert.equal(parts[0].part_id, 'lpc_weapon_sword_png_001')
+  assert.equal(parts[0].label, 'weapon')
+  assert.equal(parts[0].reviewed, true)
+  assert.ok(parts[0].tags.includes('lpc_source_weapon_sword_png'))
+  assert.ok(parts[0].warnings.some((warning) => warning.includes('credit/license')))
 })
 
 function setAlpha(pixels, width, x, y, alpha) {

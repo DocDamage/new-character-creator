@@ -265,8 +265,9 @@ input {
 }
 
 .pixel-stage canvas {
-  width: 320px;
-  height: 320px;
+  width: min(320px, 100%);
+  height: auto;
+  aspect-ratio: 1 / 1;
   image-rendering: pixelated;
   border: 1px solid var(--line-strong);
   background: #151d27;
@@ -310,7 +311,7 @@ input {
 
 .recipe-controls {
   display: grid;
-  grid-template-columns: minmax(220px, 1fr) minmax(220px, 1fr) minmax(180px, auto);
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
   gap: 10px;
   align-items: end;
   margin-bottom: 14px;
@@ -478,7 +479,7 @@ input {
 
 .workstation-grid {
   display: grid;
-  grid-template-columns: minmax(180px, 0.8fr) minmax(190px, 0.75fr) minmax(220px, 0.9fr) minmax(240px, 1fr);
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
   gap: 14px;
 }
 
@@ -623,7 +624,7 @@ input {
 
 .library-filters {
   display: grid;
-  grid-template-columns: minmax(220px, 1.4fr) repeat(3, minmax(150px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
   gap: 10px;
   margin-bottom: 14px;
 }
@@ -992,7 +993,7 @@ input {
 
 .duelyst-filter-bar {
   display: grid;
-  grid-template-columns: minmax(180px, 1.4fr) repeat(4, minmax(130px, 1fr)) auto;
+  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
   gap: 10px;
   align-items: end;
   margin: 14px 0;
@@ -1067,6 +1068,68 @@ input {
   overflow-wrap: anywhere;
 }
 
+.lpc-browser {
+  display: grid;
+  gap: 12px;
+  margin-top: 14px;
+}
+
+.lpc-reviewed-toggle {
+  min-height: 34px;
+  align-items: center;
+  padding: 7px 8px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: #111821;
+}
+
+.lpc-selection-actions {
+  margin-bottom: 2px;
+}
+
+.lpc-sheet-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 10px;
+}
+
+.lpc-sheet-grid article {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: var(--control);
+}
+
+.lpc-sheet-grid article.selected {
+  border-color: rgba(108, 214, 143, 0.58);
+  background: rgba(108, 214, 143, 0.08);
+}
+
+.lpc-sheet-grid img {
+  width: 100%;
+  height: 132px;
+  object-fit: contain;
+  image-rendering: pixelated;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: #0c1118;
+}
+
+.lpc-sheet-grid code {
+  max-height: 56px;
+  padding: 8px;
+  color: #cad4df;
+  background: #0c1118;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  font: 11px/1.35 var(--mono);
+  overflow: auto;
+  overflow-wrap: anywhere;
+}
+
 @media (max-width: 720px) {
   .duelyst-filter-bar {
     grid-template-columns: 1fr;
@@ -1129,6 +1192,38 @@ input {
   .sidebar {
     position: static;
     min-height: 0;
+    padding: 12px;
+    gap: 12px;
+  }
+
+  .brand-mark {
+    width: 36px;
+    height: 36px;
+  }
+
+  .brand h1 {
+    font-size: 18px;
+  }
+
+  .brand p {
+    font-size: 11px;
+  }
+
+  .nav-list {
+    grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+  }
+
+  .nav-list button {
+    min-height: 32px;
+    text-align: center;
+  }
+
+  .stats {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .stats span {
+    min-height: 40px;
   }
 
   .main-grid,
@@ -1136,8 +1231,62 @@ input {
     grid-template-columns: 1fr;
   }
 
+  .main-grid {
+    padding: 12px;
+  }
+
   .topbar {
     align-items: start;
     flex-direction: column;
+    min-height: 0;
+    padding: 12px;
+  }
+
+  .preview-panel {
+    min-height: 0;
+  }
+}
+
+@media (max-width: 560px) {
+  .sidebar {
+    padding: 10px;
+  }
+
+  .nav-list {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .nav-list button,
+  .topbar-actions button,
+  .export-grid button,
+  .status-strip button {
+    min-width: 0;
+  }
+
+  .panel-heading,
+  .composite-preview-panel > div:first-child,
+  .direction-preview > div:first-child,
+  .part-library-list article > div:first-child,
+  .job > div:first-child {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .wide-panel,
+  .preview-panel {
+    padding: 12px;
+  }
+
+  .direction-preview-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .layer-controls,
+  .library-filters {
+    grid-template-columns: 1fr;
+  }
+
+  .seed-panel {
+    grid-template-columns: 1fr;
   }
 }

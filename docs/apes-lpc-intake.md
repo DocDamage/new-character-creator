@@ -148,6 +148,13 @@ Weak APES candidates:
    - Run APES bridge.
    - Import APES masks as parts with confidence/warning metadata.
 
+APES Lab now exposes the local preparation scripts directly:
+
+- `Prepare fine-tune data` writes and reloads
+  `data/training/apes_finetune/finetune_manifest.json`.
+- `Prepare Duelyst jobs` writes `data/apes/input/duelyst_job_batch.json`,
+  reloads the generated job configs, and queues them for `Run Duelyst queue`.
+
 4. Keep credits attached to every imported layer.
    - Use upstream `CREDITS.csv` or item `credits` blocks.
    - Export credit manifests alongside generated character packages.
@@ -173,8 +180,13 @@ choose `characters.local.json` for ignored or external assets.
   does not get staged accidentally.
 - `npm run lpc:inventory` builds an ignored local inventory at
   `data/lpc/lpc_asset_inventory.json`.
-- The tool test suite covers LPC inventory fixture behavior alongside the asset
-  indexer local-manifest regression.
+- Asset Audit can run the inventory, browse sheet previews, filter by search,
+  category, and LPC grid compatibility, select visible or individual sheets,
+  choose inferred or explicit part labels, mark imported parts reviewed, and
+  import them into the Part Library as selectable manual parts.
+- The tool and browser test suites cover LPC inventory fixture behavior and the
+  browse/select/label/import UI workflow alongside the asset indexer
+  local-manifest regression.
 - LPC credits/license data is treated as useful private metadata, not as a
   release gate.
 
@@ -182,7 +194,7 @@ choose `characters.local.json` for ignored or external assets.
 
 - Build a metadata-first LPC importer that consumes upstream-like
   `sheet_definitions` and local loose folders separately.
-- Add UI import/review controls for choosing which inventory buckets become
-  local parts.
+- Attach upstream per-layer credit records when `sheet_definitions` metadata is
+  available, rather than relying only on inventory-level credit-file warnings.
 - Keep APES focused on unknown packs and review masks, not on replacing LPC's
   existing layer metadata.
