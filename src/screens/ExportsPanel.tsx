@@ -1,6 +1,7 @@
 import { CompositeCanvas } from '../CompositeCanvas'
 import { DirectionPreviewGrid } from '../DirectionPreviewGrid'
 import type { BatchVariant } from '../appViewTypes'
+import { downloadCreditsReport } from '../exportPackage'
 import { defaultFilenameTemplate, renderExportFilenameTemplate } from '../filenameTemplates'
 import type { AnimationName, CharacterManifest, Direction, ExtractedPart, KitbashRecipe } from '../types'
 import { downloadJson, getFrames, slugLabel } from '../utils'
@@ -109,6 +110,7 @@ export function ExportsPanel({
         <button onClick={exportUnityMetadata}>Download Unity 2D metadata</button>
         <button onClick={exportRpgMakerMetadata}>Download RPG Maker MZ metadata</button>
         <button onClick={exportAsepriteReference}>Download Aseprite reference</button>
+        <button data-testid="export-credits-report" onClick={() => downloadCreditsReport(selectedCharacter, recipe, partLibrary)}>Download credits report</button>
       </div>
       <div className="settings-card">
         <strong>Filename pattern</strong>

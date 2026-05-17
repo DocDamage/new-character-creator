@@ -21,7 +21,9 @@ Latest verification after the release hardening pass:
 - `npm run build`: passed
 - `npm run validate:release-package`: passed
 - `npm run test:preview-tools`: passed
-- `npm run test:browser`: passed, 12 tests
+- `npm run test:browser`: passed, 13 tests
+- `npm run test:browser:all`: passed, 39 tests across Chromium, Firefox, and WebKit
+- `npm run test:private-assets`: passed
 - `npm run release:check`: passed
 
 ```powershell
@@ -57,7 +59,8 @@ manifest download, and source alpha/floor/pivot analysis.
 The harness now also covers placeholder-mode export provenance, accessible
 release controls, a usable LPC inventory browser/import workflow, and paged
 rendering for large layer-bundle imports in the Part Library, including
-page-scoped visible export and bulk review behavior. Private Duelyst package harvesting is available through
+page-scoped visible export and bulk review behavior. It also verifies APES
+fine-tune/Duelyst prep actions and credits/provenance report exports. Private Duelyst package harvesting is available through
 `npm run test:private-assets` and is intentionally opt-in outside the standard
 release gate.
 Browser regression is served from `npm run build && npx vite preview` so the
@@ -69,6 +72,10 @@ suite exercises the production bundle rather than the Vite dev transform path.
 - `npm run release:check` now runs the release gate in one command: lint,
   source-hygiene checks, tool tests, production build, release-package
   validation, preview local-tool smoke, and browser regression.
+- GitHub Actions runs the same release gate on pushes and pull requests to
+  `main`.
+- `npm run test:browser:all` is available for optional local Chromium, Firefox,
+  and WebKit smoke coverage after running `npm run test:browser:install-all`.
 - `npm run check:source-hygiene` fails if private/local/generated inputs such
   as `duelyst.private.json`, `characters.local.json`, raw Duelyst/LPC dumps,
   APES outputs, caches, training data, `dist`, or Playwright artifacts are
@@ -92,6 +99,9 @@ suite exercises the production bundle rather than the Vite dev transform path.
   full-package zip exports.
 - The standalone `Download SpriteFrames resource` action now uses the same
   rendered-frame-backed Godot resource builder as full-package exports.
+- Export System now emits a `pixel_creator_credits_report` JSON download and
+  full-package zips include `credits_report.json` with selected part review,
+  LPC credit/license warning, and APES QA provenance signals.
 - Canvas preview and manual mask editor image failures now surface visible UI
   status instead of console-only errors.
 - Browser-storage read failures fall back to safe defaults, and write failures

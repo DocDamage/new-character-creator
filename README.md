@@ -77,7 +77,9 @@ The `Settings` screen now also exposes a `Copy browser regression command` actio
 - large Part Library layer-bundle imports staying paged instead of rendering every part at once
 
 Use `npm run release:check` before handoff. It runs lint, source-hygiene checks, tool tests, production build, release package validation, preview local-tool smoke, and the browser regression harness in order.
+The checked-in GitHub Actions workflow runs the same release gate on push and pull request for `main`.
 The release gate also runs `npm run test:preview-tools`, which starts the production preview server and verifies the `/__local` tool endpoints used by Settings, APES Lab, Duelyst audit, and LPC intake. It also checks the restricted app-root `/@fs` route used for local staged preview assets. `npm run test:private-assets` is available for machines that have `assets/Duelyst-Unit-Animations.unitypackage`; it runs the heavier private Duelyst audit path explicitly and skips cleanly when the package is absent.
+For an optional local cross-browser smoke pass after installing all Playwright browsers, run `npm run test:browser:install-all` once and then `npm run test:browser:all`.
 
 `Settings` also exposes a `Download local setup bundle` action. It writes a machine-ready markdown checklist with your current asset root, APES interpreter, setup commands, and browser regression command filled in so you can move the workflow to another PC without rebuilding the commands by hand.
 
@@ -100,8 +102,8 @@ The release gate also runs `npm run test:preview-tools`, which starts the produc
 - Duelyst Asset Audit filters for search, body class, source family, training role, and staged state, plus batch APES job creation for staged candidates.
 - APES Lab with first-class job creation, local preflight/bridge actions, one-click fine-tune prep, one-click Duelyst job-batch prep, a local QA harness generator, logs, job config export, explicit placeholder-mode provenance in exports, failed-output surfacing, file import, pasted JSON import, inventory import, and APES-to-part-library conversion.
 - APES CLI bridge tools for preparing and running private Duelyst job batches from `data/apes/input/`, including partial-failure recording and strict opt-in failure mode.
-- Export panel for generic manifests, rendered frame/package downloads, Godot scenes, SpriteFrames resources, and batch queues.
-- Production-oriented full package zip with rendered PNGs, Godot 4 `SpriteFrames` resources, Unity import settings and Editor importer script, RPG Maker MZ single-character sheet, Aseprite import script/spec, and useful local metadata.
+- Export panel for generic manifests, rendered frame/package downloads, Godot scenes, SpriteFrames resources, batch queues, and a credits/provenance report for selected parts.
+- Production-oriented full package zip with rendered PNGs, Godot 4 `SpriteFrames` resources, Unity import settings and Editor importer script, RPG Maker MZ single-character sheet, Aseprite import script/spec, credits report, and useful local metadata.
 - Release package validator that rejects private manifests, local `/@fs/` and `/__local/` paths, and missing bundled manifest assets.
 - Browser-side spritesheet downloads for the current animation/direction and all directions of the current action.
 - CLI character export under `data/exports/<character_id>/` with `package_manifest.json`, rendered frames/sheets, engine metadata, and source-frame references.
@@ -247,6 +249,7 @@ The browser harness now covers:
 - Workstation APES mode fake-part prevention
 - APES QA harness generation, reload, and pasted JSON import
 - APES local-output part image/mask inclusion in full-package zip exports
+- credits/provenance report export and inclusion in full-package zips
 - Duelyst package audit status and staged source opening when available
 - portable setup bundle download from `Settings`
 - placeholder-mode manifest provenance and accessible release controls

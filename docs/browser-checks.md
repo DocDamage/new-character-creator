@@ -19,7 +19,14 @@ If you want the automated smoke pass instead of stepping through the UI manually
 npm run test:browser
 ```
 
-That harness covers export/package downloads, standalone Godot SpriteFrames resources, manual mask save persistence, recipe save/load, Part Library bulk review actions, fake APES-part prevention, APES QA harness generation/import, APES fine-tune prep and Duelyst job-batch queueing, APES local-output image/mask package assets, Duelyst audit behavior, LPC inventory browse/select/label/import, placeholder-mode manifest provenance, paged large Part Library imports, page-scoped visible export/review actions, and the portable local setup bundle download from `Settings`.
+That harness covers export/package downloads, standalone Godot SpriteFrames resources, credits/provenance report export, manual mask save persistence, recipe save/load, Part Library bulk review actions, fake APES-part prevention, APES QA harness generation/import, APES fine-tune prep and Duelyst job-batch queueing, APES local-output image/mask package assets, Duelyst audit behavior, LPC inventory browse/select/label/import, placeholder-mode manifest provenance, paged large Part Library imports, page-scoped visible export/review actions, and the portable local setup bundle download from `Settings`.
+
+For optional local cross-browser smoke coverage after installing the full browser set:
+
+```bash
+npm run test:browser:install-all
+npm run test:browser:all
+```
 
 Private Duelyst package harvesting is intentionally opt-in outside the release gate:
 
@@ -38,8 +45,10 @@ Latest verified automated run:
 - `npm run validate:release-package`
 - `npm run test:preview-tools`
 - `npm run test:browser`
+- `npm run test:browser:all`
+- `npm run test:private-assets`
 - `npm run release:check`
-- lint passed, source-hygiene passed, 12 tool tests passed, build passed, release package validation passed, preview local-tool smoke passed, and 13 browser tests passed
+- lint passed, source-hygiene passed, 12 tool tests passed, build passed, release package validation passed, preview local-tool smoke passed, 13 Chromium browser tests passed, 39 Chromium/Firefox/WebKit browser-matrix tests passed, and private Duelyst audit passed
 
 Latest verified local app state:
 
@@ -83,11 +92,13 @@ Latest verified local app state:
    - `rendered_outputs`
    - `engine_exports`
    - `reusable_part_folders`
+   - `credits_report`
    - optional local metadata such as source layer details
 12. Click `Download full package zip`.
 13. Confirm a file named like `<recipe>_full_package.zip` downloads.
 14. Open the zip and confirm it contains:
    - `package_manifest.json`
+   - `credits_report.json`
    - `exports/godot/*`
    - `exports/unity/*`
    - `exports/rpg_maker/*`
@@ -97,6 +108,8 @@ Latest verified local app state:
    - selected `parts/<label>/<part_id>/` folders when reviewed parts are used in the recipe
 15. Click `Download SpriteFrames resource`.
 16. Confirm the `.tres` file contains real `Texture2D` frame resources pointing at `rendered/frames`.
+17. Click `Download credits report`.
+18. Confirm the JSON has `format: pixel_creator_credits_report`, selected part review status, LPC credit/license warnings when LPC parts are present, and APES visual QA notes when APES parts are present.
 
 ## Manual Mask Save
 

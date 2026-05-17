@@ -1,5 +1,27 @@
 import { defineConfig, devices } from '@playwright/test'
 
+const browserProjects = process.env.PIXEL_CREATOR_BROWSER_MATRIX === '1'
+  ? [
+      {
+        name: 'chromium',
+        use: { ...devices['Desktop Chrome'] },
+      },
+      {
+        name: 'firefox',
+        use: { ...devices['Desktop Firefox'] },
+      },
+      {
+        name: 'webkit',
+        use: { ...devices['Desktop Safari'] },
+      },
+    ]
+  : [
+      {
+        name: 'chromium',
+        use: { ...devices['Desktop Chrome'] },
+      },
+    ]
+
 export default defineConfig({
   testDir: './tests/browser',
   timeout: 180_000,
@@ -19,10 +41,5 @@ export default defineConfig({
     reuseExistingServer: false,
     timeout: 240_000,
   },
-  projects: [
-    {
-      name: 'chromium',
-      use: { ...devices['Desktop Chrome'] },
-    },
-  ],
+  projects: browserProjects,
 })

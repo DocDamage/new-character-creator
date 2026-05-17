@@ -19,6 +19,13 @@ type FullPackageManifestDownload = {
   }
   reusable_part_folders: unknown[]
   extraction_provenance: unknown[]
+  credits_report: {
+    format: string
+    summary: {
+      selected_part_count: number
+      release_blocking: boolean
+    }
+  }
   engine_exports: {
     godot_4: {
       scene_text: string
@@ -80,12 +87,15 @@ test('rendered export and package downloads stay structurally valid', async ({ p
   expect(fullPackageManifest.rendered_outputs.frame_count).toBeGreaterThan(0)
   expect(Array.isArray(fullPackageManifest.reusable_part_folders)).toBeTruthy()
   expect(Array.isArray(fullPackageManifest.extraction_provenance)).toBeTruthy()
+  expect(fullPackageManifest.credits_report.format).toBe('pixel_creator_credits_report')
+  expect(fullPackageManifest.credits_report.summary.selected_part_count).toBeGreaterThanOrEqual(0)
   expect(fullPackageManifest.engine_exports.godot_4.scene_text).toContain('[gd_scene')
 
   const fullPackageEntries = await readZipEntries(page, async () => {
     await page.getByTestId('export-full-package-zip').click()
   })
   expect(fullPackageEntries.some((entry) => entry.endsWith('/package_manifest.json'))).toBeTruthy()
+  expect(fullPackageEntries.some((entry) => entry.endsWith('/credits_report.json'))).toBeTruthy()
   expect(fullPackageEntries.some((entry) => entry.includes('/exports/godot/') && entry.endsWith('.tscn'))).toBeTruthy()
   expect(fullPackageEntries.some((entry) => entry.includes('/exports/unity/') && entry.endsWith('.json'))).toBeTruthy()
   expect(fullPackageEntries.some((entry) => entry.includes('/exports/rpg_maker/') && entry.endsWith('.json'))).toBeTruthy()
@@ -99,6 +109,12 @@ test('rendered export and package downloads stay structurally valid', async ({ p
   expect(spriteFramesText).toContain('[gd_resource type="SpriteFrames"')
   expect(spriteFramesText).toContain('[ext_resource type="Texture2D"')
   expect(spriteFramesText).toContain('rendered/frames')
+
+  const creditsReport = await readJsonDownload<{ format: string; release_notes: string[] }>(page, async () => {
+    await page.getByTestId('export-credits-report').click()
+  })
+  expect(creditsReport.format).toBe('pixel_creator_credits_report')
+  expect(creditsReport.release_notes.join(' ')).toContain('Review every selected part')
 })
 
 test('recipe save-load and bulk review actions stay usable', async ({ page }) => {
