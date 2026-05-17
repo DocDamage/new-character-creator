@@ -51,6 +51,26 @@ type FastCreatorPanelProps = {
   localToolsAvailable: boolean
 }
 
+function partMatchesActiveFilter(
+  part: ExtractedPart,
+  label: PartLabel,
+  query: string,
+  method: ExtractedPart['extraction_method'] | 'all',
+) {
+  if (part.label !== label) return false
+  if (method !== 'all' && part.extraction_method !== method) return false
+  const normalizedQuery = query.trim().toLowerCase()
+  if (!normalizedQuery) return true
+  const searchable = [
+    part.part_id,
+    part.character_id,
+    part.extraction_method,
+    ...part.tags,
+    ...part.warnings,
+  ].join(' ').toLowerCase()
+  return searchable.includes(normalizedQuery)
+}
+
 export function FastCreatorPanel({
   selectedCharacter,
   characters,
@@ -253,6 +273,7 @@ export function FastCreatorPanel({
                   {approvedOptions.map((part) => (
                     <option key={part.part_id} value={part.part_id}>
                       {slugLabel(part.extraction_method)} / {part.character_id} / {part.part_id}
+                      {part.part_id === selectedPartIds[label] && !partMatchesActiveFilter(part, label, partSearch, partMethodFilter) ? ' / selected outside filter' : ''}
                     </option>
                   ))}
                 </select>

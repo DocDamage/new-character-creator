@@ -160,6 +160,12 @@ test('creator cockpit filters parts and persists export target profile', async (
   await expect(page.getByText(/Approved part \(0\/1\)/).first()).toBeVisible()
   await page.getByTestId('fast-part-search').fill('preset')
   await expect(page.getByText(/Approved part \(1\/1\)/).first()).toBeVisible()
+  const approvedPartSelect = page.getByLabel(/Approved part \(1\/1\)/).first()
+  const reviewedPresetPartValue = await approvedPartSelect.locator('option').nth(1).getAttribute('value')
+  expect(reviewedPresetPartValue).toBeTruthy()
+  await approvedPartSelect.selectOption(reviewedPresetPartValue ?? undefined)
+  await page.getByTestId('fast-part-search').fill('manual-only-no-match')
+  await expect(page.getByLabel(/Approved part \(1\/1\)/).first()).toContainText(/selected outside filter/)
 
   await page.getByTestId('export-target-profile').selectOption('rpg_maker_mz')
   await page.getByRole('button', { name: /Open RPG Maker MZ/i }).click()
