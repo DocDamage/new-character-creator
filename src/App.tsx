@@ -34,14 +34,6 @@ import {
   isExportTargetProfileId,
   type ExportTargetProfileId,
 } from './creatorCockpit'
-import {
-  buildFullPackageManifest,
-  buildGodotSceneText,
-  buildGodotSpriteFramesResource,
-  buildRenderedFrameSet,
-  downloadFullPackageZip,
-  downloadRenderedFrameSetZip,
-} from './exportPackage'
 import { defaultFilenameTemplate } from './filenameTemplates'
 import { buildGenerationManifest } from './generationManifest'
 import { layerBundleToExtractedParts, lpcSheetsToExtractedParts, parseLayerBundleManifest, type LpcSheetImportOptions } from './layerBundle'
@@ -94,6 +86,12 @@ const screens: Array<{ id: Screen; label: string }> = [
 const mainDirections: Direction[] = ['south', 'east', 'north', 'west']
 const apesCoreLabels: PartLabel[] = ['head', 'torso', 'front_arm', 'back_arm', 'front_leg', 'back_leg']
 const defaultPaletteRules: Omit<PaletteRules, 'team_color'> = { hue_shift: 0, saturation: 100, brightness: 100 }
+
+type ExportPackageModule = typeof import('./exportPackage')
+
+function loadExportPackage(): Promise<ExportPackageModule> {
+  return import('./exportPackage')
+}
 
 type LocalApesToolPayload = {
   action: 'preflight' | 'run-job' | 'generate-harness' | 'summarize-outputs' | 'load-report' | 'prepare-finetune' | 'prepare-duelyst-jobs'
@@ -1389,8 +1387,9 @@ function App() {
     downloadJson(`${recipe.character_id}_manifest.json`, buildExportManifest(selectedCharacter, recipe, apesJobs, { placeholderModeEnabled: apesAllowPlaceholder }))
   }
 
-  function exportGodotScene() {
+  async function exportGodotScene() {
     if (!recipe) return
+    const { buildGodotSceneText } = await loadExportPackage()
     downloadText(`${recipe.character_id}.tscn`, buildGodotSceneText(recipe))
   }
 
@@ -1398,6 +1397,7 @@ function App() {
     if (!recipe || !selectedCharacter) return
     setExportStatus('Building Godot SpriteFrames resource...')
     try {
+      const { buildGodotSpriteFramesResource, buildRenderedFrameSet } = await loadExportPackage()
       const renderedFrameSet = await buildRenderedFrameSet(selectedCharacter, recipe, characters, partLibrary)
       downloadText(`${recipe.character_id}_sprite_frames.tres`, buildGodotSpriteFramesResource(recipe, renderedFrameSet, 'rendered/frames'))
       setExportStatus(`Godot SpriteFrames resource ready with ${renderedFrameSet.frame_count} rendered frame(s).`)
@@ -1440,6 +1440,7 @@ function App() {
     if (!recipe || !selectedCharacter) return
     setExportStatus('Rendering full frame set...')
     try {
+      const { buildRenderedFrameSet } = await loadExportPackage()
       const renderedFrameSet = await buildRenderedFrameSet(selectedCharacter, recipe, characters, partLibrary)
       downloadJson(`${recipe.character_id}_rendered_frame_set.json`, renderedFrameSet)
       setExportStatus(`Rendered ${renderedFrameSet.frame_count} frame(s) and ${renderedFrameSet.spritesheet_count} spritesheet record(s).`)
@@ -1468,6 +1469,7 @@ function App() {
     if (!recipe || !selectedCharacter) return
     setExportStatus('Building full package manifest...')
     try {
+      const { buildFullPackageManifest } = await loadExportPackage()
       const packageManifest = {
         ...(await buildFullPackageManifest(selectedCharacter, recipe, characters, partLibrary, apesJobs, undefined, { placeholderModeEnabled: apesAllowPlaceholder })),
         filename_template: filenameTemplate,
@@ -1483,6 +1485,7 @@ function App() {
     if (!recipe || !selectedCharacter) return
     setExportStatus('Building rendered frame zip...')
     try {
+      const { downloadRenderedFrameSetZip } = await loadExportPackage()
       const summary = await downloadRenderedFrameSetZip(selectedCharacter, recipe, characters, partLibrary)
       setExportStatus(`Rendered frame zip ready with ${summary.frame_count} frame(s) and ${summary.spritesheet_count} spritesheet(s).`)
     } catch (error) {
@@ -1494,11 +1497,18 @@ function App() {
     if (!recipe || !selectedCharacter) return
     setExportStatus('Building full package zip...')
     try {
+      const { downloadFullPackageZip } = await loadExportPackage()
       const summary = await downloadFullPackageZip(selectedCharacter, recipe, characters, partLibrary, apesJobs, { placeholderModeEnabled: apesAllowPlaceholder })
       setExportStatus(`Full package zip ready with ${summary.frame_count} frame(s), ${summary.spritesheet_count} spritesheet(s), and ${summary.part_count} selected part folder(s).`)
     } catch (error) {
       setExportStatus(`Full package zip failed: ${error instanceof Error ? error.message : String(error)}`)
     }
+  }
+
+  async function exportCreditsReport() {
+    if (!selectedCharacter) return
+    const { downloadCreditsReport } = await loadExportPackage()
+    downloadCreditsReport(selectedCharacter, recipe, partLibrary)
   }
 
   async function copyCommand(command: string, successMessage: string) {
@@ -1957,6 +1967,7 @@ function App() {
               exportFullPackageManifest={exportFullPackageManifest}
               exportRenderedFrameSetZip={exportRenderedFrameSetZip}
               exportFullPackageZip={exportFullPackageZip}
+              exportCreditsReport={exportCreditsReport}
               exportStatus={exportStatus}
               batchVariants={batchVariants}
               filenameTemplate={filenameTemplate}

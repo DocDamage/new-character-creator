@@ -7,7 +7,6 @@ import {
   type ExportTargetProfileId,
   type RecipeReadiness,
 } from '../creatorCockpit'
-import { downloadCreditsReport } from '../exportPackage'
 import { defaultFilenameTemplate, renderExportFilenameTemplate } from '../filenameTemplates'
 import type { AnimationName, CharacterManifest, Direction, ExtractedPart, KitbashRecipe } from '../types'
 import { downloadJson, getFrames, slugLabel } from '../utils'
@@ -33,6 +32,7 @@ type ExportsPanelProps = {
   exportFullPackageManifest: () => Promise<void>
   exportRenderedFrameSetZip: () => Promise<void>
   exportFullPackageZip: () => Promise<void>
+  exportCreditsReport: () => Promise<void>
   exportStatus: string
   batchVariants: BatchVariant[]
   filenameTemplate: string
@@ -63,6 +63,7 @@ export function ExportsPanel({
   exportFullPackageManifest,
   exportRenderedFrameSetZip,
   exportFullPackageZip,
+  exportCreditsReport,
   exportStatus,
   batchVariants,
   filenameTemplate,
@@ -148,7 +149,7 @@ export function ExportsPanel({
         <button data-testid="export-unity-metadata" onClick={exportUnityMetadata}>Download Unity 2D metadata</button>
         <button data-testid="export-rpg-maker-metadata" className={targetButtonClass('export-rpg-maker-metadata')} onClick={exportRpgMakerMetadata}>Download RPG Maker MZ metadata</button>
         <button data-testid="export-aseprite-reference" className={targetButtonClass('export-aseprite-reference')} onClick={exportAsepriteReference}>Download Aseprite reference</button>
-        <button data-testid="export-credits-report" onClick={() => downloadCreditsReport(selectedCharacter, recipe, partLibrary)}>Download credits report</button>
+        <button data-testid="export-credits-report" onClick={() => void exportCreditsReport()}>Download credits report</button>
       </div>
       <div className="settings-card">
         <strong>Filename pattern</strong>
