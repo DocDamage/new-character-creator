@@ -1,6 +1,12 @@
 import { CompositeCanvas } from '../CompositeCanvas'
 import { DirectionPreviewGrid } from '../DirectionPreviewGrid'
 import type { BatchVariant } from '../appViewTypes'
+import {
+  exportTargetProfiles,
+  getExportTargetProfile,
+  type ExportTargetProfileId,
+  type RecipeReadiness,
+} from '../creatorCockpit'
 import { downloadCreditsReport } from '../exportPackage'
 import { defaultFilenameTemplate, renderExportFilenameTemplate } from '../filenameTemplates'
 import type { AnimationName, CharacterManifest, Direction, ExtractedPart, KitbashRecipe } from '../types'
@@ -31,6 +37,9 @@ type ExportsPanelProps = {
   batchVariants: BatchVariant[]
   filenameTemplate: string
   setFilenameTemplate: (value: string) => void
+  exportTargetProfile: ExportTargetProfileId
+  setExportTargetProfile: (value: ExportTargetProfileId) => void
+  recipeReadiness: RecipeReadiness
 }
 
 export function ExportsPanel({
@@ -58,6 +67,9 @@ export function ExportsPanel({
   batchVariants,
   filenameTemplate,
   setFilenameTemplate,
+  exportTargetProfile,
+  setExportTargetProfile,
+  recipeReadiness,
 }: ExportsPanelProps) {
   const directionCoverage = selectedCharacter.animation_names.flatMap((name) =>
     mainDirections.map((item) => getFrames(selectedCharacter, name, item).length > 0),
@@ -81,6 +93,13 @@ export function ExportsPanel({
     frame: String(currentFrameIndex).padStart(3, '0'),
     label: 'head',
   })}.png`
+  const activeExportTarget = getExportTargetProfile(exportTargetProfile)
+
+  function targetButtonClass(testId: string, baseClass = '') {
+    return [baseClass, activeExportTarget.recommendedActionTestId === testId ? 'recommended-export' : '']
+      .filter(Boolean)
+      .join(' ')
+  }
 
   return (
     <section className="panel wide-panel">
@@ -96,20 +115,39 @@ export function ExportsPanel({
           </article>
         ))}
       </div>
+      <section className="export-target-panel" aria-label="Export target profile">
+        <label className="field">
+          <span>Export target</span>
+          <select
+            data-testid="exports-target-profile"
+            value={exportTargetProfile}
+            onChange={(event) => setExportTargetProfile(event.target.value as ExportTargetProfileId)}
+          >
+            {exportTargetProfiles.map((profile) => (
+              <option key={profile.id} value={profile.id}>{profile.label}</option>
+            ))}
+          </select>
+        </label>
+        <div>
+          <strong>{activeExportTarget.label}</strong>
+          <span>{activeExportTarget.hint}</span>
+          <span>{recipeReadiness.state === 'ready' ? 'Recipe readiness is clean.' : `Recipe readiness is ${recipeReadiness.state.replace('_', ' ')}.`}</span>
+        </div>
+      </section>
       <div className="export-grid">
-        <button className="primary" data-testid="export-generic-manifest" onClick={exportGeneric}>Download generic manifest</button>
-        <button className="primary" data-testid="export-full-package-manifest" onClick={() => void exportFullPackageManifest()}>Download full package manifest</button>
-        <button data-testid="export-rendered-frame-set" onClick={() => void exportRenderedFrameSet()}>Download rendered frame set</button>
-        <button className="primary" data-testid="export-full-package-zip" onClick={() => void exportFullPackageZip()}>Download full package zip</button>
-        <button data-testid="export-rendered-frame-zip" onClick={() => void exportRenderedFrameSetZip()}>Download rendered frame zip</button>
+        <button className={targetButtonClass('export-generic-manifest', 'primary')} data-testid="export-generic-manifest" onClick={exportGeneric}>Download generic manifest</button>
+        <button className={targetButtonClass('export-full-package-manifest', 'primary')} data-testid="export-full-package-manifest" onClick={() => void exportFullPackageManifest()}>Download full package manifest</button>
+        <button className={targetButtonClass('export-rendered-frame-set')} data-testid="export-rendered-frame-set" onClick={() => void exportRenderedFrameSet()}>Download rendered frame set</button>
+        <button className={targetButtonClass('export-full-package-zip', 'primary')} data-testid="export-full-package-zip" onClick={() => void exportFullPackageZip()}>Download full package zip</button>
+        <button className={targetButtonClass('export-rendered-frame-zip')} data-testid="export-rendered-frame-zip" onClick={() => void exportRenderedFrameSetZip()}>Download rendered frame zip</button>
         <button onClick={exportCurrentSpriteSheet}>Download current spritesheet</button>
         <button onClick={exportAnimationSheets}>Download current action sheets</button>
-        <button onClick={exportGodotScene}>Download Godot scene</button>
+        <button data-testid="export-godot-scene" onClick={exportGodotScene}>Download Godot scene</button>
         <button onClick={() => downloadJson(`${selectedCharacter.character_id}_batch_queue.json`, batchVariants)}>Download batch queue</button>
-        <button onClick={() => void exportSpriteFrames()}>Download SpriteFrames resource</button>
-        <button onClick={exportUnityMetadata}>Download Unity 2D metadata</button>
-        <button onClick={exportRpgMakerMetadata}>Download RPG Maker MZ metadata</button>
-        <button onClick={exportAsepriteReference}>Download Aseprite reference</button>
+        <button data-testid="export-sprite-frames" onClick={() => void exportSpriteFrames()}>Download SpriteFrames resource</button>
+        <button data-testid="export-unity-metadata" onClick={exportUnityMetadata}>Download Unity 2D metadata</button>
+        <button data-testid="export-rpg-maker-metadata" className={targetButtonClass('export-rpg-maker-metadata')} onClick={exportRpgMakerMetadata}>Download RPG Maker MZ metadata</button>
+        <button data-testid="export-aseprite-reference" className={targetButtonClass('export-aseprite-reference')} onClick={exportAsepriteReference}>Download Aseprite reference</button>
         <button data-testid="export-credits-report" onClick={() => downloadCreditsReport(selectedCharacter, recipe, partLibrary)}>Download credits report</button>
       </div>
       <div className="settings-card">

@@ -9,6 +9,7 @@ import {
   apesQaHarnessJobId,
   assetRootInputStorageKey,
   composerRecipesStorageKey,
+  exportTargetProfileStorageKey,
   filenameTemplateStorageKey,
   loadStoredApesPreflight,
   loadStoredApesJobs,
@@ -26,6 +27,13 @@ import {
   type SavedComposerRecipe,
 } from './appPersistence'
 import type { ManualMaskSaveRequest } from './appViewTypes'
+import {
+  buildRecipeReadiness,
+  defaultExportTargetProfileId,
+  getExportTargetProfile,
+  isExportTargetProfileId,
+  type ExportTargetProfileId,
+} from './creatorCockpit'
 import {
   buildFullPackageManifest,
   buildGodotSceneText,
@@ -227,6 +235,10 @@ function App() {
   const [variationPresets, setVariationPresets] = useState<VariationPreset[]>(loadStoredVariationPresets)
   const [activeVariationPresetId, setActiveVariationPresetId] = useState('')
   const [filenameTemplate, setFilenameTemplate] = useState(() => loadStoredString(filenameTemplateStorageKey, defaultFilenameTemplate))
+  const [exportTargetProfile, setExportTargetProfileState] = useState<ExportTargetProfileId>(() => {
+    const stored = loadStoredString(exportTargetProfileStorageKey, defaultExportTargetProfileId)
+    return isExportTargetProfileId(stored) ? stored : defaultExportTargetProfileId
+  })
   const [generationStyleNotes, setGenerationStyleNotes] = useState('Readable 64x64 RPG character parts with clean alpha, consistent floor contact, and reusable layer boundaries.')
 
   async function fetchManifest(signal?: AbortSignal) {
@@ -429,6 +441,11 @@ function App() {
   const onionPath = getFramePath(selectedCharacter, animation, direction, Math.max(frameIndex - 1, 0))
   const frames = getFrames(selectedCharacter, animation, direction)
   const recipe = selectedCharacter ? makeRecipe(selectedCharacter, { ...selectedParts, [selectedRegion]: selectedId }, partLibrary, selectedPartIds, layerSettings, recipeId, palette, paletteRules) : null
+  const recipeReadiness = useMemo(
+    () => buildRecipeReadiness({ selectedPartIds, partLibrary, layerLabels: layerOrder }),
+    [selectedPartIds, partLibrary],
+  )
+  const activeExportTargetProfile = getExportTargetProfile(exportTargetProfile)
 
   useEffect(() => {
     if (!playing) return
@@ -586,6 +603,11 @@ function App() {
     setPaletteRules((current) => ({ ...current, ...patch }))
   }
 
+  function setExportTargetProfile(value: ExportTargetProfileId) {
+    setExportTargetProfileState(value)
+    storeString(exportTargetProfileStorageKey, value)
+  }
+
   function updateLayerSetting(label: PartLabel, patch: Partial<ComposerLayerSettings>) {
     setLayerSettings((current) => {
       const existing = current[label] ?? { offset: [0, 0], visible: true, locked: false }
@@ -616,6 +638,25 @@ function App() {
     }
     setApesJobs((current) => [job, ...current])
     setScreen('apes')
+  }
+
+  function openPartReview() {
+    setScreen('library')
+    setPartLibraryStatus('Review the selected or unreviewed parts before packaging this recipe.')
+  }
+
+  function openBatchGenerator() {
+    setScreen('batch')
+  }
+
+  function openExports() {
+    setScreen('exports')
+    setExportStatus(`${activeExportTargetProfile.label} selected. ${activeExportTargetProfile.hint}`)
+  }
+
+  function openSettingsRepair() {
+    setScreen('settings')
+    setSettingsStatus('Check the indexed root and local tool availability before repairing or reindexing assets.')
   }
 
   function createDuelystApesJobs(characterIds: string[]) {
@@ -1774,6 +1815,15 @@ function App() {
               paletteRules={paletteRules}
               updatePaletteRules={updatePaletteRules}
               mainDirections={mainDirections}
+              recipeReadiness={recipeReadiness}
+              exportTargetProfile={exportTargetProfile}
+              setExportTargetProfile={setExportTargetProfile}
+              openPartReview={openPartReview}
+              openBatchGenerator={openBatchGenerator}
+              openExports={openExports}
+              openSettingsRepair={openSettingsRepair}
+              createApesJob={createApesJob}
+              localToolsAvailable={localToolsAvailable}
             />
           ) : null}
           {screen === 'workstation' ? (
@@ -1911,6 +1961,9 @@ function App() {
               batchVariants={batchVariants}
               filenameTemplate={filenameTemplate}
               setFilenameTemplate={setFilenameTemplate}
+              exportTargetProfile={exportTargetProfile}
+              setExportTargetProfile={setExportTargetProfile}
+              recipeReadiness={recipeReadiness}
             />
           ) : null}
           {screen === 'settings' ? (

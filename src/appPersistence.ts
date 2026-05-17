@@ -22,6 +22,7 @@ export const apesJobsStorageKey = 'pixel_creator_apes_jobs'
 export const apesHarnessGeneratedAtStorageKey = 'pixel_creator_apes_harness_generated_at'
 export const variationPresetsStorageKey = 'pixel_creator_variation_presets'
 export const filenameTemplateStorageKey = 'pixel_creator_filename_template'
+export const exportTargetProfileStorageKey = 'pixel_creator_export_target_profile'
 export const apesQaHarnessJobId = 'apes_harness_job'
 
 function parseStoredJson<T>(storageKey: string, fallback: T) {

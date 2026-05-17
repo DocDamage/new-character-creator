@@ -1,7 +1,14 @@
-import type { Dispatch, SetStateAction } from 'react'
+import { useMemo, useState, type Dispatch, type SetStateAction } from 'react'
 import { CompositeCanvas } from '../CompositeCanvas'
 import { DirectionPreviewGrid } from '../DirectionPreviewGrid'
 import type { SavedComposerRecipe } from '../appPersistence'
+import {
+  exportTargetProfiles,
+  filterReviewedPartsForLayer,
+  getExportTargetProfile,
+  type ExportTargetProfileId,
+  type RecipeReadiness,
+} from '../creatorCockpit'
 import { clampOffsetInput, clampSignedInput, clampUnsignedInput } from '../inputUtils'
 import { layerOrder, palettePresets } from '../presets'
 import type { AnimationName, CharacterManifest, ComposerLayerSettings, Direction, ExtractedPart, KitbashRecipe, PaletteRules, PartLabel } from '../types'
@@ -33,6 +40,15 @@ type FastCreatorPanelProps = {
   paletteRules: Omit<PaletteRules, 'team_color'>
   updatePaletteRules: (patch: Partial<Omit<PaletteRules, 'team_color'>>) => void
   mainDirections: Direction[]
+  recipeReadiness: RecipeReadiness
+  exportTargetProfile: ExportTargetProfileId
+  setExportTargetProfile: (value: ExportTargetProfileId) => void
+  openPartReview: () => void
+  openBatchGenerator: () => void
+  openExports: () => void
+  openSettingsRepair: () => void
+  createApesJob: () => void
+  localToolsAvailable: boolean
 }
 
 export function FastCreatorPanel({
@@ -61,8 +77,24 @@ export function FastCreatorPanel({
   paletteRules,
   updatePaletteRules,
   mainDirections,
+  recipeReadiness,
+  exportTargetProfile,
+  setExportTargetProfile,
+  openPartReview,
+  openBatchGenerator,
+  openExports,
+  openSettingsRepair,
+  createApesJob,
+  localToolsAvailable,
 }: FastCreatorPanelProps) {
   const reviewedParts = partLibrary.filter((part) => part.reviewed)
+  const [partSearch, setPartSearch] = useState('')
+  const [partMethodFilter, setPartMethodFilter] = useState<ExtractedPart['extraction_method'] | 'all'>('all')
+  const activeExportTarget = getExportTargetProfile(exportTargetProfile)
+  const availableMethods = useMemo(
+    () => Array.from(new Set(reviewedParts.map((part) => part.extraction_method))).sort(),
+    [reviewedParts],
+  )
   const selectedReviewedParts = layerOrder
     .map((label) => reviewedParts.find((part) => part.part_id === selectedPartIds[label]))
     .filter(Boolean)
@@ -97,6 +129,69 @@ export function FastCreatorPanel({
         </label>
         <span className="recipe-id">{recipeId}</span>
       </div>
+      <section className="cockpit-panel" aria-label="Recipe readiness">
+        <div className={`readiness-strip ${recipeReadiness.state}`}>
+          <span>
+            <strong>{recipeReadiness.reviewedSelectedPartCount}</strong>
+            reviewed selected
+          </span>
+          <span>
+            <strong>{recipeReadiness.missingReviewedLayerCount}</strong>
+            layers need reviewed parts
+          </span>
+          <span>
+            <strong>{recipeReadiness.warningCount}</strong>
+            warning(s)
+          </span>
+          <span>
+            <strong>{activeExportTarget.label}</strong>
+            target
+          </span>
+        </div>
+        <div className="cockpit-controls">
+          <label className="field">
+            <span>Find approved parts</span>
+            <input
+              data-testid="fast-part-search"
+              value={partSearch}
+              onChange={(event) => setPartSearch(event.target.value)}
+              placeholder="Search part id, source, method, tag, warning"
+            />
+          </label>
+          <label className="field">
+            <span>Method</span>
+            <select
+              data-testid="fast-part-method-filter"
+              value={partMethodFilter}
+              onChange={(event) => setPartMethodFilter(event.target.value as ExtractedPart['extraction_method'] | 'all')}
+            >
+              <option value="all">all methods</option>
+              {availableMethods.map((method) => (
+                <option key={method} value={method}>{slugLabel(method)}</option>
+              ))}
+            </select>
+          </label>
+          <label className="field">
+            <span>Export target</span>
+            <select
+              data-testid="export-target-profile"
+              value={exportTargetProfile}
+              onChange={(event) => setExportTargetProfile(event.target.value as ExportTargetProfileId)}
+            >
+              {exportTargetProfiles.map((profile) => (
+                <option key={profile.id} value={profile.id}>{profile.label}</option>
+              ))}
+            </select>
+          </label>
+        </div>
+        <div className="next-actions" aria-label="Next actions">
+          <button onClick={openPartReview}>Review parts</button>
+          <button onClick={openBatchGenerator}>Generate variants</button>
+          <button onClick={createApesJob}>Prepare APES job</button>
+          <button className="primary" onClick={openExports}>Open {activeExportTarget.label}</button>
+          <button onClick={openSettingsRepair} disabled={localToolsAvailable}>Check setup</button>
+        </div>
+      </section>
       <DirectionPreviewGrid character={selectedCharacter} animation={currentAnimation} frameIndex={currentFrameIndex} directions={mainDirections} />
       {recipe ? (
         <section className="composite-preview-panel">
@@ -118,7 +213,14 @@ export function FastCreatorPanel({
       ) : null}
       <div className="part-grid">
         {layerOrder.map((label) => {
-          const approvedOptions = reviewedParts.filter((part) => part.label === label)
+          const approvedOptions = filterReviewedPartsForLayer({
+            reviewedParts,
+            label,
+            query: partSearch,
+            method: partMethodFilter,
+            selectedPartId: selectedPartIds[label],
+          })
+          const totalApprovedOptions = reviewedParts.filter((part) => part.label === label).length
           const settings = layerSettings[label] ?? { offset: [0, 0], visible: true, locked: false }
           return (
             <div key={label} className="composer-layer">
@@ -136,7 +238,7 @@ export function FastCreatorPanel({
                 </select>
               </label>
               <label className="field">
-                <span>Approved part</span>
+                <span>Approved part ({approvedOptions.length}/{totalApprovedOptions})</span>
                 <select
                   value={selectedPartIds[label] ?? ''}
                   onChange={(event) =>

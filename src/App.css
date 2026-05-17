@@ -1184,6 +1184,93 @@ input {
   color: var(--text-strong);
 }
 
+.cockpit-panel {
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: rgba(12, 17, 24, 0.38);
+}
+
+.readiness-strip {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.readiness-strip span {
+  min-height: 48px;
+  display: grid;
+  align-content: center;
+  gap: 2px;
+  padding: 8px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--control);
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.readiness-strip strong {
+  color: var(--text-strong);
+  font-size: 14px;
+}
+
+.readiness-strip.ready span {
+  border-color: rgba(108, 214, 143, 0.46);
+}
+
+.readiness-strip.needs_review span {
+  border-color: rgba(246, 207, 120, 0.5);
+}
+
+.readiness-strip.incomplete span {
+  border-color: rgba(255, 154, 154, 0.45);
+}
+
+.cockpit-controls {
+  display: grid;
+  grid-template-columns: minmax(220px, 1.2fr) minmax(150px, 0.7fr) minmax(180px, 0.8fr);
+  gap: 10px;
+}
+
+.next-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.export-target-panel {
+  display: grid;
+  grid-template-columns: minmax(180px, 260px) minmax(0, 1fr);
+  gap: 12px;
+  align-items: start;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: rgba(12, 17, 24, 0.38);
+}
+
+.export-target-panel > div {
+  display: grid;
+  gap: 4px;
+}
+
+.export-target-panel strong {
+  color: var(--text-strong);
+}
+
+.export-target-panel span {
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+button.recommended-export {
+  border-color: rgba(108, 214, 143, 0.72);
+  box-shadow: inset 0 0 0 1px rgba(108, 214, 143, 0.18);
+}
+
 @media (max-width: 980px) {
   .app-shell {
     grid-template-columns: 1fr;
@@ -1245,6 +1332,11 @@ input {
   .preview-panel {
     min-height: 0;
   }
+
+  .cockpit-controls,
+  .readiness-strip {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
 
 @media (max-width: 560px) {
@@ -1287,6 +1379,15 @@ input {
   }
 
   .seed-panel {
+    grid-template-columns: 1fr;
+  }
+
+  .cockpit-controls,
+  .readiness-strip {
+    grid-template-columns: 1fr;
+  }
+
+  .export-target-panel {
     grid-template-columns: 1fr;
   }
 }
