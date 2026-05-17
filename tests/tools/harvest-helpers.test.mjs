@@ -5,6 +5,12 @@ import { renderExportFilenameTemplate } from '../../src/filenameTemplates.ts'
 import { buildGenerationManifest } from '../../src/generationManifest.ts'
 import { layerBundleToExtractedParts, lpcSheetsToExtractedParts, parseLayerBundleManifest } from '../../src/layerBundle.ts'
 import { analyzeAlphaData } from '../../src/sourceAnalysis.ts'
+import {
+  buildRecipeReadiness,
+  exportTargetProfiles,
+  filterReviewedPartsForLayer,
+  getExportTargetProfile,
+} from '../../src/creatorCockpit.ts'
 
 test('source alpha analysis reports opaque bounds, floor, and pivot', () => {
   const pixels = new Uint8ClampedArray(4 * 4 * 4)
@@ -207,6 +213,50 @@ test('LPC inventory import supports selected sheets, explicit labels, and review
   assert.ok(parts[0].warnings.some((warning) => warning.includes('credit/license')))
 })
 
+test('creator cockpit readiness summarizes selected reviewed parts and warnings', () => {
+  const parts = [
+    makeExtractedPart({ part_id: 'reviewed_head', label: 'head', reviewed: true, warnings: ['credit/license missing'] }),
+    makeExtractedPart({ part_id: 'draft_torso', label: 'torso', reviewed: false }),
+  ]
+
+  const readiness = buildRecipeReadiness({
+    selectedPartIds: { head: 'reviewed_head', torso: 'draft_torso' },
+    partLibrary: parts,
+    layerLabels: ['head', 'torso', 'front_arm'],
+  })
+
+  assert.equal(readiness.selectedPartCount, 2)
+  assert.equal(readiness.reviewedSelectedPartCount, 1)
+  assert.equal(readiness.unreviewedSelectedPartCount, 1)
+  assert.equal(readiness.missingReviewedLayerCount, 1)
+  assert.equal(readiness.warningCount, 1)
+  assert.equal(readiness.state, 'needs_review')
+})
+
+test('creator cockpit filters reviewed parts while keeping the selected part visible', () => {
+  const parts = [
+    makeExtractedPart({ part_id: 'apes_head', label: 'head', extraction_method: 'apes', tags: ['qa_harness'] }),
+    makeExtractedPart({ part_id: 'manual_head', label: 'head', extraction_method: 'manual', tags: ['cleanup'] }),
+    makeExtractedPart({ part_id: 'manual_torso', label: 'torso', extraction_method: 'manual' }),
+  ]
+
+  const filtered = filterReviewedPartsForLayer({
+    reviewedParts: parts,
+    label: 'head',
+    query: 'qa',
+    method: 'manual',
+    selectedPartId: 'manual_head',
+  })
+
+  assert.deepEqual(filtered.map((part) => part.part_id), ['manual_head'])
+})
+
+test('creator cockpit export target lookup falls back to generic profile', () => {
+  assert.equal(exportTargetProfiles.length, 5)
+  assert.equal(getExportTargetProfile('godot_4').recommendedActionTestId, 'export-full-package-zip')
+  assert.equal(getExportTargetProfile('not-real').id, 'generic')
+})
+
 function setAlpha(pixels, width, x, y, alpha) {
   pixels[(y * width + x) * 4 + 3] = alpha
 }
@@ -222,6 +272,28 @@ function makeLayerBundle(...parts) {
       image: { path: '/assets/head.png', bounds: { x: 0, y: 0, w: 64, h: 64 } },
       ...part,
     })),
+  }
+}
+
+function makeExtractedPart(overrides = {}) {
+  return {
+    part_id: overrides.part_id ?? 'part_head',
+    character_id: overrides.character_id ?? 'source_hero',
+    label: overrides.label ?? 'head',
+    source_animation: 'idle',
+    source_direction: 'south',
+    image_path: '/parts/head.png',
+    mask_path: '/parts/head_mask.png',
+    anchor: { x: 0, y: 0 },
+    bounds: { x: 0, y: 0, w: 16, h: 16 },
+    extraction_method: overrides.extraction_method ?? 'manual',
+    compatibility: {
+      animations: ['idle'],
+      directions: ['south'],
+    },
+    reviewed: overrides.reviewed ?? true,
+    tags: overrides.tags ?? [],
+    warnings: overrides.warnings ?? [],
   }
 }
 
