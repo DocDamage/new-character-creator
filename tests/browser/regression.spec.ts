@@ -149,6 +149,9 @@ test('creator cockpit filters parts and persists export target profile', async (
   await page.getByTestId('extract-current-region').click()
 
   await page.getByTestId('nav-library').click()
+  await expect(page.getByRole('region', { name: 'Live part picker' })).toBeVisible()
+  await expect(page.getByTestId('library-live-layer')).toBeVisible()
+  await expect(page.getByTestId('library-live-part')).toBeVisible()
   await page.getByTestId('part-library-method-filter').selectOption('preset_region')
   await page.getByTestId('mark-visible-reviewed').click()
 

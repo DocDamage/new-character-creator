@@ -1,12 +1,22 @@
-import { useState } from 'react'
+import { useState, type Dispatch, type SetStateAction } from 'react'
+import { CompositeCanvas } from '../CompositeCanvas'
 import { partLabels } from '../presets'
-import type { ExtractedPart, ExtractionMethod, PartLabel } from '../types'
+import type { AnimationName, CharacterManifest, Direction, ExtractedPart, ExtractionMethod, KitbashRecipe, PartLabel } from '../types'
 import { downloadJson, slugLabel } from '../utils'
 
 type PartReviewFilter = 'all' | 'reviewed' | 'needs_review'
 
 type PartLibraryPanelProps = {
   parts: ExtractedPart[]
+  recipe: KitbashRecipe | null
+  characters: CharacterManifest[]
+  selectedPartIds: Partial<Record<PartLabel, string>>
+  setSelectedPartIds: Dispatch<SetStateAction<Partial<Record<PartLabel, string>>>>
+  activePartLabel: PartLabel
+  setActivePartLabel: (label: PartLabel) => void
+  currentAnimation: AnimationName
+  currentDirection: Direction
+  currentFrameIndex: number
   importLayerBundleJson: (text: string, sourceName: string) => void
   partLibraryStatus: string
   togglePartReviewed: (partId: string) => void
@@ -18,6 +28,15 @@ type PartLibraryPanelProps = {
 
 export function PartLibraryPanel({
   parts,
+  recipe,
+  characters,
+  selectedPartIds,
+  setSelectedPartIds,
+  activePartLabel,
+  setActivePartLabel,
+  currentAnimation,
+  currentDirection,
+  currentFrameIndex,
   importLayerBundleJson,
   partLibraryStatus,
   togglePartReviewed,
@@ -47,6 +66,20 @@ export function PartLibraryPanel({
   })
   const visibleParts = filteredParts.slice(0, visibleLimit)
   const visibleIds = visibleParts.map((part) => part.part_id)
+  const reviewedPartsForActiveLabel = parts.filter((part) => part.reviewed && part.label === activePartLabel)
+  const selectedActivePart = selectedPartIds[activePartLabel]
+
+  function selectActivePart(partId: string) {
+    setSelectedPartIds((current) => {
+      const next = { ...current }
+      if (partId) {
+        next[activePartLabel] = partId
+      } else {
+        delete next[activePartLabel]
+      }
+      return next
+    })
+  }
 
   return (
     <section className="panel wide-panel">
@@ -79,6 +112,55 @@ export function PartLibraryPanel({
         <strong>Import status</strong>
         <span>{partLibraryStatus}</span>
       </div>
+
+      <section className="part-picker-panel" aria-label="Live part picker">
+        <div>
+          <strong>Live part picker</strong>
+          <span>Pick a reviewed part and watch the composite preview update immediately.</span>
+        </div>
+        <div className="part-picker-controls">
+          <label className="field">
+            <span>Layer</span>
+            <select
+              data-testid="library-live-layer"
+              value={activePartLabel}
+              onChange={(event) => setActivePartLabel(event.target.value as PartLabel)}
+            >
+              {partLabels.map((label) => (
+                <option key={label} value={label}>{slugLabel(label)}</option>
+              ))}
+            </select>
+          </label>
+          <label className="field">
+            <span>Reviewed part</span>
+            <select
+              data-testid="library-live-part"
+              value={selectedActivePart ?? ''}
+              onChange={(event) => selectActivePart(event.target.value)}
+              disabled={reviewedPartsForActiveLabel.length === 0}
+            >
+              <option value="">{reviewedPartsForActiveLabel.length === 0 ? 'no reviewed parts for this layer' : 'use source character'}</option>
+              {reviewedPartsForActiveLabel.map((part) => (
+                <option key={part.part_id} value={part.part_id}>
+                  {part.part_id} / {slugLabel(part.extraction_method)}
+                </option>
+              ))}
+            </select>
+          </label>
+        </div>
+        {recipe ? (
+          <CompositeCanvas
+            recipe={recipe}
+            characters={characters}
+            partLibrary={parts}
+            animation={currentAnimation}
+            direction={currentDirection}
+            frameIndex={currentFrameIndex}
+            scale={3}
+            label={`live composite ${currentAnimation} ${currentDirection} frame ${currentFrameIndex + 1}`}
+          />
+        ) : null}
+      </section>
 
       <div className="validation-grid">
         <article className="pass">

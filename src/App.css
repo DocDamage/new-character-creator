@@ -631,6 +631,43 @@ input {
   margin-bottom: 14px;
 }
 
+.part-picker-panel {
+  display: grid;
+  grid-template-columns: minmax(220px, 0.8fr) minmax(220px, 1fr) auto;
+  align-items: start;
+  gap: 12px;
+  padding: 12px;
+  margin: 14px 0;
+  border: 1px solid rgba(108, 214, 143, 0.36);
+  border-radius: 7px;
+  background: rgba(18, 25, 34, 0.9);
+}
+
+.part-picker-panel > div:first-child,
+.part-picker-controls {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+
+.part-picker-panel strong {
+  color: var(--text-strong);
+}
+
+.part-picker-panel span {
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.part-picker-panel .pixel-stage {
+  gap: 6px;
+}
+
+.part-picker-panel .pixel-stage canvas {
+  width: 160px;
+  height: 160px;
+}
+
 .status-strip button:disabled {
   cursor: not-allowed;
   opacity: 0.5;
@@ -1324,7 +1361,8 @@ button.recommended-export {
   }
 
   .main-grid,
-  .workstation-grid {
+  .workstation-grid,
+  .part-picker-panel {
     grid-template-columns: 1fr;
   }
 

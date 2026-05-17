@@ -446,6 +446,14 @@ function App() {
   const activeExportTargetProfile = getExportTargetProfile(exportTargetProfile)
 
   useEffect(() => {
+    if (!selectedCharacter) return
+    if (!selectedCharacter.animation_names.includes(animation)) {
+      setAnimation(selectedCharacter.animation_names[0] ?? 'idle')
+    }
+    setFrameIndex(0)
+  }, [selectedCharacter, animation])
+
+  useEffect(() => {
     if (!playing) return
     const timer = window.setInterval(() => {
       setFrameIndex((current) => (frames.length > 0 ? (current + 1) % frames.length : 0))
@@ -1739,7 +1747,15 @@ function App() {
 
         <section className="sidebar-block">
           <label htmlFor="character">Source character</label>
-          <select id="character" value={selectedCharacter.character_id} onChange={(event) => setSelectedId(event.target.value)}>
+          <select
+            id="character"
+            value={selectedCharacter.character_id}
+            onChange={(event) => {
+              setSelectedId(event.target.value)
+              setDirection('south')
+              setFrameIndex(0)
+            }}
+          >
             {characters.map((character) => (
               <option key={character.character_id} value={character.character_id}>
                 {character.display_name}
@@ -1856,6 +1872,15 @@ function App() {
           {screen === 'library' ? (
             <PartLibraryPanel
               parts={partLibrary}
+              recipe={recipe}
+              characters={characters}
+              selectedPartIds={selectedPartIds}
+              setSelectedPartIds={setSelectedPartIds}
+              activePartLabel={selectedRegion}
+              setActivePartLabel={setSelectedRegion}
+              currentAnimation={animation}
+              currentDirection={direction}
+              currentFrameIndex={frameIndex}
               importLayerBundleJson={importLayerBundleJson}
               partLibraryStatus={partLibraryStatus}
               togglePartReviewed={togglePartReviewed}

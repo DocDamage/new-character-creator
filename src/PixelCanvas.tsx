@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import type { Rect } from './types'
 
 type PixelCanvasProps = {
@@ -13,6 +13,8 @@ type PixelCanvasProps = {
 
 export function PixelCanvas({ src, scale = 5, region, onionSrc, label, seed, onPixelClick }: PixelCanvasProps) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null)
+  const [loadError, setLoadError] = useState<{ src: string; message: string } | null>(null)
+  const visibleLoadError = src ? (loadError?.src === src ? loadError.message : '') : 'No frame is available for this character, animation, and direction.'
 
   useEffect(() => {
     const canvas = canvasRef.current
@@ -21,12 +23,23 @@ export function PixelCanvas({ src, scale = 5, region, onionSrc, label, seed, onP
     if (!context) return
 
     let cancelled = false
+    canvas.width = 64 * scale
+    canvas.height = 64 * scale
+    context.imageSmoothingEnabled = false
+    context.clearRect(0, 0, canvas.width, canvas.height)
+    drawChecker(context, canvas.width, canvas.height, scale)
+
+    if (!src) {
+      return () => {
+        cancelled = true
+      }
+    }
+
     const image = new Image()
     image.crossOrigin = 'anonymous'
     image.onload = () => {
       if (cancelled) return
-      canvas.width = 64 * scale
-      canvas.height = 64 * scale
+      setLoadError(null)
       context.imageSmoothingEnabled = false
       context.clearRect(0, 0, canvas.width, canvas.height)
       drawChecker(context, canvas.width, canvas.height, scale)
@@ -51,6 +64,12 @@ export function PixelCanvas({ src, scale = 5, region, onionSrc, label, seed, onP
       drawRegion(context, scale, region)
       drawSeed(context, scale, seed)
     }
+    image.onerror = () => {
+      if (cancelled) return
+      context.clearRect(0, 0, canvas.width, canvas.height)
+      drawChecker(context, canvas.width, canvas.height, scale)
+      setLoadError({ src, message: `Could not load frame: ${src}` })
+    }
     image.src = src
 
     return () => {
@@ -72,6 +91,7 @@ export function PixelCanvas({ src, scale = 5, region, onionSrc, label, seed, onP
     <figure className="pixel-stage" aria-label={label}>
       <canvas ref={canvasRef} onClick={handleClick} className={onPixelClick ? 'clickable' : undefined} />
       {label ? <figcaption>{label}</figcaption> : null}
+      {visibleLoadError ? <span className="canvas-error" role="status">{visibleLoadError}</span> : null}
     </figure>
   )
 }
