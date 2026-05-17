@@ -19,6 +19,7 @@ async function main() {
     stdio: ['ignore', 'pipe', 'pipe'],
     windowsHide: true,
   })
+  let requestedShutdown = false
 
   const logs = []
   preview.stdout.on('data', (chunk) => logs.push(String(chunk)))
@@ -40,13 +41,15 @@ async function main() {
 
     console.log(`Preview local tools smoke passed on http://127.0.0.1:${port}`)
   } finally {
+    requestedShutdown = true
     preview.kill()
     await waitForExit(preview, 5_000).catch(() => {
       preview.kill('SIGKILL')
     })
   }
 
-  if (preview.exitCode !== null && preview.exitCode !== 0 && preview.exitCode !== 1) {
+  const expectedShutdown = requestedShutdown && (preview.signalCode === 'SIGTERM' || preview.exitCode === 143)
+  if (!expectedShutdown && preview.exitCode !== null && preview.exitCode !== 0 && preview.exitCode !== 1) {
     throw new Error(`Preview server exited unexpectedly with code ${preview.exitCode}.\n${logs.join('')}`)
   }
 }
