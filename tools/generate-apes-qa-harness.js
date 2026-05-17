@@ -67,6 +67,40 @@ function createBlank(width, height) {
   return new PNG({ width, height })
 }
 
+function createGeneratedHarnessSource() {
+  const png = createBlank(64, 64)
+  for (let y = 0; y < png.height; y += 1) {
+    for (let x = 0; x < png.width; x += 1) {
+      const index = (png.width * y + x) << 2
+      png.data[index] = 22
+      png.data[index + 1] = 28
+      png.data[index + 2] = 36
+      png.data[index + 3] = 0
+    }
+  }
+
+  const fills = [
+    { rect: { x: 18, y: 6, w: 28, h: 22 }, color: [232, 193, 128, 255] },
+    { rect: { x: 20, y: 22, w: 24, h: 18 }, color: [86, 132, 192, 255] },
+    { rect: { x: 12, y: 22, w: 12, h: 24 }, color: [78, 105, 156, 255] },
+    { rect: { x: 40, y: 22, w: 12, h: 24 }, color: [63, 86, 130, 255] },
+    { rect: { x: 20, y: 38, w: 12, h: 22 }, color: [74, 78, 96, 255] },
+    { rect: { x: 32, y: 38, w: 12, h: 22 }, color: [58, 63, 82, 255] },
+  ]
+
+  for (const fill of fills) {
+    forEachRectPixel(fill.rect, (x, y) => {
+      const index = (png.width * y + x) << 2
+      png.data[index] = fill.color[0]
+      png.data[index + 1] = fill.color[1]
+      png.data[index + 2] = fill.color[2]
+      png.data[index + 3] = fill.color[3]
+    })
+  }
+
+  return png
+}
+
 function forEachRectPixel(rect, callback) {
   for (let y = rect.y; y < rect.y + rect.h; y += 1) {
     for (let x = rect.x; x < rect.x + rect.w; x += 1) {
@@ -130,18 +164,25 @@ function resolveManifestFramePath(framePath) {
 }
 
 function resolveHarnessSourceFrame() {
+  if (process.env.PIXEL_CREATOR_QA_HARNESS_FORCE_GENERATED === '1') {
+    return null
+  }
+
   const manifestPath = getActiveManifestPath()
   const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'))
   const harnessCharacter = manifest.characters.find((character) => character.character_id === '1-warrior-woman') ?? manifest.characters[0]
   if (!harnessCharacter) {
-    throw new Error(`No characters were found in the manifest at ${manifestPath}.`)
+    return null
   }
 
   const idleSouthFrames = harnessCharacter.animations.find((animation) => animation.name === 'idle')?.directions?.south
   const sourceFrame = idleSouthFrames?.[0]?.path ?? harnessCharacter.representative_frame
+  if (!sourceFrame) {
+    return null
+  }
   const resolvedSourceFrame = resolveManifestFramePath(sourceFrame)
   if (!fs.existsSync(resolvedSourceFrame)) {
-    throw new Error(`Missing source frame for APES QA harness: ${resolvedSourceFrame}`)
+    return null
   }
 
   return resolvedSourceFrame
@@ -151,7 +192,7 @@ function main() {
   ensureDir(masksRoot)
   ensureDir(partsRoot)
   const sourceFrame = resolveHarnessSourceFrame()
-  const source = readPng(sourceFrame)
+  const source = sourceFrame ? readPng(sourceFrame) : createGeneratedHarnessSource()
 
   const report = {
     job_id: jobId,
@@ -182,6 +223,7 @@ function main() {
     warnings: [
       'QA harness report. Import into APES Lab and verify that bounds, confidence tags, warnings, and preview paths survive into Part Library entries.',
       'This harness is static and does not require CUDA or the APES Python runtime.',
+      ...(!sourceFrame ? ['Source asset pack was not present; generated a deterministic CI-safe harness frame.'] : []),
     ],
   }
 
