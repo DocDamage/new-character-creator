@@ -228,7 +228,7 @@ test('creator cockpit readiness summarizes selected reviewed parts and warnings'
   assert.equal(readiness.selectedPartCount, 2)
   assert.equal(readiness.reviewedSelectedPartCount, 1)
   assert.equal(readiness.unreviewedSelectedPartCount, 1)
-  assert.equal(readiness.missingReviewedLayerCount, 1)
+  assert.equal(readiness.missingReviewedLayerCount, 2)
   assert.equal(readiness.warningCount, 1)
   assert.equal(readiness.state, 'needs_review')
 })

@@ -92,7 +92,7 @@ export function buildRecipeReadiness({ selectedPartIds, partLibrary, layerLabels
   const missingReviewedLayerCount = layerLabels.filter((label) => {
     const selectedPartId = selectedPartIds[label]
     if (!selectedPartId) return true
-    return !partLibrary.some((part) => part.part_id === selectedPartId)
+    return !partLibrary.some((part) => part.part_id === selectedPartId && part.reviewed)
   }).length
   const state: RecipeReadinessState =
     missingPartCount > 0 || missingReviewedLayerCount === layerLabels.length
