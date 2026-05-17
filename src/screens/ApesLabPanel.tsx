@@ -36,6 +36,10 @@ type ApesLabPanelProps = {
   apesHarnessGeneratedAt: string
   mainDirections: Direction[]
   apesCoreLabels: PartLabel[]
+  localToolsAvailable: boolean
+  generationStyleNotes: string
+  setGenerationStyleNotes: (value: string) => void
+  downloadGenerationManifest: () => void
 }
 
 export function ApesLabPanel({
@@ -69,6 +73,10 @@ export function ApesLabPanel({
   apesHarnessGeneratedAt,
   mainDirections,
   apesCoreLabels,
+  localToolsAvailable,
+  generationStyleNotes,
+  setGenerationStyleNotes,
+  downloadGenerationManifest,
 }: ApesLabPanelProps) {
   const [reportText, setReportText] = useState('')
   const apesParts = partLibrary.filter((part) => part.extraction_method === 'apes')
@@ -133,11 +141,11 @@ export function ApesLabPanel({
         </article>
         <article>
           <strong>Runtime</strong>
-          <span>{apesPreflight ? (apesPreflight.ready ? 'preflight passed' : 'preflight failed') : 'preflight not run yet'}</span>
+          <span>{localToolsAvailable ? (apesPreflight ? (apesPreflight.ready ? 'preflight passed' : 'preflight failed') : 'local server available') : 'local server unavailable'}</span>
         </article>
         <article>
           <strong>Interpreter</strong>
-          <span>{apesPythonPath.trim() || 'dev server default Python'}</span>
+          <span>{apesPythonPath.trim() || 'local server default Python'}</span>
         </article>
         <article>
           <strong>Harness</strong>
@@ -201,12 +209,12 @@ export function ApesLabPanel({
       </div>
       <div className="status-strip">
         <button className="primary" data-testid="create-apes-job" onClick={createApesJob}>Create APES job</button>
-        <button className="primary" data-testid="run-apes-preflight" onClick={() => void runApesPreflight()} disabled={apesBridgeBusy || !import.meta.env.DEV}>Run APES preflight</button>
-        <button data-testid="run-prepared-duelyst-apes-jobs" onClick={() => void runPreparedDuelystJobs()} disabled={apesBridgeBusy || !import.meta.env.DEV || preparedDuelystJobs.length === 0}>
+        <button className="primary" data-testid="run-apes-preflight" onClick={() => void runApesPreflight()} disabled={apesBridgeBusy || !localToolsAvailable}>Run APES preflight</button>
+        <button data-testid="run-prepared-duelyst-apes-jobs" onClick={() => void runPreparedDuelystJobs()} disabled={apesBridgeBusy || !localToolsAvailable || preparedDuelystJobs.length === 0}>
           Run Duelyst queue ({preparedDuelystJobs.length})
         </button>
-        <button data-testid="summarize-apes-outputs" onClick={() => void summarizeApesOutputs()} disabled={apesBridgeBusy || !import.meta.env.DEV}>Inventory APES outputs</button>
-        <button data-testid="generate-apes-qa-harness" onClick={() => void generateApesQaHarness()} disabled={apesBridgeBusy || !import.meta.env.DEV}>Generate local QA harness</button>
+        <button data-testid="summarize-apes-outputs" onClick={() => void summarizeApesOutputs()} disabled={apesBridgeBusy || !localToolsAvailable}>Inventory APES outputs</button>
+        <button data-testid="generate-apes-qa-harness" onClick={() => void generateApesQaHarness()} disabled={apesBridgeBusy || !localToolsAvailable}>Generate local QA harness</button>
         <button data-testid="clear-apes-qa-harness-parts" onClick={clearApesQaHarnessParts} disabled={qaHarnessParts.length === 0}>Clear QA harness parts</button>
         <button data-testid="load-apes-qa-report" onClick={() => void loadApesQaHarnessReport()}>
           Load and replace QA sample report
@@ -241,6 +249,14 @@ export function ApesLabPanel({
           />
         </label>
       </div>
+      <div className="settings-card">
+        <strong>Generation manifest</strong>
+        <label className="field">
+          <span>Style notes</span>
+          <textarea data-testid="generation-style-notes" value={generationStyleNotes} onChange={(event) => setGenerationStyleNotes(event.target.value)} />
+        </label>
+        <button data-testid="download-generation-manifest" onClick={downloadGenerationManifest}>Download generation manifest</button>
+      </div>
       <div data-testid="apes-bridge-status" className={`settings-card ${apesPreflight && !apesPreflight.ready ? 'settings-card-warning' : ''}`}>
         <strong>Bridge status</strong>
         <span>{apesBridgeStatus}</span>
@@ -261,8 +277,21 @@ export function ApesLabPanel({
         <div className="settings-card">
           <strong>APES output inventory</strong>
           <span>
-            {apesOutputInventory.report_count} report(s), {apesOutputInventory.summary.needs_review} need review, {apesOutputInventory.summary.empty_reports} empty
+            {apesOutputInventory.report_count} report(s), {apesOutputInventory.summary.needs_review} need review, {apesOutputInventory.summary.empty_reports} empty, {apesOutputInventory.summary.failed_outputs} failed
           </span>
+          {apesOutputInventory.failed_outputs.length > 0 ? (
+            <div className="job-list compact-list">
+              {apesOutputInventory.failed_outputs.slice(0, 4).map((failure) => (
+                <article key={failure.output_dir} className="job failed">
+                  <div>
+                    <strong>{failure.job_id}</strong>
+                    <span>{failure.failure_kind}</span>
+                  </div>
+                  <p>{failure.logs.at(-1) || 'APES did not produce a report for this output.'}</p>
+                </article>
+              ))}
+            </div>
+          ) : null}
           <div className="job-list compact-list">
             {apesOutputInventory.reports.slice(0, 8).map((report) => (
               <article key={`${report.output_dir}-${report.report_path}`} className={`job ${report.needs_review ? 'prepared' : 'complete'}`}>
@@ -274,7 +303,7 @@ export function ApesLabPanel({
                 {report.missing_labels.length > 0 ? <p>Missing {report.missing_labels.join(', ')}</p> : null}
                 {report.low_confidence_labels.length > 0 ? <p>Low confidence {report.low_confidence_labels.join(', ')}</p> : null}
                 <div className="job-actions">
-                  <button onClick={() => void importApesInventoryReport(report.report_path)} disabled={apesBridgeBusy || report.mask_count === 0 || !import.meta.env.DEV}>
+                  <button onClick={() => void importApesInventoryReport(report.report_path)} disabled={apesBridgeBusy || report.mask_count === 0 || !localToolsAvailable}>
                     Import report
                   </button>
                 </div>
@@ -350,7 +379,7 @@ export function ApesLabPanel({
               >
                 Download report template
               </button>
-              <button className="primary" onClick={() => void runApesJob(job.job_id)} disabled={apesBridgeBusy || !import.meta.env.DEV}>Run local bridge</button>
+              <button className="primary" onClick={() => void runApesJob(job.job_id)} disabled={apesBridgeBusy || !localToolsAvailable}>Run local bridge</button>
             </div>
             {job.status === 'complete' ? (
               <p>{job.output_labels.length} APES mask records are now available in the Part Library for review.</p>

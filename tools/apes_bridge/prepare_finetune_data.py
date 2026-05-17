@@ -121,7 +121,7 @@ def prepare_duelyst_sheet_dataset(private_manifest: Path, output_root: Path, roo
                     "detector_class": labels.get("detector_class"),
                     "training_role": labels.get("training_role"),
                     "needs_manual_review": labels.get("needs_manual_review", True),
-                    "note": "Local Duelyst review label. This is detector/metadata triage, not APES ground-truth correspondence.",
+                    "note": "Local Duelyst detector/metadata label for private-tool filtering.",
                 },
                 indent=2,
             )
@@ -135,7 +135,7 @@ def prepare_duelyst_sheet_dataset(private_manifest: Path, output_root: Path, roo
         "character_count": copied,
         "source_manifest": normalize(private_manifest),
         "warnings": warnings,
-        "purpose": "Inference, pseudo-labeling, APES review, and future weak-supervision. It is not supervised correspondence training data by itself.",
+        "purpose": "Inference, pseudo-labeling, APES output generation, and future weak-supervision experiments.",
     }
 
 
@@ -183,7 +183,7 @@ def build_commands(root: Path, output_root: Path) -> dict[str, list[str]]:
         ],
         "duelyst_pseudo_label_review": [
             f"{py} tools/apes_bridge/check_apes_env.py --test-folder {q(output_root / 'duelyst_sheets')} --json",
-            "Create APES Lab jobs against staged Duelyst characters, review masks, then promote reviewed masks into a supervised or weak-supervised dataset.",
+            "Create APES Lab jobs against staged Duelyst characters, then inspect generated masks before using them in supervised or weak-supervised experiments.",
         ],
     }
 
@@ -229,7 +229,7 @@ def main() -> None:
         "commands": build_commands(root, output_root),
         "warnings": [
             "Duelyst assets are private local inputs. Do not commit or redistribute generated Duelyst frames or manifests.",
-            "Duelyst staged frames do not include ground-truth correspondence labels. Use them for APES inference, reviewed pseudo-labeling, or a later weak-supervision pass.",
+            "Duelyst staged frames are private-tool inputs for APES inference, pseudo-labeling, or later weak-supervision passes.",
             "Fullnet fine-tuning expects predcorr files from corrnet evaluation/precomputation.",
         ],
     }

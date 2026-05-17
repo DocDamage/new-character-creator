@@ -96,10 +96,45 @@ def summarize_report(report_path: Path, root: Path, input_root: Path) -> dict[st
     }
 
 
+def summarize_failed_status(status_path: Path, root: Path, input_root: Path) -> dict[str, Any]:
+    status = read_json(status_path) or {}
+    job_id = status_path.parent.name
+    job_path = input_root / job_id / "job.json"
+    job = read_json(job_path)
+    failure_details = str(status.get("failure_details") or "")
+    failure_kind = "apes_runtime_error"
+    if "'a' cannot be empty unless no samples are taken" in failure_details:
+        failure_kind = "apes_segmentation_empty_sample"
+    elif "CUDA out of memory" in failure_details:
+        failure_kind = "cuda_out_of_memory"
+
+    return {
+        "job_id": job_id,
+        "status": status.get("status") or "failed",
+        "character_id": job.get("character_id") if isinstance(job, dict) else None,
+        "output_dir": relpath(status_path.parent, root),
+        "status_path": relpath(status_path, root),
+        "input_job_path": relpath(job_path, root) if job_path.exists() else None,
+        "failure_kind": failure_kind,
+        "failure_details": failure_details[:2000],
+        "logs": [str(item) for item in status.get("logs", [])[-8:]] if isinstance(status.get("logs"), list) else [],
+        "needs_review": True,
+    }
+
+
 def build_inventory(output_root: Path, input_root: Path) -> dict[str, Any]:
     root = repo_root()
     report_paths = sorted(path for path in output_root.rglob("apes_report.json") if path.is_file())
     reports = [summarize_report(path, root, input_root) for path in report_paths]
+    report_dirs = {path.parent.resolve() for path in report_paths}
+    failed_status_paths = sorted(
+        path
+        for path in output_root.rglob("status.json")
+        if path.is_file()
+        and path.parent.resolve() not in report_dirs
+        and (read_json(path) or {}).get("status") == "failed"
+    )
+    failed_outputs = [summarize_failed_status(path, root, input_root) for path in failed_status_paths]
     complete = sum(1 for report in reports if report["status"] == "complete")
     empty = sum(1 for report in reports if report["mask_count"] == 0)
     needs_review = sum(1 for report in reports if report["needs_review"])
@@ -116,11 +151,13 @@ def build_inventory(output_root: Path, input_root: Path) -> dict[str, Any]:
         "summary": {
             "complete_reports": complete,
             "empty_reports": empty,
+            "failed_outputs": len(failed_outputs),
             "needs_review": needs_review,
             "reviewed_reports": sum(1 for report in reports if report["review_state"] == "reviewed"),
             "label_counts": {label: label_counts.get(label, 0) for label in ordered_labels(set(label_counts))},
         },
         "reports": reports,
+        "failed_outputs": failed_outputs,
     }
 
 
@@ -146,7 +183,8 @@ def main() -> int:
     else:
         print(
             f"Wrote {relpath(inventory_path, root)} with {inventory['report_count']} report(s), "
-            f"{inventory['summary']['needs_review']} needing review."
+            f"{inventory['summary']['needs_review']} needing review, "
+            f"{inventory['summary']['failed_outputs']} failed output(s)."
         )
     return 0
 

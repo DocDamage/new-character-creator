@@ -1,11 +1,14 @@
 # Browser Checks
 
-Use these checks while running the local Vite app.
+Use these checks while running the local Vite app. The automated harness serves
+the production bundle through Vite preview so it exercises release behavior.
 
 ## Start
 
 ```bash
 npm run dev -- --host 127.0.0.1 --port 8002 --strictPort
+npm run build
+npm run preview -- --host 127.0.0.1 --port 4173 --strictPort
 ```
 
 Open `http://127.0.0.1:8002/`.
@@ -16,12 +19,27 @@ If you want the automated smoke pass instead of stepping through the UI manually
 npm run test:browser
 ```
 
-That harness covers export/package downloads, manual mask save persistence, recipe save/load, Part Library bulk review actions, APES QA harness generation and import, Duelyst audit behavior, and the portable local setup bundle download from `Settings`.
+That harness covers export/package downloads, standalone Godot SpriteFrames resources, manual mask save persistence, recipe save/load, Part Library bulk review actions, fake APES-part prevention, APES QA harness generation/import, APES local-output image/mask package assets, Duelyst audit behavior, placeholder-mode manifest provenance, paged large Part Library imports, page-scoped visible export/review actions, and the portable local setup bundle download from `Settings`.
+
+Private Duelyst package harvesting is intentionally opt-in outside the release gate:
+
+```bash
+npm run test:private-assets
+```
+
+It runs the heavier private package path when `assets/Duelyst-Unit-Animations.unitypackage` is present and skips cleanly on machines without that ignored asset.
 
 Latest verified automated run:
 
-- `npm run test:browser -- --reporter=line`
-- 6 tests passed
+- `npm run lint`
+- `npm run check:source-hygiene`
+- `npm run test:tools`
+- `npm run build`
+- `npm run validate:release-package`
+- `npm run test:preview-tools`
+- `npm run test:browser`
+- `npm run release:check`
+- lint passed, source-hygiene passed, 11 tool tests passed, build passed, release package validation passed, preview local-tool smoke passed, and 11 browser tests passed
 
 Latest verified local app state:
 
@@ -34,9 +52,10 @@ Latest verified local app state:
 - Default Duelyst filters show the staged APES-review subset, and `Queue APES jobs` creates APES Lab jobs for those filtered staged candidates
 - Queued Duelyst APES jobs persist across reloads and APES Lab exposes `Run Duelyst queue` for prepared Duelyst jobs
 - CLI Duelyst APES queue writes 60 ignored jobs with `npm run apes:prepare-duelyst-jobs`
-- Real APES execution reaches vendored network/deformer on the RTX 3060; multi-frame Duelyst idle jobs can produce creator-sized review masks
-- APES Lab exposes `Inventory APES outputs`, backed by `npm run apes:summarize-outputs`, to summarize completed local reports and import non-empty reports for review triage
+- Real APES execution reaches vendored network/deformer on the RTX 3060. The latest full Duelyst APES run attempted 60 jobs, produced 57 successes, and recorded 3 sprite-specific APES segmentation rejects in the batch manifest.
+- APES Lab exposes `Inventory APES outputs`, backed by `npm run apes:summarize-outputs`, to summarize completed local reports, show failed outputs, and import non-empty reports
 - Fine-tune prep writes `data/training/apes_finetune/finetune_manifest.json` and 64 Duelyst review folders
+- Source metadata is optional private debugging data and is not a browser-check release gate.
 
 ## Export Panel
 
@@ -62,7 +81,7 @@ Latest verified local app state:
    - `rendered_outputs`
    - `engine_exports`
    - `reusable_part_folders`
-   - `extraction_provenance`
+   - optional local metadata such as source layer details
 12. Click `Download full package zip`.
 13. Confirm a file named like `<recipe>_full_package.zip` downloads.
 14. Open the zip and confirm it contains:
@@ -74,6 +93,8 @@ Latest verified local app state:
    - `rendered/frames/*.png`
    - `rendered/sheets/*.png`
    - selected `parts/<label>/<part_id>/` folders when reviewed parts are used in the recipe
+15. Click `Download SpriteFrames resource`.
+16. Confirm the `.tres` file contains real `Texture2D` frame resources pointing at `rendered/frames`.
 
 ## Manual Mask Save
 
@@ -118,6 +139,21 @@ Confirm:
 - the checkpoint path points at `checkpoints/train_cluster/model_best.pth.tar`
 - the test folder points at `training data/okaysamurai_sheets`
 
+## APES Output Inventory
+
+1. Run `npm run apes:summarize-outputs` after APES jobs complete.
+2. Open `APES Lab` and click `Inventory APES outputs`.
+3. Confirm the inventory shows:
+   - completed report count
+   - failed output count
+   - missing/low-confidence label summaries
+   - import buttons for non-empty reports
+4. For the latest full Duelyst batch, expect 3 failed outputs:
+   - `apes_duelyst_neutral_mercsongweaver_010`
+   - `apes_duelyst_neutral_mercarcanelimiter_038`
+   - `apes_duelyst_neutral_mercsightlessfarseer_048`
+5. Confirm the failed outputs are visible as APES/content failures, not hidden as a crashed batch.
+
 ## Duelyst Audit
 
 1. Open `Asset Audit`.
@@ -135,7 +171,9 @@ Confirm:
    - the asset root you entered
    - the APES interpreter you entered
    - repair, reindex, and sample export commands
+   - `npm run validate:release-package`
    - `npm run test:browser`
+   - `npm run release:check`
    - `.\tools\apes_bridge\setup_home_pc.ps1`
 
 ## Export Package Contents

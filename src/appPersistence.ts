@@ -1,4 +1,4 @@
-import type { ApesJob, ApesPreflightReport, ComposerLayerSettings, ExtractedPart, PaletteRules, PartLabel } from './types'
+import type { ApesJob, ApesPreflightReport, ComposerLayerSettings, ExtractedPart, PaletteRules, PartLabel, VariationPreset } from './types'
 
 export type SavedComposerRecipe = {
   recipe_id: string
@@ -20,14 +20,16 @@ export const apesAllowPlaceholderStorageKey = 'pixel_creator_apes_allow_placehol
 export const apesPreflightStorageKey = 'pixel_creator_apes_preflight'
 export const apesJobsStorageKey = 'pixel_creator_apes_jobs'
 export const apesHarnessGeneratedAtStorageKey = 'pixel_creator_apes_harness_generated_at'
+export const variationPresetsStorageKey = 'pixel_creator_variation_presets'
+export const filenameTemplateStorageKey = 'pixel_creator_filename_template'
 export const apesQaHarnessJobId = 'apes_harness_job'
 
 function parseStoredJson<T>(storageKey: string, fallback: T) {
   if (typeof window === 'undefined') return fallback
-  const raw = window.localStorage.getItem(storageKey)
-  if (!raw) return fallback
 
   try {
+    const raw = window.localStorage.getItem(storageKey)
+    if (!raw) return fallback
     return JSON.parse(raw) as T
   } catch {
     return fallback
@@ -50,37 +52,64 @@ export function loadStoredApesJobs() {
   return parseStoredJson<ApesJob[]>(apesJobsStorageKey, [])
 }
 
+export function loadStoredVariationPresets() {
+  return parseStoredJson<VariationPreset[]>(variationPresetsStorageKey, [])
+}
+
 export function loadStoredString(storageKey: string, fallback = '') {
   if (typeof window === 'undefined') return fallback
-  return window.localStorage.getItem(storageKey) || fallback
+  try {
+    return window.localStorage.getItem(storageKey) || fallback
+  } catch {
+    return fallback
+  }
 }
 
 export function loadStoredBoolean(storageKey: string) {
   if (typeof window === 'undefined') return false
-  return window.localStorage.getItem(storageKey) === 'true'
+  try {
+    return window.localStorage.getItem(storageKey) === 'true'
+  } catch {
+    return false
+  }
 }
 
 export function storeJson(storageKey: string, value: unknown | null) {
-  if (typeof window === 'undefined') return
-  if (value === null) {
-    window.localStorage.removeItem(storageKey)
-    return
+  if (typeof window === 'undefined') return true
+  try {
+    if (value === null) {
+      window.localStorage.removeItem(storageKey)
+      return true
+    }
+    window.localStorage.setItem(storageKey, JSON.stringify(value))
+    return true
+  } catch {
+    return false
   }
-  window.localStorage.setItem(storageKey, JSON.stringify(value))
 }
 
 export function storeString(storageKey: string, value: string) {
-  if (typeof window === 'undefined') return
-  if (!value) {
-    window.localStorage.removeItem(storageKey)
-    return
+  if (typeof window === 'undefined') return true
+  try {
+    if (!value) {
+      window.localStorage.removeItem(storageKey)
+      return true
+    }
+    window.localStorage.setItem(storageKey, value)
+    return true
+  } catch {
+    return false
   }
-  window.localStorage.setItem(storageKey, value)
 }
 
 export function storeBoolean(storageKey: string, value: boolean) {
-  if (typeof window === 'undefined') return
-  window.localStorage.setItem(storageKey, String(value))
+  if (typeof window === 'undefined') return true
+  try {
+    window.localStorage.setItem(storageKey, String(value))
+    return true
+  } catch {
+    return false
+  }
 }
 
 export function makeDraftRecipeId(characterId = 'character') {

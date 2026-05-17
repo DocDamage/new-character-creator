@@ -15,6 +15,7 @@ type SettingsPanelProps = {
   apesAllowPlaceholder: boolean
   setApesAllowPlaceholder: Dispatch<SetStateAction<boolean>>
   apesPreflight: ApesPreflightReport | null
+  localToolsAvailable: boolean
 }
 
 export function SettingsPanel({
@@ -31,6 +32,7 @@ export function SettingsPanel({
   apesAllowPlaceholder,
   setApesAllowPlaceholder,
   apesPreflight,
+  localToolsAvailable,
 }: SettingsPanelProps) {
   const normalizedAssetRoot = assetRootInput.trim() || manifestAssetRoot
   const manifestRootForCompare = normalizeAssetRootForCompare(manifestAssetRoot)
@@ -46,6 +48,7 @@ export function SettingsPanel({
     ? `"${escapedPythonPath}" tools/apes_bridge/check_apes_env.py --json`
     : 'python tools/apes_bridge/check_apes_env.py --json'
   const browserRegressionCommand = 'npm run test:browser'
+  const releaseCheckCommand = 'npm run release:check'
   const apesPlaceholderLabel = apesAllowPlaceholder ? 'Placeholder APES fallback enabled for UI-only testing.' : 'Real APES bridge only. Placeholder fallback is disabled.'
 
   return (
@@ -75,7 +78,7 @@ export function SettingsPanel({
             <span>Interpreter on the APES machine</span>
             <input data-testid="settings-apes-python-input" value={apesPythonPath} onChange={(event) => setApesPythonPath(event.target.value)} placeholder="C:\\Users\\you\\miniconda3\\envs\\apes-gpu\\python.exe" />
           </label>
-          <span>Leave blank to use the Python running npm run dev. Set this to the dedicated APES env on your home GPU PC.</span>
+          <span>Leave blank to use the Python running the local Vite server. Set this to the dedicated APES env on your home GPU PC.</span>
         </article>
       </div>
 
@@ -87,14 +90,15 @@ export function SettingsPanel({
       ) : null}
 
       <div className="settings-actions">
-        <button className="primary" onClick={() => void runLocalAssetTool('repair')} disabled={!import.meta.env.DEV || settingsBusy}>Run repair now</button>
-        <button onClick={() => void runLocalAssetTool('reindex')} disabled={!import.meta.env.DEV || settingsBusy}>Run reindex now</button>
+        <button className="primary" onClick={() => void runLocalAssetTool('repair')} disabled={!localToolsAvailable || settingsBusy}>Run repair now</button>
+        <button onClick={() => void runLocalAssetTool('reindex')} disabled={!localToolsAvailable || settingsBusy}>Run reindex now</button>
         <button className="primary" onClick={() => void copyCommand(repairCommand, 'Repair command copied. Run it in the terminal to rewrite manifest paths.')}>Copy repair command</button>
         <button onClick={() => void copyCommand(reindexCommand, 'Reindex command copied. Run it to rebuild the manifest from the new asset root.')}>Copy reindex command</button>
         <button onClick={() => void copyCommand(exportCommand, 'Export command copied. Run it after repairing or reindexing to verify the new root.')}>Copy sample export command</button>
         <button className="primary" onClick={() => void copyCommand(apesSetupCommand, 'APES setup command copied. Run it on the home GPU PC to build the APES environment.')}>Copy APES setup command</button>
         <button onClick={() => void copyCommand(apesPreflightCommand, 'APES preflight command copied. Run it with the configured interpreter to verify the APES machine.')}>Copy APES preflight command</button>
         <button data-testid="copy-browser-regression-command" onClick={() => void copyCommand(browserRegressionCommand, 'Browser regression command copied. Run it to validate exports and manual mask persistence.')}>Copy browser regression command</button>
+        <button data-testid="copy-release-check-command" onClick={() => void copyCommand(releaseCheckCommand, 'Release check command copied. Run it before packaging or handoff.')}>Copy release check command</button>
         <button data-testid="download-local-setup-bundle" onClick={downloadLocalSetupBundle}>Download local setup bundle</button>
         <button onClick={() => setAssetRootInput(manifestAssetRoot)}>Use indexed root</button>
       </div>
@@ -108,6 +112,7 @@ export function SettingsPanel({
         <strong>Browser regression harness</strong>
         <span>Use the Playwright harness when you want one repeatable local check for rendered exports, full-package downloads, and manual mask persistence.</span>
         <code>{browserRegressionCommand}</code>
+        <code>{releaseCheckCommand}</code>
       </div>
 
       <div className="settings-card">
@@ -117,11 +122,14 @@ export function SettingsPanel({
           <span>Allow placeholder APES fallback for UI-only testing on non-GPU machines</span>
         </label>
         <span>{apesPlaceholderLabel}</span>
+        {apesAllowPlaceholder ? (
+          <span data-testid="apes-placeholder-warning">Placeholder APES mode is not production segmentation. Exports will record placeholder_mode_enabled so QA can reject accidental placeholder output.</span>
+        ) : null}
       </div>
 
       <div className="settings-card">
         <strong>Direct actions</strong>
-        <span>{import.meta.env.DEV ? 'Run repair or reindex directly when the app is started with npm run dev.' : 'Direct actions only work in dev mode. Use the copy-command buttons in preview or production builds.'}</span>
+        <span>{localToolsAvailable ? 'Local server tools are available in this session, including preview builds served by Vite.' : 'Local server tools are unavailable in this static session. Use the copy-command buttons or serve the build with npm run preview.'}</span>
       </div>
 
       <div className={`settings-card ${apesPreflight && !apesPreflight.ready ? 'settings-card-warning' : ''}`}>
@@ -141,6 +149,7 @@ export function SettingsPanel({
         <code>{reindexCommand}</code>
         <code>{exportCommand}</code>
         <code>{browserRegressionCommand}</code>
+        <code>{releaseCheckCommand}</code>
         <code>{apesSetupCommand}</code>
         <code>{apesPreflightCommand}</code>
       </div>

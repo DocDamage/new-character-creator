@@ -1,0 +1,188 @@
+# APES LPC Intake
+
+Date: 2026-05-17
+
+## Scope
+
+Local source folder:
+
+```text
+assets/lpc sprite generator stuff
+```
+
+Reference upstream:
+
+```text
+https://github.com/liberatedpixelcup/Universal-LPC-Spritesheet-Character-Generator
+```
+
+Reference clone used for intake only:
+
+```text
+%TEMP%/Universal-LPC-Spritesheet-Character-Generator-intake
+```
+
+## Intake Summary
+
+This source should not be treated as a plain APES-only pixel extraction batch.
+Universal LPC already carries structured metadata that is more valuable than
+inference for many files: layer definitions, z positions, body-type variants,
+animation support, recolor palettes, and per-item credits.
+
+Recommended split:
+
+- Use LPC metadata import for canonical LPC/ULPC/LPCR sheets.
+- Use APES for unlabeled sheets, loose packs, generated compositions, and QA
+  review where part masks are missing.
+- Keep credits and license metadata available for local reference when building
+  exports. This is a private tool, so those records are useful context rather
+  than release-blocking source-tracking gates.
+
+## Local Asset Inventory
+
+Current local folder shape:
+
+- 16,200 PNG files.
+- 2 JSON files.
+- 9 text or markdown-like files.
+- About 128 MB of PNG data.
+- Dominant PNG sheet sizes:
+  - 192x256: 6,253 files.
+  - 512x256: 4,246 files.
+  - 384x256: 2,113 files.
+  - 320x256: 798 files.
+  - 128x256: 466 files.
+  - 832x1344: 460 files.
+
+Largest local top-level buckets by PNG count:
+
+- `[LPC Revised] Character Basics`: 12,606
+- `Clothes`: 378
+- `memao-assets`: 319
+- `lpc-helmets`: 318
+- `Bases`: 200
+- `Adult Female`: 175
+- `Adult Female, Pregnant`: 175
+- `Teen`: 175
+- `lpc_entry`: 164
+- `Hair`: 160
+- `Adult Male`: 145
+- `Androgynous Long-Sleeve Shirt`: 140
+- `Androgynous Pants`: 140
+
+Current handling: this local LPC folder is under `assets/` and is ignored by
+git through `/assets/lpc sprite generator stuff/`. Avoid staging the raw folder;
+use `npm run lpc:inventory` to generate ignored local metadata under
+`data/lpc/`.
+
+## Upstream Repo Findings
+
+Upstream HEAD inspected:
+
+```text
+34d62814547dd93b2cba7f94d98e15ec3ae9e945
+2026-05-15 08:44:45 -0400
+feat: Migrate the final components to ts
+```
+
+Useful upstream folders:
+
+- `sheet_definitions/`: 767 JSON definitions.
+- `palette_definitions/`: palette materials and variants.
+- `spritesheets/`: 145,452 PNG files.
+- `CREDITS.csv`: full attribution table.
+- `scripts/generate_sources.js`: metadata generator entrypoint.
+- `scripts/generateSources/items.js`: parser for item definitions.
+- `scripts/generateSources/state.js`: emits item, layer, credit, palette, and
+  index metadata modules.
+- `sources/custom-animations.ts`: animation row/frame layout definitions.
+
+The key item JSON shape includes:
+
+- `name`
+- `priority`
+- `type_name`
+- `layer_1` through `layer_9`
+- per-layer `zPos`
+- body-type path mappings such as `male`, `female`, `teen`, `child`
+- `animations`
+- `credits`
+- `recolors`
+- tags and variant metadata
+
+This maps closely to this app's part library, layer order, local export
+metadata, and APES review metadata.
+
+## APES Fit
+
+Good APES candidates:
+
+- Loose sheets without metadata.
+- Memao and other mixed packs where body part labels are absent.
+- Generated composite characters where APES can create review masks.
+- QA comparisons between inferred masks and metadata-derived layer bounds.
+
+Weak APES candidates:
+
+- LPC sheets with exact upstream `sheet_definitions`.
+- Recolor variants where palette metadata already describes the change.
+- Source packs where credits should remain available as local reference
+  metadata.
+
+## Import Strategy
+
+1. Add a metadata-first LPC importer.
+   - Read `sheet_definitions/**/*.json`.
+   - Normalize layers into local part/layer records.
+   - Preserve z position, type name, supported animations, body types, variants,
+     recolor material, and credits.
+
+2. Add a local asset-root mode for LPC.
+   - Keep source files under ignored local storage.
+   - Write a small manifest into `public/data/manifests/*.local.json` or another
+     ignored runtime path.
+   - Store absolute `/@fs/...` URLs for local preview, not committed asset paths.
+
+3. Add APES review only where metadata is absent.
+   - Stage selected composed frames into `data/apes/input/<job_id>/frames`.
+   - Run APES bridge.
+   - Import APES masks as parts with confidence/warning metadata.
+
+4. Keep credits attached to every imported layer.
+   - Use upstream `CREDITS.csv` or item `credits` blocks.
+   - Export credit manifests alongside generated character packages.
+
+## Parallel Work Guidance
+
+Yes, you can keep ingesting while this intake work exists. The safest split is:
+
+- You can work on raw asset organization and ingest experiments under
+  `assets/lpc sprite generator stuff`.
+- I should avoid editing that folder directly while you are moving files.
+- I can work on docs, importer code, tests, and manifest generation.
+- We should avoid both editing `tools/index-assets.js`,
+  `public/data/manifests/*`, or the same new importer file at the same time.
+
+If you run an ingest that regenerates manifests, tell me which command and
+output path, because this repo already has local-manifest behavior that may
+choose `characters.local.json` for ignored or external assets.
+
+## Current Progress
+
+- `/assets/lpc sprite generator stuff/` is now ignored so the raw 16k-file dump
+  does not get staged accidentally.
+- `npm run lpc:inventory` builds an ignored local inventory at
+  `data/lpc/lpc_asset_inventory.json`.
+- The tool test suite covers LPC inventory fixture behavior alongside the asset
+  indexer local-manifest regression.
+- LPC credits/license data is treated as useful private metadata, not as a
+  release gate.
+
+## Remaining Next Steps
+
+- Build a metadata-first LPC importer that consumes upstream-like
+  `sheet_definitions` and local loose folders separately.
+- Add UI import/review controls for choosing which inventory buckets become
+  local parts.
+- Keep APES focused on unknown packs and review masks, not on replacing LPC's
+  existing layer metadata.

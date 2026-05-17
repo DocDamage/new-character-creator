@@ -136,6 +136,8 @@ APES runtime compatibility fixes tracked in the repo:
 Run the frontend checks:
 
 ```powershell
+npm run lint
+npm run test:tools
 npm run build
 npm run test:browser
 ```
@@ -183,15 +185,17 @@ This writes ignored job configs under `data/apes/input/` plus `duelyst_job_batch
 npm run apes:run-duelyst-jobs
 ```
 
+By default, sprite-specific APES failures are recorded in `duelyst_job_batch.json` and the command exits cleanly so successful reports are still usable. Add `-- --fail-on-job-error` if you want a strict non-zero exit for CI or diagnostics.
+
 Summarize completed local APES outputs for review:
 
 ```powershell
 npm run apes:summarize-outputs
 ```
 
-That writes `data/apes/output/apes_output_inventory.json` with report counts, labels, missing expected labels, low-confidence masks, warnings, and review state.
+That writes `data/apes/output/apes_output_inventory.json` with report counts, labels, missing expected labels, low-confidence masks, warnings, review state, and failed output folders that contain `status.json` but no APES report.
 
-Current Duelyst staged jobs use real staged idle atlas frames when available and only duplicate a representative crop for one-frame sources. The APES runtime can execute that path; the first verified multi-frame Duelyst job produced creator-sized `head`, `torso`, and `front_arm` review masks. Treat those as review signals, not training labels, until manually checked and promoted.
+Current Duelyst staged jobs use real staged idle atlas frames when available and only duplicate a representative crop for one-frame sources. The latest full local batch attempted 60 Duelyst jobs, produced 57 successful job results, and recorded 3 APES segmentation rejects: `apes_duelyst_neutral_mercsongweaver_010`, `apes_duelyst_neutral_mercarcanelimiter_038`, and `apes_duelyst_neutral_mercsightlessfarseer_048`. Output quality is sprite-specific, so inspect failures and low-confidence masks before using them for generated character parts.
 
 ## Notes For Future Rebuilds
 

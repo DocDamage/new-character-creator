@@ -209,6 +209,20 @@ input {
   font-size: 24px;
 }
 
+.topbar-warning {
+  max-width: 640px;
+  margin-top: 4px;
+  color: var(--warning);
+  font-size: 12px;
+}
+
+.canvas-error {
+  display: block;
+  max-width: 280px;
+  color: var(--warning);
+  font-size: 11px;
+}
+
 .topbar-actions,
 .transport,
 .job-actions,

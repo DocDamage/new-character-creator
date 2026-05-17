@@ -3,7 +3,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const appRoot = path.resolve(__dirname, '..');
+const appRoot = path.resolve(process.env.PIXEL_CREATOR_INDEX_APP_ROOT || path.resolve(__dirname, '..'));
 const projectRoot = path.resolve(appRoot, '..');
 const manifestDir = path.resolve(appRoot, 'public', 'data', 'manifests');
 const manifestPath = path.resolve(manifestDir, 'characters.json');
@@ -71,6 +71,10 @@ function fsUrl(filePath) {
 function isWithinRoot(filePath, rootPath) {
   const relativePath = path.relative(rootPath, filePath);
   return relativePath === '' || (!relativePath.startsWith('..') && !path.isAbsolute(relativePath));
+}
+
+function isIgnoredInRepoAssetRoot(assetRoot) {
+  return isWithinRoot(assetRoot, path.resolve(appRoot, 'assets'));
 }
 
 function serializeAssetRoot(assetRoot, mode) {
@@ -247,18 +251,21 @@ function buildCharacter(folderName, assetRoot, mode) {
 
 function main() {
   if (cliArgs.includes('--help') || cliArgs.includes('-h')) {
-    console.log('Usage: node tools/index-assets.js [--asset-root <path>]');
+    console.log('Usage: node tools/index-assets.js [--asset-root <path>] [--public-manifest]');
     console.log('Environment override: PIXEL_CREATOR_ASSET_ROOT=<path>');
+    console.log('By default, ignored in-repo assets and external asset roots write characters.local.json.');
     return;
   }
 
   const assetRoot = resolveAssetRoot();
+  const forcePublicManifest = cliArgs.includes('--public-manifest');
   if (!fs.existsSync(assetRoot)) {
     throw new Error(`Asset root not found: ${assetRoot}`);
   }
 
   fs.mkdirSync(manifestDir, { recursive: true });
   const mode = isWithinRoot(assetRoot, appRoot) ? 'repo' : 'local';
+  const writeLocalManifest = !forcePublicManifest && (mode === 'local' || isIgnoredInRepoAssetRoot(assetRoot));
   const characters = listDirs(assetRoot).map(name => buildCharacter(name, assetRoot, mode));
   const manifest = {
     generated_at: new Date().toISOString(),
@@ -269,17 +276,17 @@ function main() {
     characters,
   };
 
-  const outputPath = mode === 'repo' ? manifestPath : localManifestPath;
+  const outputPath = writeLocalManifest ? localManifestPath : manifestPath;
   fs.writeFileSync(outputPath, `${JSON.stringify(manifest, null, 2)}\n`);
 
-  if (mode === 'repo') {
+  if (!writeLocalManifest) {
     fs.rmSync(localManifestPath, { force: true });
     console.log(`Indexed ${characters.length} characters -> ${manifestPath}`);
     return;
   }
 
   console.log(`Indexed ${characters.length} characters -> ${localManifestPath}`);
-  console.log(`Left ${manifestPath} untouched because ${assetRoot} is outside the repository root.`);
+  console.log(`Left ${manifestPath} untouched because ${mode === 'local' ? 'the asset root is outside the repository root' : 'the asset root is ignored local runtime data'}.`);
 }
 
 main();

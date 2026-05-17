@@ -96,6 +96,49 @@ export type DuelystPackageAudit = {
   label_schema?: Record<string, unknown>
 }
 
+export type LpcAssetInventory = {
+  format: 'pixel_creator_lpc_asset_inventory'
+  generated_at: string
+  source: {
+    kind: string
+    asset_root: string
+    upstream_repo: string
+    upstream_reference: {
+      available: boolean
+      root: string
+      commit?: string | null
+      sheet_definition_count?: number
+      spritesheet_png_count?: number
+      credits_csv_available?: boolean
+    }
+  }
+  summary: {
+    png_count: number
+    lpc_grid_count: number
+    non_lpc_grid_count: number
+    categories: Record<string, number>
+    frame_grids: Record<string, number>
+    credit_file_count: number
+  }
+  credit_files: Array<{
+    path: string
+    excerpt: string
+  }>
+  sheets: Array<{
+    path: string
+    category: string
+    file_name: string
+    width: number
+    height: number
+    frame_width: number
+    frame_height: number
+    frame_columns: number | null
+    frame_rows: number | null
+    lpc_grid: boolean
+    tags: string[]
+  }>
+}
+
 export type PartLabel =
   | 'shadow'
   | 'back_item'
@@ -144,6 +187,8 @@ export type ExtractedPart = {
   source_frame_path?: string
   image_path: string
   mask_path?: string
+  image_asset_key?: string
+  mask_asset_key?: string
   image_data_url?: string
   mask_data_url?: string
   anchor: { x: number; y: number }
@@ -245,6 +290,7 @@ export type ApesOutputInventory = {
   summary: {
     complete_reports: number
     empty_reports: number
+    failed_outputs: number
     needs_review: number
     reviewed_reports: number
     label_counts: Partial<Record<PartLabel, number>> & Record<string, number | undefined>
@@ -268,6 +314,18 @@ export type ApesOutputInventory = {
     warnings: string[]
     needs_review: boolean
   }>
+  failed_outputs: Array<{
+    job_id: string
+    status: string
+    character_id: string | null
+    output_dir: string
+    status_path: string
+    input_job_path: string | null
+    failure_kind: string
+    failure_details: string
+    logs: string[]
+    needs_review: boolean
+  }>
 }
 
 export type KitbashLayer = {
@@ -288,4 +346,75 @@ export type KitbashRecipe = {
   palette: PaletteRules
   animation_coverage: AnimationName[]
   export_targets: string[]
+}
+
+export type LayerBundleSource = {
+  path?: string
+  url?: string
+  data_url?: string
+  bounds?: Rect
+  anchor?: { x: number; y: number }
+}
+
+export type LayerBundlePart = {
+  id?: string
+  label: PartLabel
+  source_character?: string
+  animation?: AnimationName
+  direction?: Direction
+  tags?: string[]
+  warnings?: string[]
+  image: LayerBundleSource
+  mask?: LayerBundleSource
+}
+
+export type LayerBundleManifest = {
+  format: 'pixel_creator_layer_bundle'
+  version: number
+  bundle_id: string
+  generated_at?: string
+  source?: string
+  parts: LayerBundlePart[]
+}
+
+export type VariationPreset = {
+  preset_id: string
+  name: string
+  base_character: string
+  selected_part_ids: Partial<Record<PartLabel, string>>
+  selected_parts: Partial<Record<PartLabel, string>>
+  layer_settings: Partial<Record<PartLabel, ComposerLayerSettings>>
+  palette: string
+  palette_rules: Omit<PaletteRules, 'team_color'>
+  tags: string[]
+  saved_at: string
+}
+
+export type SourceAlphaAnalysis = {
+  format: 'pixel_creator_source_alpha_analysis'
+  version: number
+  width: number
+  height: number
+  opaque_pixel_count: number
+  alpha_bounds: Rect | null
+  floor_y: number | null
+  pivot: { x: number; y: number } | null
+  warnings: string[]
+}
+
+export type GenerationManifest = {
+  format: 'pixel_creator_generation_manifest'
+  version: number
+  generated_at: string
+  style_notes: string
+  source_character: string
+  frame_references: Array<{
+    animation: AnimationName
+    direction: Direction
+    frame_index: number
+    path: string
+  }>
+  output_labels: PartLabel[]
+  filename_template: string
+  layer_bundle_targets: string[]
 }

@@ -94,7 +94,7 @@ def build_job(character: dict[str, Any], index: int) -> dict[str, Any]:
         "logs": [
             "Prepared from private Duelyst staged atlas frames.",
             *([] if len(selected_frames) >= 2 else ["Duplicated the staged source frame so the APES bridge has the minimum two-frame runtime input."]),
-            "Review output masks carefully before promotion or training.",
+            "Review output masks for visual quality before using them in generated character parts.",
         ],
     }
 
@@ -133,7 +133,16 @@ def run_job(job_path: Path, output_dir: Path, allow_placeholder: bool) -> dict[s
         "status": result.returncode,
         "stdout": result.stdout,
         "stderr": result.stderr,
+        "failure_kind": classify_failure(result.stderr) if result.returncode != 0 else None,
     }
+
+
+def classify_failure(stderr: str) -> str:
+    if "'a' cannot be empty unless no samples are taken" in stderr:
+        return "apes_segmentation_empty_sample"
+    if "CUDA out of memory" in stderr:
+        return "cuda_out_of_memory"
+    return "apes_runtime_error"
 
 
 def main() -> None:
@@ -145,6 +154,7 @@ def main() -> None:
     parser.add_argument("--limit", type=int, default=None)
     parser.add_argument("--run", action="store_true", help="Run each prepared job immediately through run_apes_extract.py.")
     parser.add_argument("--allow-placeholder", action="store_true", help="Pass --allow-placeholder when --run is used.")
+    parser.add_argument("--fail-on-job-error", action="store_true", help="Exit non-zero when any APES job fails. By default, content-level failures are recorded in the batch manifest.")
     args = parser.parse_args()
 
     root = repo_root()
@@ -178,6 +188,8 @@ def main() -> None:
         "source_manifest": normalize(manifest_path),
         "input_root": normalize(output_root),
         "job_count": len(jobs),
+        "success_count": sum(1 for item in run_results if item["status"] == 0),
+        "failure_count": sum(1 for item in run_results if item["status"] != 0),
         "filters": {
             "role": args.role,
             "body_class": args.body_class,
@@ -187,7 +199,7 @@ def main() -> None:
         "run_results": run_results,
         "warnings": [
             "Duelyst jobs use staged idle atlas frames when available; jobs with only one available frame duplicate it to satisfy the APES bridge two-frame minimum.",
-            "Treat generated masks as review candidates, not ground-truth labels.",
+            "Generated masks are private-tool outputs; inspect failures and low-confidence masks before relying on them for character assembly.",
         ],
     }
     batch_path = output_root / "duelyst_job_batch.json"
@@ -196,7 +208,13 @@ def main() -> None:
     if args.run:
         failures = [item for item in run_results if item["status"] != 0]
         if failures:
-            raise SystemExit(f"{len(failures)} Duelyst APES job(s) failed. See {normalize(batch_path)}")
+            failure_kinds = sorted({str(item.get("failure_kind") or "unknown") for item in failures})
+            print(
+                f"Completed with {len(failures)} APES job failure(s): {', '.join(failure_kinds)}. "
+                f"See {normalize(batch_path)} and run npm run apes:summarize-outputs for review."
+            )
+            if args.fail_on_job_error:
+                raise SystemExit(f"{len(failures)} Duelyst APES job(s) failed. See {normalize(batch_path)}")
 
 
 if __name__ == "__main__":

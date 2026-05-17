@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Finish the local Animated Pixel Character Creator so reviewed extracted parts can be edited, composed, batch-rendered, and exported with first-class APES provenance.
+**Goal:** Finish the local Animated Pixel Character Creator so reviewed extracted parts can be edited, composed, batch-rendered, and exported with optional private APES/source metadata.
 
 **Architecture:** Keep the app local/offline-first. Add focused renderer and persistence modules instead of growing `App.tsx` further; use canvas for pixel-perfect composition and mask editing. Keep original sprite assets read-only, while generated part data, recipes, and exports are represented as app data and downloadable packages.
 
@@ -12,7 +12,7 @@
 
 **APES GPU Status:** PyTorch3D is now fixed on the home RTX 3060 PC. The working env uses Python 3.10, PyTorch `2.5.1+cu124`, PyTorch3D `0.7.8`, matching PyG CUDA wheels, headless OpenCV, NumPy `1.26.4`, and TensorBoard `2.20.0`. Vendored APES compatibility shims cover missing `torch_batch_svd`, removed `torch.symeig`, current scikit-image SLIC args, Windows path handling, absolute bridge output paths, and 256x256 runtime normalization. Rebuild instructions are documented in `docs/apes-gpu-rebuild.md`.
 
-**Training/Fine-Tuning Status:** `tools/apes_bridge/prepare_finetune_data.py` inventories the local Okay Samurai and Creative Flow supervised datasets, creates a local Duelyst APES review dataset from the private manifest, and writes `data/training/apes_finetune/finetune_manifest.json` with quoted Windows-safe training commands. `tools/apes_bridge/prepare_duelyst_apes_jobs.py` prepares ignored CLI APES jobs from the private staged Duelyst manifest. `tools/apes_bridge/summarize_apes_outputs.py` writes a local APES output inventory for completed report review, and APES Lab can import non-empty inventoried reports into the Part Library. Current Duelyst staged jobs use real idle atlas frame sequences where available, so APES can produce review masks; pseudo-label promotion still requires manual review and a curated accepted-mask export.
+**Training/Fine-Tuning Status:** `tools/apes_bridge/prepare_finetune_data.py` inventories the local Okay Samurai and Creative Flow supervised datasets, creates a local Duelyst APES dataset from the private manifest, and writes `data/training/apes_finetune/finetune_manifest.json` with quoted Windows-safe training commands. `tools/apes_bridge/prepare_duelyst_apes_jobs.py` prepares ignored CLI APES jobs from the private staged Duelyst manifest. `tools/apes_bridge/summarize_apes_outputs.py` writes a local APES output inventory for completed reports and failed outputs, and APES Lab can import non-empty inventoried reports into the Part Library. Current Duelyst staged jobs use real idle atlas frame sequences where available; the latest 60-job batch produced 57 successful job results and 3 recorded APES segmentation rejects.
 
 ---
 
@@ -136,7 +136,7 @@ Export a helper that renders a recipe/layer set to a PNG data URL for a given an
 
 - [x] **Step 2: Add batch render action**
 
-Batch Generator should render deterministic variant preview thumbnails and download a batch queue manifest including recipe settings, source part ids, and APES provenance.
+Batch Generator should render deterministic variant preview thumbnails and download a batch queue manifest including recipe settings, source part ids, and optional APES/source metadata.
 
 - [x] **Step 3: Verify**
 
@@ -162,7 +162,7 @@ Build a package manifest with:
 - RPG Maker MZ metadata
 - Aseprite reference package
 - reusable part folders
-- extraction provenance
+- local source metadata
 
 - [x] **Step 2: Add export package button**
 

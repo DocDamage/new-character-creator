@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { humanoid64Preset } from './presets'
 import type { AnimationName, CharacterManifest, Direction, ExtractedPart, KitbashRecipe, Rect } from './types'
 import { getFramePath } from './utils'
@@ -14,6 +14,8 @@ type CompositeCanvasProps = {
   label?: string
 }
 
+const imageLoadCache = new Map<string, Promise<HTMLImageElement>>()
+
 export function CompositeCanvas({
   recipe,
   characters,
@@ -25,6 +27,7 @@ export function CompositeCanvas({
   label,
 }: CompositeCanvasProps) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null)
+  const [renderError, setRenderError] = useState('')
 
   useEffect(() => {
     const canvas = canvasRef.current
@@ -39,6 +42,7 @@ export function CompositeCanvas({
     drawContext.imageSmoothingEnabled = false
     drawContext.clearRect(0, 0, canvas.width, canvas.height)
     drawChecker(drawContext, canvas.width, canvas.height, scale)
+    setRenderError('')
 
     async function drawComposite() {
       for (const layer of recipe.layers) {
@@ -53,14 +57,17 @@ export function CompositeCanvas({
         if (!source) continue
 
         const image = await loadImage(source)
+        const maskImage = sourcePart?.mask_data_url ? await loadImage(sourcePart.mask_data_url) : undefined
         if (cancelled) return
 
-        drawLayer(drawContext, image, bounds, layer.offset, scale, recipe, Boolean(sourcePart?.image_data_url))
+        drawLayer(drawContext, image, maskImage, bounds, layer.offset, scale, recipe, Boolean(sourcePart?.image_data_url))
       }
     }
 
     drawComposite().catch((error) => {
-      console.error('Could not render composite preview', error)
+      if (!cancelled) {
+        setRenderError(`Could not render composite preview: ${error instanceof Error ? error.message : String(error)}`)
+      }
     })
 
     return () => {
@@ -72,6 +79,7 @@ export function CompositeCanvas({
     <figure className="pixel-stage composite-stage" aria-label={label}>
       <canvas ref={canvasRef} />
       {label ? <figcaption>{label}</figcaption> : null}
+      {renderError ? <span className="canvas-error" role="status">{renderError}</span> : null}
     </figure>
   )
 }
@@ -79,6 +87,7 @@ export function CompositeCanvas({
 function drawLayer(
   context: CanvasRenderingContext2D,
   image: HTMLImageElement,
+  maskImage: HTMLImageElement | undefined,
   bounds: Rect,
   offset: [number, number],
   scale: number,
@@ -89,17 +98,7 @@ function drawLayer(
   context.imageSmoothingEnabled = false
   context.filter = `hue-rotate(${recipe.palette.hue_shift}deg) saturate(${recipe.palette.saturation}%) brightness(${recipe.palette.brightness}%)`
   if (isExtractedPart) {
-    context.drawImage(
-      image,
-      0,
-      0,
-      image.naturalWidth,
-      image.naturalHeight,
-      (bounds.x + offset[0]) * scale,
-      (bounds.y + offset[1]) * scale,
-      bounds.w * scale,
-      bounds.h * scale,
-    )
+    drawExtractedLayer(context, image, maskImage, bounds, offset, scale)
   } else {
     context.drawImage(
       image,
@@ -116,6 +115,55 @@ function drawLayer(
   context.restore()
 }
 
+function drawExtractedLayer(
+  context: CanvasRenderingContext2D,
+  image: HTMLImageElement,
+  maskImage: HTMLImageElement | undefined,
+  bounds: Rect,
+  offset: [number, number],
+  scale: number,
+) {
+  const canCropFromBounds = image.naturalWidth >= bounds.x + bounds.w && image.naturalHeight >= bounds.y + bounds.h
+  const sourceX = canCropFromBounds ? bounds.x : 0
+  const sourceY = canCropFromBounds ? bounds.y : 0
+  const sourceWidth = canCropFromBounds ? bounds.w : image.naturalWidth
+  const sourceHeight = canCropFromBounds ? bounds.h : image.naturalHeight
+  const destinationX = (bounds.x + offset[0]) * scale
+  const destinationY = (bounds.y + offset[1]) * scale
+  const destinationWidth = bounds.w * scale
+  const destinationHeight = bounds.h * scale
+
+  if (!maskImage) {
+    context.drawImage(
+      image,
+      sourceX,
+      sourceY,
+      sourceWidth,
+      sourceHeight,
+      destinationX,
+      destinationY,
+      destinationWidth,
+      destinationHeight,
+    )
+    return
+  }
+
+  const scratch = document.createElement('canvas')
+  scratch.width = Math.max(1, bounds.w)
+  scratch.height = Math.max(1, bounds.h)
+  const scratchContext = scratch.getContext('2d')
+  if (!scratchContext) return
+  scratchContext.imageSmoothingEnabled = false
+  scratchContext.drawImage(image, sourceX, sourceY, sourceWidth, sourceHeight, 0, 0, scratch.width, scratch.height)
+  scratchContext.globalCompositeOperation = 'destination-in'
+  if (maskImage.naturalWidth === 64 && maskImage.naturalHeight === 64) {
+    scratchContext.drawImage(maskImage, bounds.x, bounds.y, bounds.w, bounds.h, 0, 0, scratch.width, scratch.height)
+  } else {
+    scratchContext.drawImage(maskImage, 0, 0, maskImage.naturalWidth, maskImage.naturalHeight, 0, 0, scratch.width, scratch.height)
+  }
+  context.drawImage(scratch, destinationX, destinationY, destinationWidth, destinationHeight)
+}
+
 function drawChecker(context: CanvasRenderingContext2D, width: number, height: number, scale: number) {
   const size = scale * 2
   for (let y = 0; y < height; y += size) {
@@ -127,11 +175,19 @@ function drawChecker(context: CanvasRenderingContext2D, width: number, height: n
 }
 
 function loadImage(src: string) {
-  return new Promise<HTMLImageElement>((resolve, reject) => {
+  const cached = imageLoadCache.get(src)
+  if (cached) return cached
+
+  const promise = new Promise<HTMLImageElement>((resolve, reject) => {
     const image = new Image()
     image.crossOrigin = 'anonymous'
     image.onload = () => resolve(image)
     image.onerror = () => reject(new Error(`Could not load ${src}`))
     image.src = src
   })
+  imageLoadCache.set(src, promise)
+  promise.catch(() => {
+    imageLoadCache.delete(src)
+  })
+  return promise
 }

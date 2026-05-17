@@ -376,7 +376,7 @@ function stripInternalCandidateFields(candidate) {
 export function duelystLabelSchema() {
   return {
     label_scope: 'unit_identity_visual_detector_and_training_triage',
-    warning: 'These labels combine filename/path/animation metadata with a lightweight alpha-silhouette detector. They are not APES ground-truth body-part correspondence labels.',
+    warning: 'These labels combine filename/path/animation metadata with a lightweight alpha-silhouette detector for private-tool filtering.',
     fields: {
       source_family: 'Duelyst faction/source prefix inferred from the unit file name.',
       body_class: 'Final broad visual class after combining filename hints with detector evidence.',
@@ -387,7 +387,7 @@ export function duelystLabelSchema() {
       animation_labels: 'Animation names normalized from Unity animation clips.',
       asset_labels: 'Flat tags useful for filtering manifests and review batches.',
       label_confidence: 'high/medium/low confidence for broad triage labels.',
-      needs_manual_review: 'True because these are review labels, not supervised segmentation truth.',
+      needs_manual_review: 'True when the detector confidence or source shape suggests a visual check would be useful.',
     },
   }
 }

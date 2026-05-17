@@ -12,6 +12,7 @@ import {
 } from './utils'
 
 const exportDirections: Direction[] = ['south', 'east', 'north', 'west']
+const imageLoadCache = new Map<string, Promise<HTMLImageElement>>()
 
 type RenderRecipeFrameOptions = {
   recipe: KitbashRecipe
@@ -89,7 +90,8 @@ export async function renderRecipeFrameToDataUrl({
     if (!source) continue
 
     const image = await loadImage(source)
-    drawLayer(context, image, bounds, layer.offset, recipe, Boolean(sourcePart?.image_data_url))
+    const maskImage = sourcePart?.mask_data_url ? await loadImage(sourcePart.mask_data_url) : undefined
+    drawLayer(context, image, maskImage, bounds, layer.offset, recipe, Boolean(sourcePart?.image_data_url))
   }
 
   return canvas.toDataURL('image/png')
@@ -167,6 +169,7 @@ export async function buildFullPackageManifest(
   partLibrary: ExtractedPart[],
   apesJobs: ApesJob[],
   renderedFrameSet?: RenderedFrameSet,
+  options: { placeholderModeEnabled?: boolean } = {},
 ) {
   const resolvedRenderedFrameSet = renderedFrameSet ?? (await buildRenderedFrameSet(character, recipe, characters, partLibrary))
 
@@ -176,7 +179,7 @@ export async function buildFullPackageManifest(
     generated_at: new Date().toISOString(),
     character_id: recipe.character_id,
     source_character: character.character_id,
-    manifest: buildExportManifest(character, recipe, apesJobs),
+    manifest: buildExportManifest(character, recipe, apesJobs, options),
     rendered_outputs: resolvedRenderedFrameSet,
     engine_exports: {
       godot_4: {
@@ -260,9 +263,10 @@ export async function downloadFullPackageZip(
   characters: CharacterManifest[],
   partLibrary: ExtractedPart[],
   apesJobs: ApesJob[],
+  options: { placeholderModeEnabled?: boolean } = {},
 ) {
   const renderedFrameSet = await buildRenderedFrameSet(character, recipe, characters, partLibrary)
-  const packageManifest = await buildFullPackageManifest(character, recipe, characters, partLibrary, apesJobs, renderedFrameSet)
+  const packageManifest = await buildFullPackageManifest(character, recipe, characters, partLibrary, apesJobs, renderedFrameSet, options)
   const zip = new JSZip()
   const rootPath = recipe.character_id
   const selectedParts = recipe.layers
@@ -270,7 +274,7 @@ export async function downloadFullPackageZip(
     .filter((part): part is ExtractedPart => Boolean(part))
 
   zip.file(`${rootPath}/package_manifest.json`, JSON.stringify(makeFullPackageFileIndex(packageManifest, rootPath), null, 2))
-  zip.file(`${rootPath}/exports/generic_manifest.json`, JSON.stringify(buildExportManifest(character, recipe, apesJobs), null, 2))
+  zip.file(`${rootPath}/exports/generic_manifest.json`, JSON.stringify(buildExportManifest(character, recipe, apesJobs, options), null, 2))
   zip.file(`${rootPath}/exports/godot/${recipe.character_id}.tscn`, buildGodotSceneText(recipe))
   zip.file(`${rootPath}/exports/godot/${recipe.character_id}_sprite_frames.tres`, buildGodotSpriteFramesResource(recipe, renderedFrameSet, 'rendered/frames'))
   zip.file(`${rootPath}/exports/unity/${recipe.character_id}_unity_2d.json`, JSON.stringify(buildUnity2DMetadata(character, recipe), null, 2))
@@ -315,7 +319,7 @@ export function buildGodotSceneText(recipe: KitbashRecipe) {
   return `[gd_scene load_steps=2 format=3]\n\n[ext_resource type="SpriteFrames" path="res://${recipe.character_id}_sprite_frames.tres" id="1"]\n\n[node name="${recipe.character_id}" type="AnimatedSprite2D"]\nsprite_frames = ExtResource("1")\nanimation = "idle_south"\ncentered = true\n`
 }
 
-function buildGodotSpriteFramesResource(recipe: KitbashRecipe, renderedFrameSet: RenderedFrameSet, frameBasePath: string) {
+export function buildGodotSpriteFramesResource(recipe: KitbashRecipe, renderedFrameSet: RenderedFrameSet, frameBasePath: string) {
   const extResources: string[] = []
   const atlasResources: string[] = []
   const animations = renderedFrameSet.spritesheets.map((sheet) => {
@@ -472,6 +476,7 @@ async function renderSpriteSheetToDataUrl(frameDataUrls: string[]) {
 function drawLayer(
   context: CanvasRenderingContext2D,
   image: HTMLImageElement,
+  maskImage: HTMLImageElement | undefined,
   bounds: Rect,
   offset: [number, number],
   recipe: KitbashRecipe,
@@ -481,17 +486,7 @@ function drawLayer(
   context.imageSmoothingEnabled = false
   context.filter = `hue-rotate(${recipe.palette.hue_shift}deg) saturate(${recipe.palette.saturation}%) brightness(${recipe.palette.brightness}%)`
   if (isExtractedPart) {
-    context.drawImage(
-      image,
-      0,
-      0,
-      image.naturalWidth,
-      image.naturalHeight,
-      bounds.x + offset[0],
-      bounds.y + offset[1],
-      bounds.w,
-      bounds.h,
-    )
+    drawExtractedLayer(context, image, maskImage, bounds, offset, 1)
   } else {
     context.drawImage(
       image,
@@ -508,18 +503,78 @@ function drawLayer(
   context.restore()
 }
 
+function drawExtractedLayer(
+  context: CanvasRenderingContext2D,
+  image: HTMLImageElement,
+  maskImage: HTMLImageElement | undefined,
+  bounds: Rect,
+  offset: [number, number],
+  scale: number,
+) {
+  const canCropFromBounds = image.naturalWidth >= bounds.x + bounds.w && image.naturalHeight >= bounds.y + bounds.h
+  const sourceX = canCropFromBounds ? bounds.x : 0
+  const sourceY = canCropFromBounds ? bounds.y : 0
+  const sourceWidth = canCropFromBounds ? bounds.w : image.naturalWidth
+  const sourceHeight = canCropFromBounds ? bounds.h : image.naturalHeight
+  const destinationX = (bounds.x + offset[0]) * scale
+  const destinationY = (bounds.y + offset[1]) * scale
+  const destinationWidth = bounds.w * scale
+  const destinationHeight = bounds.h * scale
+
+  if (!maskImage) {
+    context.drawImage(
+      image,
+      sourceX,
+      sourceY,
+      sourceWidth,
+      sourceHeight,
+      destinationX,
+      destinationY,
+      destinationWidth,
+      destinationHeight,
+    )
+    return
+  }
+
+  const scratch = document.createElement('canvas')
+  scratch.width = Math.max(1, bounds.w)
+  scratch.height = Math.max(1, bounds.h)
+  const scratchContext = scratch.getContext('2d')
+  if (!scratchContext) return
+  scratchContext.imageSmoothingEnabled = false
+  scratchContext.drawImage(image, sourceX, sourceY, sourceWidth, sourceHeight, 0, 0, scratch.width, scratch.height)
+  scratchContext.globalCompositeOperation = 'destination-in'
+  if (maskImage.naturalWidth === 64 && maskImage.naturalHeight === 64) {
+    scratchContext.drawImage(maskImage, bounds.x, bounds.y, bounds.w, bounds.h, 0, 0, scratch.width, scratch.height)
+  } else {
+    scratchContext.drawImage(maskImage, 0, 0, maskImage.naturalWidth, maskImage.naturalHeight, 0, 0, scratch.width, scratch.height)
+  }
+  context.drawImage(scratch, destinationX, destinationY, destinationWidth, destinationHeight)
+}
+
 function loadImage(src: string) {
-  return new Promise<HTMLImageElement>((resolve, reject) => {
+  const cached = imageLoadCache.get(src)
+  if (cached) return cached
+
+  const promise = new Promise<HTMLImageElement>((resolve, reject) => {
     const image = new Image()
     image.crossOrigin = 'anonymous'
     image.onload = () => resolve(image)
     image.onerror = () => reject(new Error(`Could not load ${src}`))
     image.src = src
   })
+  imageLoadCache.set(src, promise)
+  promise.catch(() => {
+    imageLoadCache.delete(src)
+  })
+  return promise
 }
 
 async function addDataUrlFile(zip: JSZip, path: string, dataUrl: string) {
   const response = await fetch(dataUrl)
+  if (!response.ok) {
+    throw new Error(`Could not add ${path}: asset request failed with status ${response.status}`)
+  }
   const blob = await response.blob()
   zip.file(path, blob)
 }
@@ -584,6 +639,8 @@ function stripPartInlineAssets(part: ExtractedPart) {
     source_frame_path: part.source_frame_path,
     image_path: part.image_path,
     mask_path: part.mask_path,
+    image_asset_key: part.image_asset_key,
+    mask_asset_key: part.mask_asset_key,
     anchor: part.anchor,
     bounds: part.bounds,
     extraction_method: part.extraction_method,

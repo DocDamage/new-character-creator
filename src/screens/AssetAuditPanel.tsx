@@ -1,5 +1,6 @@
-import { useMemo, useState } from 'react'
-import type { AssetManifest, DuelystPackageAudit, DuelystPackageCandidate } from '../types'
+import { useEffect, useMemo, useState } from 'react'
+import { analyzeImageSource } from '../sourceAnalysis'
+import type { AssetManifest, DuelystPackageAudit, DuelystPackageCandidate, LpcAssetInventory, SourceAlphaAnalysis } from '../types'
 import { slugLabel } from '../utils'
 
 type AssetAuditPanelProps = {
@@ -8,10 +9,17 @@ type AssetAuditPanelProps = {
   duelystAudit: DuelystPackageAudit | null
   duelystBusy: boolean
   duelystStatus: string
+  lpcInventory: LpcAssetInventory | null
+  lpcBusy: boolean
+  lpcStatus: string
   runDuelystAudit: () => Promise<void>
+  runLpcInventory: () => Promise<void>
   loadPrivateDuelystManifest: () => Promise<void>
   openDuelystStageCharacter: (characterId: string) => void
   createDuelystApesJobs: (characterIds: string[]) => void
+  localToolsAvailable: boolean
+  importLpcSheetsAsParts: (limit: number) => void
+  lpcImportStatus: string
 }
 
 export function AssetAuditPanel({
@@ -20,10 +28,17 @@ export function AssetAuditPanel({
   duelystAudit,
   duelystBusy,
   duelystStatus,
+  lpcInventory,
+  lpcBusy,
+  lpcStatus,
   runDuelystAudit,
+  runLpcInventory,
   loadPrivateDuelystManifest,
   openDuelystStageCharacter,
   createDuelystApesJobs,
+  localToolsAvailable,
+  importLpcSheetsAsParts,
+  lpcImportStatus,
 }: AssetAuditPanelProps) {
   const [duelystSearch, setDuelystSearch] = useState('')
   const [bodyFilter, setBodyFilter] = useState('all')
@@ -68,6 +83,40 @@ export function AssetAuditPanel({
     })
   }, [bodyFilter, duelystAudit, duelystSearch, sourceFilter, stagedFilter, trainingFilter])
   const batchableDuelystCandidates = filteredDuelystCandidates.filter((candidate) => candidate.staged && candidate.stage_character_id && getStringLabel(candidate, 'training_role').startsWith('apes_'))
+  const lpcTopCategories = lpcInventory ? Object.entries(lpcInventory.summary.categories).slice(0, 8) : []
+  const lpcTopFrameGrids = lpcInventory ? Object.entries(lpcInventory.summary.frame_grids).slice(0, 6) : []
+  const [sourceAnalysis, setSourceAnalysis] = useState<SourceAlphaAnalysis | null>(null)
+  const [sourceAnalysisStatus, setSourceAnalysisStatus] = useState('Waiting for a representative source frame.')
+
+  useEffect(() => {
+    const representativeFrame = manifest.characters[0]?.representative_frame
+    if (!representativeFrame) {
+      window.setTimeout(() => {
+        setSourceAnalysis(null)
+        setSourceAnalysisStatus('No representative source frame is available for alpha analysis.')
+      }, 0)
+      return
+    }
+
+    let cancelled = false
+    window.setTimeout(() => {
+      if (!cancelled) setSourceAnalysisStatus('Analyzing source alpha, floor, and pivot...')
+    }, 0)
+    analyzeImageSource(representativeFrame)
+      .then((analysis) => {
+        if (cancelled) return
+        setSourceAnalysis(analysis)
+        setSourceAnalysisStatus(`Analyzed ${analysis.opaque_pixel_count} opaque pixel(s) from ${representativeFrame}.`)
+      })
+      .catch((error) => {
+        if (cancelled) return
+        setSourceAnalysis(null)
+        setSourceAnalysisStatus(`Source alpha analysis failed. ${error instanceof Error ? error.message : String(error)}`)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [manifest])
 
   return (
     <section className="panel wide-panel">
@@ -92,6 +141,88 @@ export function AssetAuditPanel({
         {warnings.length === 0 ? <p>No source warnings found.</p> : null}
       </div>
 
+      <div className="settings-card">
+        <strong>Source alpha analysis</strong>
+        <span>{sourceAnalysisStatus}</span>
+        {sourceAnalysis ? (
+          <code>
+            {`alpha bounds: ${sourceAnalysis.alpha_bounds ? `${sourceAnalysis.alpha_bounds.x},${sourceAnalysis.alpha_bounds.y} ${sourceAnalysis.alpha_bounds.w}x${sourceAnalysis.alpha_bounds.h}` : 'none'}\nfloor: ${sourceAnalysis.floor_y ?? 'n/a'}\npivot: ${sourceAnalysis.pivot ? `${sourceAnalysis.pivot.x},${sourceAnalysis.pivot.y}` : 'n/a'}\nwarnings: ${sourceAnalysis.warnings.join('; ') || 'none'}`}
+          </code>
+        ) : null}
+      </div>
+
+      <div className="panel-heading audit-subheading">
+        <div>
+          <h3>LPC Intake</h3>
+          <p>Inventory the local LPC generator assets, upstream reference metadata, and credit files before promoting any sheets into project content.</p>
+        </div>
+        <div className="audit-actions">
+          <button
+            className="primary"
+            data-testid="run-lpc-inventory"
+            onClick={() => void runLpcInventory()}
+            disabled={!localToolsAvailable || lpcBusy}
+          >
+            {lpcBusy ? 'Scanning LPC assets...' : 'Build LPC inventory'}
+          </button>
+        </div>
+      </div>
+
+      <div data-testid="lpc-status" className={`settings-card ${lpcInventory ? '' : 'settings-card-warning'}`}>
+        <strong>LPC status</strong>
+        <span>{lpcStatus}</span>
+        {lpcInventory ? (
+          <code>
+            {`root: ${lpcInventory.source.asset_root}\nupstream: ${lpcInventory.source.upstream_reference.commit ?? 'not cached'}\ncredits: ${lpcInventory.summary.credit_file_count} local file(s)`}
+          </code>
+        ) : null}
+      </div>
+
+      {lpcInventory ? (
+        <>
+          <div className="audit-grid duelyst-summary-grid">
+            <article>
+              <strong>{lpcInventory.summary.png_count}</strong>
+              <span>local PNG sheets</span>
+            </article>
+            <article>
+              <strong>{lpcInventory.summary.lpc_grid_count}</strong>
+              <span>64x64 LPC grids</span>
+            </article>
+            <article>
+              <strong>{lpcInventory.summary.non_lpc_grid_count}</strong>
+              <span>non-standard grids</span>
+            </article>
+            <article>
+              <strong>{lpcInventory.summary.credit_file_count}</strong>
+              <span>credit/license files</span>
+            </article>
+            <article>
+              <strong>{lpcInventory.source.upstream_reference.sheet_definition_count ?? 0}</strong>
+              <span>upstream definitions</span>
+            </article>
+            <article>
+              <strong>{lpcInventory.source.upstream_reference.spritesheet_png_count ?? 0}</strong>
+              <span>upstream PNGs cached</span>
+            </article>
+          </div>
+          <div className="settings-card">
+            <strong>LPC categories</strong>
+            <div className="part-meta">
+              {lpcTopCategories.map(([category, count]) => <span key={category}>{category}: {count}</span>)}
+            </div>
+            <strong>Common frame grids</strong>
+            <div className="part-meta">
+              {lpcTopFrameGrids.map(([grid, count]) => <span key={grid}>{grid}: {count}</span>)}
+            </div>
+            <div className="audit-actions">
+              <button data-testid="import-lpc-sheets" onClick={() => importLpcSheetsAsParts(12)}>Import first 12 sheets as parts</button>
+              <span>{lpcImportStatus}</span>
+            </div>
+          </div>
+        </>
+      ) : null}
+
       <div className="panel-heading audit-subheading">
         <div>
           <h3>Duelyst Package Audit</h3>
@@ -109,7 +240,7 @@ export function AssetAuditPanel({
             className="primary"
             data-testid="run-duelyst-audit"
             onClick={() => void runDuelystAudit()}
-            disabled={!import.meta.env.DEV || duelystBusy}
+            disabled={!localToolsAvailable || duelystBusy}
           >
             {duelystBusy ? 'Working on Duelyst assets...' : 'Rebuild and stage 64'}
           </button>

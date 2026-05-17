@@ -9,28 +9,36 @@ import {
   apesQaHarnessJobId,
   assetRootInputStorageKey,
   composerRecipesStorageKey,
+  filenameTemplateStorageKey,
   loadStoredApesPreflight,
   loadStoredApesJobs,
   loadStoredBoolean,
   loadStoredComposerRecipes,
   loadStoredPartLibrary,
   loadStoredString,
+  loadStoredVariationPresets,
   makeDraftRecipeId,
   partLibraryStorageKey,
   storeBoolean,
   storeJson,
   storeString,
+  variationPresetsStorageKey,
   type SavedComposerRecipe,
 } from './appPersistence'
 import type { ManualMaskSaveRequest } from './appViewTypes'
 import {
   buildFullPackageManifest,
   buildGodotSceneText,
+  buildGodotSpriteFramesResource,
   buildRenderedFrameSet,
   downloadFullPackageZip,
   downloadRenderedFrameSetZip,
 } from './exportPackage'
+import { defaultFilenameTemplate } from './filenameTemplates'
+import { buildGenerationManifest } from './generationManifest'
+import { layerBundleToExtractedParts, lpcSheetsToExtractedParts, parseLayerBundleManifest } from './layerBundle'
 import { buildManualMaskPart } from './manualParts'
+import { hydratePartLibraryAssets, persistPartLibraryAssets } from './partAssetStore'
 import { PixelCanvas } from './PixelCanvas'
 import { humanoid64Preset, layerOrder, palettePresets } from './presets'
 import { ApesLabPanel } from './screens/ApesLabPanel'
@@ -41,11 +49,10 @@ import { FastCreatorPanel } from './screens/FastCreatorPanel'
 import { PartLibraryPanel } from './screens/PartLibraryPanel'
 import { SettingsPanel } from './screens/SettingsPanel'
 import { WorkstationPanel } from './screens/WorkstationPanel'
-import type { AnimationName, ApesBridgeStatus, ApesJob, ApesOutputInventory, ApesPreflightReport, ApesReport, AssetManifest, ComposerLayerSettings, Direction, DuelystPackageAudit, ExtractedPart, ExtractionMethod, PaletteRules, PartLabel, Rect } from './types'
+import type { AnimationName, ApesBridgeStatus, ApesJob, ApesOutputInventory, ApesPreflightReport, ApesReport, AssetManifest, ComposerLayerSettings, Direction, DuelystPackageAudit, ExtractedPart, ExtractionMethod, LpcAssetInventory, PaletteRules, PartLabel, Rect, VariationPreset } from './types'
 import {
   buildExportManifest,
   buildAsepriteReference,
-  buildGodotSpriteFrames,
   buildRpgMakerMzMetadata,
   buildUnity2DMetadata,
   downloadCroppedPng,
@@ -95,12 +102,13 @@ type LocalApesToolPayload = {
 }
 
 type LocalAssetToolPayload = {
-  action: 'repair' | 'reindex' | 'duelyst-audit'
+  action: 'repair' | 'reindex' | 'duelyst-audit' | 'lpc-inventory'
   stdout?: string
   stderr?: string
   status?: number
   error?: string
   duelyst?: DuelystPackageAudit | null
+  lpcInventory?: LpcAssetInventory | null
 }
 
 function normalizeDuelystAudit(payload: DuelystPackageAudit): DuelystPackageAudit {
@@ -133,6 +141,33 @@ function isApesQaHarnessPart(part: ExtractedPart) {
   return part.extraction_method === 'apes' && (part.tags.includes('qa_harness') || part.part_id.startsWith(`${apesQaHarnessJobId}_`))
 }
 
+function toBrowserAssetUrl(assetPath: string | undefined) {
+  if (!assetPath) return undefined
+  if (assetPath.startsWith('data:') || assetPath.startsWith('http://') || assetPath.startsWith('https://')) {
+    return assetPath
+  }
+  if (assetPath.startsWith('/__local/')) return assetPath
+  if (assetPath.startsWith('/')) return assetPath
+  const normalized = assetPath.replaceAll('\\', '/')
+  const apesOutputMarker = 'data/apes/output/'
+  const apesOutputIndex = normalized.indexOf(apesOutputMarker)
+  if (apesOutputIndex >= 0) {
+    return `/__local/apes-output/${normalized.slice(apesOutputIndex + apesOutputMarker.length)}`
+  }
+  return `/${normalized}`
+}
+
+function isLocalApesOutputPath(assetPath: string | undefined) {
+  if (!assetPath) return false
+  return assetPath.replaceAll('\\', '/').includes('data/apes/output/') || assetPath.startsWith('/__local/apes-output/')
+}
+
+function fileNameFromAssetPath(assetPath: string | undefined, fallback: string) {
+  if (!assetPath) return fallback
+  const normalized = assetPath.replaceAll('\\', '/')
+  return normalized.split('/').filter(Boolean).at(-1) ?? fallback
+}
+
 function App() {
   const [manifest, setManifest] = useState<AssetManifest | null>(null)
   const [manifestStatus, setManifestStatus] = useState<'loading' | 'ready' | 'error'>('loading')
@@ -160,6 +195,7 @@ function App() {
   const [extractionHistory, setExtractionHistory] = useState<string[]>([])
   const [connectedSeed, setConnectedSeed] = useState<{ x: number; y: number } | undefined>()
   const [partLibrary, setPartLibrary] = useState<ExtractedPart[]>(loadStoredPartLibrary)
+  const [partLibraryStatus, setPartLibraryStatus] = useState('Import APES reports, layer bundles, LPC sheets, or workstation extractions to build reusable parts.')
   const [apesAnimations, setApesAnimations] = useState<AnimationName[]>(['idle', 'walk'])
   const [apesDirections, setApesDirections] = useState<Direction[]>(mainDirections)
   const [apesLabels, setApesLabels] = useState<PartLabel[]>(apesCoreLabels)
@@ -168,9 +204,14 @@ function App() {
   const [assetRootInput, setAssetRootInput] = useState('')
   const [settingsStatus, setSettingsStatus] = useState('Copy a command from here when you move the project to another machine.')
   const [settingsBusy, setSettingsBusy] = useState(false)
+  const [persistenceWarning, setPersistenceWarning] = useState('')
   const [duelystBusy, setDuelystBusy] = useState(false)
   const [duelystAudit, setDuelystAudit] = useState<DuelystPackageAudit | null>(null)
   const [duelystStatus, setDuelystStatus] = useState('Loading the private Duelyst manifest if it exists. You can also rebuild it from the local unitypackage.')
+  const [lpcBusy, setLpcBusy] = useState(false)
+  const [lpcInventory, setLpcInventory] = useState<LpcAssetInventory | null>(null)
+  const [lpcStatus, setLpcStatus] = useState('Build an LPC inventory from the local asset folder to plan import, credits, and generator compatibility.')
+  const [lpcImportStatus, setLpcImportStatus] = useState('No LPC sheets imported this session.')
   const [apesPythonPath, setApesPythonPath] = useState(() => loadStoredString(apesPythonPathStorageKey))
   const [apesAllowPlaceholder, setApesAllowPlaceholder] = useState(() => loadStoredBoolean(apesAllowPlaceholderStorageKey))
   const [apesBridgeStatus, setApesBridgeStatus] = useState('Set the APES Python path in Settings, then run preflight from APES Lab.')
@@ -178,6 +219,11 @@ function App() {
   const [apesPreflight, setApesPreflight] = useState<ApesPreflightReport | null>(loadStoredApesPreflight)
   const [apesOutputInventory, setApesOutputInventory] = useState<ApesOutputInventory | null>(null)
   const [apesHarnessGeneratedAt, setApesHarnessGeneratedAt] = useState(() => loadStoredString(apesHarnessGeneratedAtStorageKey))
+  const [localToolsAvailable, setLocalToolsAvailable] = useState(false)
+  const [variationPresets, setVariationPresets] = useState<VariationPreset[]>(loadStoredVariationPresets)
+  const [activeVariationPresetId, setActiveVariationPresetId] = useState('')
+  const [filenameTemplate, setFilenameTemplate] = useState(() => loadStoredString(filenameTemplateStorageKey, defaultFilenameTemplate))
+  const [generationStyleNotes, setGenerationStyleNotes] = useState('Readable 64x64 RPG character parts with clean alpha, consistent floor contact, and reusable layer boundaries.')
 
   async function fetchManifest(signal?: AbortSignal) {
     const manifestUrls = import.meta.env.DEV
@@ -251,7 +297,6 @@ function App() {
       setManifest(null)
       setManifestError(message)
       setManifestStatus('error')
-      console.error('Failed to load manifest', error)
     }
   }, [applyManifest])
 
@@ -265,6 +310,26 @@ function App() {
 
   useEffect(() => {
     const controller = new AbortController()
+    fetch('/__local/health', { signal: controller.signal, cache: 'no-store' })
+      .then(async (response) => {
+        if (!response.ok) {
+          setLocalToolsAvailable(false)
+          return
+        }
+
+        const payload = await response.json().catch(() => null) as { ok?: unknown; server?: unknown } | null
+        setLocalToolsAvailable(payload?.ok === true && payload.server === 'vite-local-tools')
+      })
+      .catch(() => {
+        setLocalToolsAvailable(false)
+      })
+    return () => {
+      controller.abort()
+    }
+  }, [])
+
+  useEffect(() => {
+    const controller = new AbortController()
     void loadPrivateDuelystManifest(controller.signal)
     return () => {
       controller.abort()
@@ -272,36 +337,87 @@ function App() {
   }, [])
 
   useEffect(() => {
-    storeJson(partLibraryStorageKey, partLibrary)
+    let cancelled = false
+    hydratePartLibraryAssets(loadStoredPartLibrary()).then((hydratedParts) => {
+      if (!cancelled) setPartLibrary(hydratedParts)
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  useEffect(() => {
+    let cancelled = false
+    persistPartLibraryAssets(partLibrary).then((persistableParts) => {
+      if (cancelled) return
+      setPersistenceWarning(
+        storeJson(partLibraryStorageKey, persistableParts)
+          ? ''
+          : 'Could not persist the Part Library in browser storage. Export the library JSON before reloading.',
+      )
+    })
+    return () => {
+      cancelled = true
+    }
   }, [partLibrary])
 
   useEffect(() => {
-    storeJson(composerRecipesStorageKey, savedRecipes)
+    setPersistenceWarning(
+      storeJson(composerRecipesStorageKey, savedRecipes)
+        ? ''
+        : 'Could not persist saved recipes in browser storage. Download or export recipe data before reloading.',
+    )
   }, [savedRecipes])
 
   useEffect(() => {
-    storeJson(apesJobsStorageKey, apesJobs)
+    setPersistenceWarning(
+      storeJson(apesJobsStorageKey, apesJobs)
+        ? ''
+        : 'Could not persist APES jobs in browser storage. Download job configs before reloading.',
+    )
   }, [apesJobs])
 
   useEffect(() => {
-    storeString(assetRootInputStorageKey, assetRootInput)
+    if (!storeString(assetRootInputStorageKey, assetRootInput)) {
+      setPersistenceWarning('Could not persist the asset root setting in browser storage.')
+    }
   }, [assetRootInput])
 
   useEffect(() => {
-    storeString(apesPythonPathStorageKey, apesPythonPath.trim())
+    if (!storeString(apesPythonPathStorageKey, apesPythonPath.trim())) {
+      setPersistenceWarning('Could not persist the APES Python path in browser storage.')
+    }
   }, [apesPythonPath])
 
   useEffect(() => {
-    storeBoolean(apesAllowPlaceholderStorageKey, apesAllowPlaceholder)
+    if (!storeBoolean(apesAllowPlaceholderStorageKey, apesAllowPlaceholder)) {
+      setPersistenceWarning('Could not persist the APES placeholder fallback setting in browser storage.')
+    }
   }, [apesAllowPlaceholder])
 
   useEffect(() => {
-    storeJson(apesPreflightStorageKey, apesPreflight)
+    if (!storeJson(apesPreflightStorageKey, apesPreflight)) {
+      setPersistenceWarning('Could not persist the APES preflight report in browser storage.')
+    }
   }, [apesPreflight])
 
   useEffect(() => {
-    storeString(apesHarnessGeneratedAtStorageKey, apesHarnessGeneratedAt)
+    if (!storeString(apesHarnessGeneratedAtStorageKey, apesHarnessGeneratedAt)) {
+      setPersistenceWarning('Could not persist the APES QA harness timestamp in browser storage.')
+    }
   }, [apesHarnessGeneratedAt])
+
+  useEffect(() => {
+    if (!storeJson(variationPresetsStorageKey, variationPresets)) {
+      setPersistenceWarning('Could not persist variation presets in browser storage.')
+    }
+  }, [variationPresets])
+
+  useEffect(() => {
+    if (!storeString(filenameTemplateStorageKey, filenameTemplate)) {
+      setPersistenceWarning('Could not persist the export filename template in browser storage.')
+    }
+  }, [filenameTemplate])
 
   const characters = useMemo(() => [...(manifest?.characters ?? []), ...(duelystAudit?.staged_manifest.characters ?? [])], [manifest, duelystAudit])
   const selectedCharacter = characters.find((character) => character.character_id === selectedId) ?? characters[0]
@@ -329,9 +445,23 @@ function App() {
     if (!selectedCharacter || characters.length === 0) return []
     const random = seededRandom(batchSeed)
     const reviewedParts = partLibrary.filter((part) => part.reviewed)
+    const activePreset = variationPresets.find((preset) => preset.preset_id === activeVariationPresetId)
     return Array.from({ length: batchCount }, (_, index) => {
-      const baseCharacter = characters[Math.floor(random() * characters.length)]
+      const presetBase = activePreset ? characters.find((character) => character.character_id === activePreset.base_character) : undefined
+      const baseCharacter = presetBase ?? characters[Math.floor(random() * characters.length)]
       const parts = layerOrder.map((label) => {
+        const presetPartId = activePreset?.selected_part_ids[label]
+        const presetPart = presetPartId ? partLibrary.find((part) => part.part_id === presetPartId) : undefined
+        if (presetPart) {
+          return {
+            label,
+            source_character: presetPart.character_id,
+            method: presetPart.extraction_method,
+            source_part_id: presetPart.part_id,
+            reviewed: presetPart.reviewed,
+          }
+        }
+
         const approvedCandidates = reviewedParts.filter((part) => part.label === label)
         if (approvedCandidates.length > 0) {
           const sourcePart = approvedCandidates[Math.floor(random() * approvedCandidates.length)]
@@ -359,24 +489,25 @@ function App() {
         parts.map((part) => [part.label, part.source_character]),
       ) as Record<PartLabel, string>
       const variantPalette = palettePresets[Math.floor(random() * palettePresets.length)]
+      const resolvedPalette = activePreset?.palette ?? variantPalette
       return {
         id: `variant_${String(index + 1).padStart(3, '0')}`,
         base: baseCharacter.character_id,
-        palette: variantPalette,
+        palette: resolvedPalette,
         parts,
         recipe: makeRecipe(
           baseCharacter,
           selectedSourceParts,
           partLibrary,
           selectedPartIds,
-          {},
+          activePreset?.layer_settings ?? {},
           `batch_${batchSeed}_${String(index + 1).padStart(3, '0')}`,
-          variantPalette,
-          defaultPaletteRules,
+          resolvedPalette,
+          activePreset?.palette_rules ?? defaultPaletteRules,
         ),
       }
     })
-  }, [batchCount, batchSeed, characters, partLibrary, selectedCharacter])
+  }, [activeVariationPresetId, batchCount, batchSeed, characters, partLibrary, selectedCharacter, variationPresets])
 
   function updateRegion(key: keyof Rect, value: number) {
     setRegions((current) => ({
@@ -402,6 +533,24 @@ function App() {
       saved_at: new Date().toISOString(),
     }
     setSavedRecipes((current) => [savedRecipe, ...current.filter((item) => item.recipe_id !== recipeId)])
+  }
+
+  function saveVariationPreset() {
+    if (!selectedCharacter) return
+    const preset: VariationPreset = {
+      preset_id: `variation_${recipeId}_${Date.now()}`,
+      name: `${recipeName.trim() || selectedCharacter.display_name} variation`,
+      base_character: selectedCharacter.character_id,
+      selected_part_ids: { ...selectedPartIds },
+      selected_parts: { ...selectedParts },
+      layer_settings: { ...layerSettings },
+      palette,
+      palette_rules: { ...paletteRules },
+      tags: ['saved_from_creator'],
+      saved_at: new Date().toISOString(),
+    }
+    setVariationPresets((current) => [preset, ...current])
+    setActiveVariationPresetId(preset.preset_id)
   }
 
   function loadSavedRecipe(recipeToLoadId: string) {
@@ -539,13 +688,13 @@ function App() {
   }
 
   async function runApesPreflight() {
-    if (!import.meta.env.DEV) {
-      setApesBridgeStatus('APES preflight only works through the local dev server. Start the app with npm run dev on the machine that has the APES environment.')
+    if (!localToolsAvailable) {
+      setApesBridgeStatus('APES preflight needs the local tool server. Start with npm run dev or serve the built app with npm run preview on the APES machine.')
       return
     }
 
     setApesBridgeBusy(true)
-    setApesBridgeStatus('Running APES preflight through the local dev server...')
+    setApesBridgeStatus('Running APES preflight through the local tool server...')
     try {
       const response = await fetch('/__local/apes-tools', {
         method: 'POST',
@@ -579,8 +728,8 @@ function App() {
   async function runApesJob(jobId: string) {
     const job = apesJobs.find((item) => item.job_id === jobId)
     if (!job) return
-    if (!import.meta.env.DEV) {
-      setApesBridgeStatus('APES job execution only works through the local dev server. Start the app with npm run dev on the APES machine.')
+    if (!localToolsAvailable) {
+      setApesBridgeStatus('APES job execution needs the local tool server. Start with npm run dev or npm run preview on the APES machine.')
       return
     }
 
@@ -593,7 +742,7 @@ function App() {
               ...item,
               status: 'running',
               failure_details: undefined,
-              logs: [...item.logs, `Launching local APES bridge with ${apesPythonPath.trim() || 'the dev server Python interpreter'}.`],
+              logs: [...item.logs, `Launching local APES bridge with ${apesPythonPath.trim() || 'the local server Python interpreter'}.`],
             }
           : item,
       ),
@@ -647,13 +796,13 @@ function App() {
   }
 
   async function generateApesQaHarness() {
-    if (!import.meta.env.DEV) {
-      setApesBridgeStatus('Local QA harness generation only works through the dev server. Start the app with npm run dev on this machine.')
+    if (!localToolsAvailable) {
+      setApesBridgeStatus('Local QA harness generation needs the local tool server. Start with npm run dev or npm run preview on this machine.')
       return
     }
 
     setApesBridgeBusy(true)
-    setApesBridgeStatus('Generating the local APES QA harness through the dev server...')
+    setApesBridgeStatus('Generating the local APES QA harness through the local tool server...')
     try {
       const response = await fetch('/__local/apes-tools', {
         method: 'POST',
@@ -681,8 +830,8 @@ function App() {
   }
 
   async function summarizeApesOutputs() {
-    if (!import.meta.env.DEV) {
-      setApesBridgeStatus('APES output inventory only works through the local dev server. Start the app with npm run dev on the APES machine.')
+    if (!localToolsAvailable) {
+      setApesBridgeStatus('APES output inventory needs the local tool server. Start with npm run dev or npm run preview on the APES machine.')
       return
     }
 
@@ -707,7 +856,7 @@ function App() {
 
       setApesOutputInventory(inventory)
       setApesBridgeStatus(
-        `Inventoried ${inventory.report_count} APES report(s): ${inventory.summary.needs_review} need review, ${inventory.summary.empty_reports} empty, ${inventory.summary.reviewed_reports} fully reviewed. Wrote ${inventory.output_root}/apes_output_inventory.json.`,
+        `Inventoried ${inventory.report_count} APES report(s): ${inventory.summary.needs_review} need review, ${inventory.summary.empty_reports} empty, ${inventory.summary.failed_outputs} failed output(s), ${inventory.summary.reviewed_reports} fully reviewed. Wrote ${inventory.output_root}/apes_output_inventory.json.`,
       )
     } catch (error) {
       setApesBridgeStatus(`APES output inventory failed. ${error instanceof Error ? error.message : String(error)}`)
@@ -717,8 +866,8 @@ function App() {
   }
 
   async function importApesInventoryReport(reportPath: string) {
-    if (!import.meta.env.DEV) {
-      setApesBridgeStatus('APES report import from inventory only works through the local dev server. Start the app with npm run dev on the APES machine.')
+    if (!localToolsAvailable) {
+      setApesBridgeStatus('APES report import from inventory needs the local tool server. Start with npm run dev or npm run preview on the APES machine.')
       return
     }
 
@@ -778,6 +927,10 @@ function App() {
     const importedParts = report.masks.map((mask, index): ExtractedPart => {
       const input = job?.input_frames.find((frame) => frame.animation === 'idle' && frame.direction === 'south') ?? fallbackInput
       const region = mask.bounds ?? humanoid64Preset[mask.label]
+      const imageFileName = fileNameFromAssetPath(mask.image_path, `${mask.label}.png`)
+      const maskFileName = fileNameFromAssetPath(mask.path, `${mask.label}_mask.png`)
+      const imageDataUrl = toBrowserAssetUrl(mask.image_path)
+      const maskDataUrl = toBrowserAssetUrl(mask.path)
       return {
         part_id: `${report.job_id}_${mask.label}_${String(index).padStart(3, '0')}`,
         character_id: characterId,
@@ -785,8 +938,10 @@ function App() {
         source_animation: input?.animation ?? animations[0] ?? 'idle',
         source_direction: input?.direction ?? directions[0] ?? 'south',
         source_frame_path: input?.path,
-        image_path: mask.image_path ?? `data/apes/output/${report.job_id}/parts/${mask.label}.png`,
-        mask_path: mask.path,
+        image_path: imageFileName,
+        mask_path: maskFileName,
+        image_data_url: imageDataUrl,
+        mask_data_url: maskDataUrl,
         bounds: region,
         anchor: { x: region.x + Math.round(region.w / 2), y: region.y + Math.round(region.h / 2) },
         extraction_method: 'apes',
@@ -804,6 +959,8 @@ function App() {
           ...report.warnings,
           ...(mask.warnings ?? []),
           mask.confidence < 0.65 ? `Low APES confidence for ${mask.label}: ${mask.confidence}.` : '',
+          !imageDataUrl && isLocalApesOutputPath(mask.image_path) ? 'Image asset is local-only and only renderable while the local tool server is available.' : '',
+          !maskDataUrl && isLocalApesOutputPath(mask.path) ? 'Mask asset is local-only and only renderable while the local tool server is available.' : '',
         ].filter(Boolean),
       }
     })
@@ -881,13 +1038,18 @@ function App() {
       repairCommand,
       reindexCommand,
       'npm run dev -- --host 127.0.0.1 --port 8002 --strictPort',
+      '# or after npm run build:',
+      'npm run preview -- --host 127.0.0.1 --port 4173 --strictPort',
       '```',
       '',
       '## Validation',
       '',
       '```powershell',
       exportCommand,
+      'npm run build',
+      'npm run validate:release-package',
       'npm run test:browser',
+      'npm run release:check',
       '```',
       '',
       '## APES machine checks',
@@ -899,7 +1061,7 @@ function App() {
       '',
       '## Notes',
       '',
-      '- Direct repair, reindex, Duelyst audit, and APES bridge actions only work while the app is running through the local Vite dev server.',
+      '- Direct repair, reindex, Duelyst audit, LPC inventory, and APES bridge actions work when the app is served by the local Vite dev or preview server.',
       '- The APES QA harness is available in-app from APES Lab and is safe to use on non-GPU machines.',
       '- If the manifest asset root and your target asset root differ, use Settings to repair or reindex before exporting.',
     ].join('\n')
@@ -929,6 +1091,15 @@ function App() {
 
   async function extractCurrentRegion() {
     if (!selectedCharacter || !framePath) return
+    if (extractionMethod === 'apes') {
+      setExtractionHistory((current) => [
+        'Create an APES job from APES Lab or the top bar to run the bridge; Workstation APES mode does not create rectangular placeholder parts.',
+        ...current,
+      ].slice(0, 8))
+      setApesBridgeStatus('Create an APES job from APES Lab or the top bar, then run/import the bridge output before reviewing APES parts.')
+      return
+    }
+
     const region = regions[selectedRegion]
     const baseName = `${selectedCharacter.character_id}_${animation}_${direction}_frame_${String(frameIndex).padStart(3, '0')}_${selectedRegion}`
     const connectedResult =
@@ -999,6 +1170,36 @@ function App() {
     })
   }
 
+  function importLayerBundleJson(text: string, sourceName: string) {
+    try {
+      const bundle = parseLayerBundleManifest(text)
+      const importedParts = layerBundleToExtractedParts(bundle)
+      setPartLibrary((current) => [
+        ...importedParts,
+        ...current.filter((part) => !importedParts.some((imported) => imported.part_id === part.part_id)),
+      ])
+      setPartLibraryStatus(`Imported ${importedParts.length} part(s) from ${sourceName}. Review them before release export.`)
+    } catch (error) {
+      setPartLibraryStatus(`Layer bundle import failed for ${sourceName}. ${error instanceof Error ? error.message : String(error)}`)
+    }
+  }
+
+  function importLpcSheetsAsParts(limit: number) {
+    if (!lpcInventory) {
+      setLpcImportStatus('Run or load the LPC inventory before importing sheets.')
+      return
+    }
+
+    const importedParts = lpcSheetsToExtractedParts(lpcInventory, limit)
+    setPartLibrary((current) => [
+      ...importedParts,
+      ...current.filter((part) => !importedParts.some((imported) => imported.part_id === part.part_id)),
+    ])
+    setLpcImportStatus(`Imported ${importedParts.length} LPC sheet part(s) into the Part Library.`)
+    setPartLibraryStatus(`Imported ${importedParts.length} LPC sheet part(s). Filter by manual or tag "lpc" to select them in the creator.`)
+    setScreen('library')
+  }
+
   function makePartRecord(
     baseName: string,
     connectedResult: Awaited<ReturnType<typeof downloadConnectedPixelPart>> | undefined,
@@ -1042,7 +1243,7 @@ function App() {
 
   function exportGeneric() {
     if (!recipe || !selectedCharacter) return
-    downloadJson(`${recipe.character_id}_manifest.json`, buildExportManifest(selectedCharacter, recipe, apesJobs))
+    downloadJson(`${recipe.character_id}_manifest.json`, buildExportManifest(selectedCharacter, recipe, apesJobs, { placeholderModeEnabled: apesAllowPlaceholder }))
   }
 
   function exportGodotScene() {
@@ -1050,9 +1251,16 @@ function App() {
     downloadText(`${recipe.character_id}.tscn`, buildGodotSceneText(recipe))
   }
 
-  function exportSpriteFrames() {
+  async function exportSpriteFrames() {
     if (!recipe || !selectedCharacter) return
-    downloadText(`${recipe.character_id}_sprite_frames.tres`, buildGodotSpriteFrames(selectedCharacter, recipe))
+    setExportStatus('Building Godot SpriteFrames resource...')
+    try {
+      const renderedFrameSet = await buildRenderedFrameSet(selectedCharacter, recipe, characters, partLibrary)
+      downloadText(`${recipe.character_id}_sprite_frames.tres`, buildGodotSpriteFramesResource(recipe, renderedFrameSet, 'rendered/frames'))
+      setExportStatus(`Godot SpriteFrames resource ready with ${renderedFrameSet.frame_count} rendered frame(s).`)
+    } catch (error) {
+      setExportStatus(`Godot SpriteFrames export failed: ${error instanceof Error ? error.message : String(error)}`)
+    }
   }
 
   function exportUnityMetadata() {
@@ -1097,11 +1305,30 @@ function App() {
     }
   }
 
+  function downloadGenerationManifest() {
+    if (!selectedCharacter) return
+    const generationManifest = buildGenerationManifest({
+      character: selectedCharacter,
+      animations: apesAnimations,
+      directions: apesDirections,
+      frameRange: apesFrameRange,
+      labels: apesLabels,
+      filenameTemplate,
+      styleNotes: generationStyleNotes,
+      layerBundleTargets: layerOrder,
+    })
+    downloadJson(`${selectedCharacter.character_id}_generation_manifest.json`, generationManifest)
+    setApesBridgeStatus(`Generation manifest ready with ${generationManifest.frame_references.length} frame reference(s) and ${generationManifest.output_labels.length} output label(s).`)
+  }
+
   async function exportFullPackageManifest() {
     if (!recipe || !selectedCharacter) return
     setExportStatus('Building full package manifest...')
     try {
-      const packageManifest = await buildFullPackageManifest(selectedCharacter, recipe, characters, partLibrary, apesJobs)
+      const packageManifest = {
+        ...(await buildFullPackageManifest(selectedCharacter, recipe, characters, partLibrary, apesJobs, undefined, { placeholderModeEnabled: apesAllowPlaceholder })),
+        filename_template: filenameTemplate,
+      }
       downloadJson(`${recipe.character_id}_full_package_manifest.json`, packageManifest)
       setExportStatus(`Full package manifest ready with ${packageManifest.rendered_outputs.frame_count} rendered frame(s).`)
     } catch (error) {
@@ -1124,7 +1351,7 @@ function App() {
     if (!recipe || !selectedCharacter) return
     setExportStatus('Building full package zip...')
     try {
-      const summary = await downloadFullPackageZip(selectedCharacter, recipe, characters, partLibrary, apesJobs)
+      const summary = await downloadFullPackageZip(selectedCharacter, recipe, characters, partLibrary, apesJobs, { placeholderModeEnabled: apesAllowPlaceholder })
       setExportStatus(`Full package zip ready with ${summary.frame_count} frame(s), ${summary.spritesheet_count} spritesheet(s), and ${summary.part_count} selected part folder(s).`)
     } catch (error) {
       setExportStatus(`Full package zip failed: ${error instanceof Error ? error.message : String(error)}`)
@@ -1162,7 +1389,7 @@ function App() {
     }
 
     setSettingsBusy(true)
-    setSettingsStatus(action === 'repair' ? 'Running manifest repair through the local dev server...' : 'Running manifest reindex through the local dev server...')
+    setSettingsStatus(action === 'repair' ? 'Running manifest repair through the local tool server...' : 'Running manifest reindex through the local tool server...')
     try {
       const response = await fetch('/__local/asset-tools', {
         method: 'POST',
@@ -1179,15 +1406,15 @@ function App() {
       const summary = (payload.stdout || '').trim().split('\n').filter(Boolean).slice(-1)[0]
       setSettingsStatus(summary || (action === 'repair' ? 'Manifest repaired and reloaded.' : 'Manifest reindexed and reloaded.'))
     } catch (error) {
-      setSettingsStatus(`Local ${action} failed. Start the app with npm run dev or use the copy-command buttons instead. ${error instanceof Error ? error.message : String(error)}`)
+      setSettingsStatus(`Local ${action} failed. Start the app with npm run dev or npm run preview, or use the copy-command buttons instead. ${error instanceof Error ? error.message : String(error)}`)
     } finally {
       setSettingsBusy(false)
     }
   }
 
   async function runDuelystAudit() {
-    if (!import.meta.env.DEV) {
-      setDuelystStatus('Duelyst package inspection only works through the local dev server because the app stages local /@fs previews.')
+    if (!localToolsAvailable) {
+      setDuelystStatus('Duelyst package inspection needs the local tool server because the app stages local /@fs previews. Start with npm run dev or npm run preview.')
       return
     }
 
@@ -1211,6 +1438,42 @@ function App() {
       setDuelystStatus(`Duelyst audit failed. ${error instanceof Error ? error.message : String(error)}`)
     } finally {
       setDuelystBusy(false)
+    }
+  }
+
+  async function runLpcInventory() {
+    if (lpcBusy) return
+    if (!localToolsAvailable) {
+      setLpcStatus('LPC inventory rebuild needs the local tool server. Start with npm run dev or npm run preview, or run `npm run lpc:inventory` from the terminal.')
+      return
+    }
+
+    setLpcBusy(true)
+    setLpcStatus('Scanning local LPC assets and upstream reference metadata...')
+    try {
+      const response = await fetch('/__local/asset-tools', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'lpc-inventory' }),
+      })
+      const payload = await response.json() as LocalAssetToolPayload
+      if (!response.ok) {
+        throw new Error(payload.error || payload.stderr || `LPC inventory failed with status ${response.status}`)
+      }
+
+      if (!payload.lpcInventory) {
+        setLpcStatus('LPC inventory completed, but the inventory file could not be loaded.')
+        return
+      }
+
+      setLpcInventory(payload.lpcInventory)
+      setLpcStatus(
+        `Indexed ${payload.lpcInventory.summary.png_count} LPC PNG sheet(s), ${payload.lpcInventory.summary.lpc_grid_count} on a 64x64 grid, with ${payload.lpcInventory.summary.credit_file_count} credit/license file(s).`,
+      )
+    } catch (error) {
+      setLpcStatus(`LPC inventory failed. ${error instanceof Error ? error.message : String(error)}`)
+    } finally {
+      setLpcBusy(false)
     }
   }
 
@@ -1344,6 +1607,7 @@ function App() {
           <div>
             <p className="section-label">{screenLabel(screen)}</p>
             <h2>{selectedCharacter.display_name}</h2>
+            {persistenceWarning ? <p className="topbar-warning" role="status">{persistenceWarning}</p> : null}
           </div>
           <div className="topbar-actions">
             <button onClick={createApesJob}>Prepare APES Job</button>
@@ -1430,6 +1694,8 @@ function App() {
           {screen === 'library' ? (
             <PartLibraryPanel
               parts={partLibrary}
+              importLayerBundleJson={importLayerBundleJson}
+              partLibraryStatus={partLibraryStatus}
               togglePartReviewed={togglePartReviewed}
               setPartsReviewed={setPartsReviewed}
               deletePart={deletePart}
@@ -1449,6 +1715,10 @@ function App() {
               currentAnimation={animation}
               currentDirection={direction}
               currentFrameIndex={frameIndex}
+              variationPresets={variationPresets}
+              activeVariationPresetId={activeVariationPresetId}
+              setActiveVariationPresetId={setActiveVariationPresetId}
+              saveVariationPreset={saveVariationPreset}
             />
           ) : null}
           {screen === 'audit' ? (
@@ -1458,10 +1728,17 @@ function App() {
               duelystAudit={duelystAudit}
               duelystBusy={duelystBusy}
               duelystStatus={duelystStatus}
+              lpcInventory={lpcInventory}
+              lpcBusy={lpcBusy}
+              lpcStatus={lpcStatus}
               runDuelystAudit={runDuelystAudit}
+              runLpcInventory={runLpcInventory}
               loadPrivateDuelystManifest={() => loadPrivateDuelystManifest()}
               openDuelystStageCharacter={openDuelystStageCharacter}
               createDuelystApesJobs={createDuelystApesJobs}
+              localToolsAvailable={localToolsAvailable}
+              importLpcSheetsAsParts={importLpcSheetsAsParts}
+              lpcImportStatus={lpcImportStatus}
             />
           ) : null}
           {screen === 'apes' ? (
@@ -1496,6 +1773,10 @@ function App() {
               apesHarnessGeneratedAt={apesHarnessGeneratedAt}
               mainDirections={mainDirections}
               apesCoreLabels={apesCoreLabels}
+              localToolsAvailable={localToolsAvailable}
+              generationStyleNotes={generationStyleNotes}
+              setGenerationStyleNotes={setGenerationStyleNotes}
+              downloadGenerationManifest={downloadGenerationManifest}
             />
           ) : null}
           {screen === 'exports' ? (
@@ -1522,6 +1803,8 @@ function App() {
               exportFullPackageZip={exportFullPackageZip}
               exportStatus={exportStatus}
               batchVariants={batchVariants}
+              filenameTemplate={filenameTemplate}
+              setFilenameTemplate={setFilenameTemplate}
             />
           ) : null}
           {screen === 'settings' ? (
@@ -1539,6 +1822,7 @@ function App() {
               apesAllowPlaceholder={apesAllowPlaceholder}
               setApesAllowPlaceholder={setApesAllowPlaceholder}
               apesPreflight={apesPreflight}
+              localToolsAvailable={localToolsAvailable}
             />
           ) : null}
         </div>

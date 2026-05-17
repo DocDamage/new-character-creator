@@ -7,6 +7,8 @@ type PartReviewFilter = 'all' | 'reviewed' | 'needs_review'
 
 type PartLibraryPanelProps = {
   parts: ExtractedPart[]
+  importLayerBundleJson: (text: string, sourceName: string) => void
+  partLibraryStatus: string
   togglePartReviewed: (partId: string) => void
   setPartsReviewed: (partIds: string[], reviewed: boolean) => void
   deletePart: (partId: string) => void
@@ -16,6 +18,8 @@ type PartLibraryPanelProps = {
 
 export function PartLibraryPanel({
   parts,
+  importLayerBundleJson,
+  partLibraryStatus,
   togglePartReviewed,
   setPartsReviewed,
   deletePart,
@@ -26,6 +30,7 @@ export function PartLibraryPanel({
   const [labelFilter, setLabelFilter] = useState<PartLabel | 'all'>('all')
   const [reviewFilter, setReviewFilter] = useState<PartReviewFilter>('all')
   const [query, setQuery] = useState('')
+  const [visibleLimit, setVisibleLimit] = useState(100)
   const reviewedCount = parts.filter((part) => part.reviewed).length
   const byMethod = parts.reduce<Record<string, number>>((acc, part) => {
     acc[part.extraction_method] = (acc[part.extraction_method] ?? 0) + 1
@@ -40,7 +45,8 @@ export function PartLibraryPanel({
     const searchable = [part.part_id, part.character_id, part.label, part.extraction_method, ...part.tags].join(' ').toLowerCase()
     return matchesMethod && matchesLabel && matchesReview && (!normalizedQuery || searchable.includes(normalizedQuery))
   })
-  const filteredIds = filteredParts.map((part) => part.part_id)
+  const visibleParts = filteredParts.slice(0, visibleLimit)
+  const visibleIds = visibleParts.map((part) => part.part_id)
 
   return (
     <section className="panel wide-panel">
@@ -50,9 +56,28 @@ export function PartLibraryPanel({
           <p>Reusable extraction records from APES, presets, connected-pixel selections, and manual cleanup.</p>
         </div>
         <div className="topbar-actions">
+          <label className="file-import">
+            <span>Import layer bundle JSON</span>
+            <input
+              data-testid="import-layer-bundle-input"
+              type="file"
+              accept="application/json,.json"
+              onChange={(event) => {
+                const file = event.target.files?.[0]
+                if (!file) return
+                file.text().then((text) => importLayerBundleJson(text, file.name))
+                event.currentTarget.value = ''
+              }}
+            />
+          </label>
           <button onClick={exportPartLibrary}>Export library JSON</button>
           <button onClick={clearPartLibrary}>Clear library</button>
         </div>
+      </div>
+
+      <div className="settings-card">
+        <strong>Import status</strong>
+        <span>{partLibraryStatus}</span>
       </div>
 
       <div className="validation-grid">
@@ -72,18 +97,24 @@ export function PartLibraryPanel({
         ))}
         <article className={filteredParts.length > 0 ? 'pass' : 'warn'}>
           <strong>{filteredParts.length}</strong>
-          <span>visible results</span>
+          <span>filtered results</span>
         </article>
       </div>
 
       <div className="library-filters">
         <label className="field">
           <span>Search</span>
-          <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="part id, tag, character" />
+          <input value={query} onChange={(event) => {
+            setQuery(event.target.value)
+            setVisibleLimit(100)
+          }} placeholder="part id, tag, character" />
         </label>
         <label className="field">
           <span>Method</span>
-          <select data-testid="part-library-method-filter" value={methodFilter} onChange={(event) => setMethodFilter(event.target.value as ExtractionMethod | 'all')}>
+          <select data-testid="part-library-method-filter" value={methodFilter} onChange={(event) => {
+            setMethodFilter(event.target.value as ExtractionMethod | 'all')
+            setVisibleLimit(100)
+          }}>
             <option value="all">all methods</option>
             <option value="apes">APES</option>
             <option value="preset_region">preset regions</option>
@@ -93,7 +124,10 @@ export function PartLibraryPanel({
         </label>
         <label className="field">
           <span>Label</span>
-          <select value={labelFilter} onChange={(event) => setLabelFilter(event.target.value as PartLabel | 'all')}>
+          <select value={labelFilter} onChange={(event) => {
+            setLabelFilter(event.target.value as PartLabel | 'all')
+            setVisibleLimit(100)
+          }}>
             <option value="all">all labels</option>
             {partLabels.map((label) => (
               <option key={label} value={label}>
@@ -104,7 +138,10 @@ export function PartLibraryPanel({
         </label>
         <label className="field">
           <span>Review</span>
-          <select value={reviewFilter} onChange={(event) => setReviewFilter(event.target.value as PartReviewFilter)}>
+          <select value={reviewFilter} onChange={(event) => {
+            setReviewFilter(event.target.value as PartReviewFilter)
+            setVisibleLimit(100)
+          }}>
             <option value="all">all review states</option>
             <option value="needs_review">needs review</option>
             <option value="reviewed">reviewed</option>
@@ -113,25 +150,35 @@ export function PartLibraryPanel({
       </div>
 
       <div className="status-strip">
-        <button data-testid="mark-visible-reviewed" onClick={() => setPartsReviewed(filteredIds, true)} disabled={filteredParts.length === 0}>Mark visible reviewed</button>
-        <button data-testid="mark-visible-unreviewed" onClick={() => setPartsReviewed(filteredIds, false)} disabled={filteredParts.length === 0}>Mark visible unreviewed</button>
+        <button data-testid="mark-visible-reviewed" onClick={() => setPartsReviewed(visibleIds, true)} disabled={visibleParts.length === 0}>Mark visible reviewed</button>
+        <button data-testid="mark-visible-unreviewed" onClick={() => setPartsReviewed(visibleIds, false)} disabled={visibleParts.length === 0}>Mark visible unreviewed</button>
         <button
           onClick={() =>
             downloadJson('pixel_creator_filtered_parts.json', {
               exported_at: new Date().toISOString(),
               filters: { methodFilter, labelFilter, reviewFilter, query },
-              part_count: filteredParts.length,
-              parts: filteredParts,
+              filtered_part_count: filteredParts.length,
+              visible_part_count: visibleParts.length,
+              part_count: visibleParts.length,
+              parts: visibleParts,
             })
           }
-          disabled={filteredParts.length === 0}
+          disabled={visibleParts.length === 0}
         >
           Export visible JSON
         </button>
       </div>
 
+      <div className="settings-card">
+        <strong>Rendered results</strong>
+        <span>Showing {visibleParts.length} of {filteredParts.length} filtered part(s).</span>
+        {visibleParts.length < filteredParts.length ? (
+          <button data-testid="show-more-parts" onClick={() => setVisibleLimit((current) => current + 100)}>Show 100 more</button>
+        ) : null}
+      </div>
+
       <div className="part-library-list">
-        {filteredParts.map((part) => (
+        {visibleParts.map((part) => (
           <article key={part.part_id} className={part.reviewed ? 'reviewed' : ''}>
             <div>
               <strong>{part.label}</strong>

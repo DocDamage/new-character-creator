@@ -54,12 +54,19 @@ export function MaskEditor({ parts, selectedRegion, region, sourceFramePath, onS
 
   useEffect(() => {
     let cancelled = false
-    loadMask(selectedPart, region).then((mask) => {
-      if (cancelled) return
-      maskRef.current = mask
-      setStatusMessage(selectedPart ? `Editing ${selectedPart.part_id}. Saving writes a reviewed manual part.` : 'New manual part will be created from the current region mask.')
-      setRevision((value) => value + 1)
-    })
+    loadMask(selectedPart, region)
+      .then((mask) => {
+        if (cancelled) return
+        maskRef.current = mask
+        setStatusMessage(selectedPart ? `Editing ${selectedPart.part_id}. Saving writes a reviewed manual part.` : 'New manual part will be created from the current region mask.')
+        setRevision((value) => value + 1)
+      })
+      .catch((error) => {
+        if (cancelled) return
+        maskRef.current = rectToMask(region)
+        setStatusMessage(`Could not load the saved mask. Using the current region instead. ${error instanceof Error ? error.message : String(error)}`)
+        setRevision((value) => value + 1)
+      })
     return () => {
       cancelled = true
     }
@@ -106,7 +113,11 @@ export function MaskEditor({ parts, selectedRegion, region, sourceFramePath, onS
       drawContext.putImageData(overlay, 0, 0)
     }
 
-    draw().catch((error) => console.error('Could not draw mask editor', error))
+    draw().catch((error) => {
+      if (!cancelled) {
+        setStatusMessage(`Could not draw the mask editor preview. ${error instanceof Error ? error.message : String(error)}`)
+      }
+    })
     return () => {
       cancelled = true
     }

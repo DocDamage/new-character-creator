@@ -1,6 +1,6 @@
 import { CompositeCanvas } from '../CompositeCanvas'
 import type { BatchVariant } from '../appViewTypes'
-import type { AnimationName, CharacterManifest, Direction, ExtractedPart } from '../types'
+import type { AnimationName, CharacterManifest, Direction, ExtractedPart, VariationPreset } from '../types'
 import { downloadJson, slugLabel } from '../utils'
 
 type BatchGeneratorPanelProps = {
@@ -14,6 +14,10 @@ type BatchGeneratorPanelProps = {
   currentAnimation: AnimationName
   currentDirection: Direction
   currentFrameIndex: number
+  variationPresets: VariationPreset[]
+  activeVariationPresetId: string
+  setActiveVariationPresetId: (presetId: string) => void
+  saveVariationPreset: () => void
 }
 
 export function BatchGeneratorPanel({
@@ -27,6 +31,10 @@ export function BatchGeneratorPanel({
   currentAnimation,
   currentDirection,
   currentFrameIndex,
+  variationPresets,
+  activeVariationPresetId,
+  setActiveVariationPresetId,
+  saveVariationPreset,
 }: BatchGeneratorPanelProps) {
   const reviewedParts = partLibrary.filter((part) => part.reviewed)
   const reviewedApesParts = reviewedParts.filter((part) => part.extraction_method === 'apes')
@@ -50,6 +58,16 @@ export function BatchGeneratorPanel({
           <span>Export count</span>
           <input min={1} max={32} type="number" value={batchCount} onChange={(event) => setBatchCount(Number(event.target.value))} />
         </label>
+        <label className="field">
+          <span>Variation preset</span>
+          <select data-testid="variation-preset-select" value={activeVariationPresetId} onChange={(event) => setActiveVariationPresetId(event.target.value)}>
+            <option value="">seeded library mix</option>
+            {variationPresets.map((preset) => (
+              <option key={preset.preset_id} value={preset.preset_id}>{preset.name}</option>
+            ))}
+          </select>
+        </label>
+        <button data-testid="save-variation-preset" onClick={saveVariationPreset}>Save current as preset</button>
       </div>
       <div className="validation-grid">
         <article className={reviewedApesParts.length > 0 ? 'pass' : 'warn'}>
@@ -63,6 +81,10 @@ export function BatchGeneratorPanel({
         <article className={libraryBackedPartCount > 0 ? 'pass' : 'warn'}>
           <strong>{libraryBackedPartCount}</strong>
           <span>library picks in queue</span>
+        </article>
+        <article className={variationPresets.length > 0 ? 'pass' : 'warn'}>
+          <strong>{variationPresets.length}</strong>
+          <span>saved variation presets</span>
         </article>
       </div>
       <div className="status-strip">

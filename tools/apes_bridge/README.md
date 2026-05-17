@@ -11,7 +11,7 @@ data/apes/input/<job_id>/
 
 data/apes/output/<job_id>/
   status.json
-  apes_report.json
+  apes_report.json (successful or empty completed outputs)
   masks/
     head_mask.png
     torso_mask.png
@@ -29,7 +29,8 @@ data/apes/output/<job_id>/
 - runs `vendor/APES/inference/inference_os.py`
 - writes `status.json`, `preflight.json`, and `apes_report.json`
 - relabels APES part masks back onto the creator's core semantic labels with a preset-bounds heuristic
-- writes a completed empty review report when APES runs but selects zero usable parts
+- writes a completed empty report when APES runs but selects zero usable parts
+- records failed `status.json` details when upstream APES rejects a sprite before producing a report
 
 Use placeholder masks only when you explicitly opt in for harness work:
 
@@ -109,11 +110,11 @@ The manifest inventories the local supervised datasets and emits quoted Windows-
 - `creative_flow` corrnet fine-tuning from `assets/creative_flow/{train,val,test}`
 - `okay_samurai` corrnet fine-tuning from `assets/okay_samurai/{train,val,test}`
 - `okay_samurai` fullnet fine-tuning from existing corrnet/fullnet checkpoints
-- Duelyst pseudo-label review using the private staged sheet dataset
+- Duelyst pseudo-label/output generation using the private staged sheet dataset
 
-Important: Duelyst staged frames are private local inputs. Their labels are produced from Duelyst path/name/animation metadata plus a lightweight alpha-silhouette detector, not from human-reviewed APES correspondence labels. They should be used for filtering, inference, reviewed APES masks, and pseudo-label generation before being treated as supervised training examples.
+Important: Duelyst staged frames are private local inputs. Their labels are produced from Duelyst path/name/animation metadata plus a lightweight alpha-silhouette detector for filtering, inference, APES masks, and pseudo-label generation.
 
-`npm run apes:prepare-duelyst-jobs` writes ignored APES job JSON files for the staged APES-review Duelyst candidates. `npm run apes:run-duelyst-jobs` runs those jobs immediately. Current staged Duelyst jobs use real staged idle atlas frames when available and only duplicate a representative crop for one-frame sources. APES may still complete with an empty report when no moving parts can be selected; that empty report is expected for some static or low-motion inputs and is not an environment failure.
+`npm run apes:prepare-duelyst-jobs` writes ignored APES job JSON files for the staged Duelyst candidates. `npm run apes:run-duelyst-jobs` runs those jobs immediately. Current staged Duelyst jobs use real staged idle atlas frames when available and only duplicate a representative crop for one-frame sources. APES may still complete with an empty report when no moving parts can be selected; that empty report is expected for some static or low-motion inputs and is not an environment failure. Sprite-specific APES rejects are recorded in `duelyst_job_batch.json` and surfaced by the output inventory; add `-- --fail-on-job-error` when strict non-zero behavior is needed.
 
 After one or more APES jobs run, summarize the ignored local output folder with:
 
@@ -121,11 +122,11 @@ After one or more APES jobs run, summarize the ignored local output folder with:
 npm run apes:summarize-outputs
 ```
 
-That writes `data/apes/output/apes_output_inventory.json` with report counts, mask labels, missing expected labels, confidence ranges, warning counts, and review state. The APES Lab also exposes this through `Inventory APES outputs` when the app is running under `npm run dev`; non-empty inventoried reports can be imported directly into the Part Library from that list.
+That writes `data/apes/output/apes_output_inventory.json` with report counts, mask labels, missing expected labels, confidence ranges, warning counts, review state, and failed output statuses. The APES Lab also exposes this through `Inventory APES outputs` when the app is running under `npm run dev`; non-empty inventoried reports can be imported directly into the Part Library from that list.
 
-Current quality note: the first verified multi-frame Duelyst APES job produced creator-sized `head`, `torso`, and `front_arm` review masks, but missed other requested labels. Treat APES output as review material, not accepted training labels, until masks are manually checked and promoted.
+Current quality note: the latest full local Duelyst batch attempted 60 jobs, produced 57 successful job results, and recorded 3 upstream APES segmentation rejects: `apes_duelyst_neutral_mercsongweaver_010`, `apes_duelyst_neutral_mercarcanelimiter_038`, and `apes_duelyst_neutral_mercsightlessfarseer_048`. APES output quality is sprite-specific, so inspect failures or low-confidence masks before using them for character assembly.
 
-The app treats APES as a core extraction path, not a side experiment: every report includes provenance, semantic labels, review status, warnings, and editable mask paths.
+The app treats APES as a core extraction path, not a side experiment: reports include semantic labels, review status, warnings, editable mask paths, and local debugging metadata.
 
 Reports can be imported from the APES Lab with the `Import APES report JSON` control. Imported masks are converted into the same `ExtractedPart` records as preset, connected-pixel, and manual cleanup outputs, preserving APES confidence and warnings for review.
 
@@ -144,6 +145,7 @@ If the app is already running under `npm run dev`, APES Lab also exposes a `Gene
 ```text
 micromamba run -n apes-gpu-modern python -c "import torch, torchvision, cv2, numpy, pytorch3d, torch_scatter, torch_cluster; print(torch.__version__, torch.version.cuda, torch.cuda.is_available()); print(cv2.__version__, numpy.__version__, pytorch3d.__version__)"
 micromamba run -n apes-gpu-modern python tools\apes_bridge\check_apes_env.py --json
+npm run apes:summarize-outputs
 ```
 
 Expected preflight state:

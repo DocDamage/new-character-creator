@@ -23,12 +23,7 @@ export function slugLabel(value: string) {
 
 export function downloadJson(filename: string, payload: unknown) {
   const blob = new Blob([`${JSON.stringify(payload, null, 2)}\n`], { type: 'application/json' })
-  const url = URL.createObjectURL(blob)
-  const link = document.createElement('a')
-  link.href = url
-  link.download = filename
-  link.click()
-  URL.revokeObjectURL(url)
+  downloadBlob(filename, blob)
 }
 
 export function downloadText(filename: string, payload: string, type = 'text/plain') {
@@ -41,8 +36,11 @@ export function downloadBlob(filename: string, blob: Blob) {
   const link = document.createElement('a')
   link.href = url
   link.download = filename
+  link.style.display = 'none'
+  document.body.appendChild(link)
   link.click()
-  URL.revokeObjectURL(url)
+  document.body.removeChild(link)
+  window.setTimeout(() => URL.revokeObjectURL(url), 1000)
 }
 
 export async function downloadCroppedPng(filename: string, src: string, region: Rect) {
@@ -338,30 +336,7 @@ export function makeApesJob(
   }
 }
 
-export function buildGodotSpriteFrames(character: CharacterManifest, recipe: KitbashRecipe) {
-  const animationEntries = character.animation_names.flatMap((animation) =>
-    ['south', 'east', 'north', 'west'].map((direction) => {
-      const frames = getFrames(character, animation, direction as Direction)
-      return {
-        name: `${animation}_${direction}`,
-        speed: animation === 'attack' ? 10 : 7,
-        loop: animation !== 'attack',
-        frame_count: frames.length,
-      }
-    }),
-  )
-
-  return `[gd_resource type="SpriteFrames" format=3]
-
-[resource]
-metadata/provenance = "${recipe.character_id}"
-metadata/source_character = "${character.character_id}"
-metadata/extraction_methods = "APES,preset_region,connected_pixel,manual"
-animations = ${JSON.stringify(animationEntries).replaceAll('"', '\\"')}
-`
-}
-
-export function buildExportManifest(character: CharacterManifest, recipe: KitbashRecipe, apesJobs: ApesJob[]) {
+export function buildExportManifest(character: CharacterManifest, recipe: KitbashRecipe, apesJobs: ApesJob[], options: { placeholderModeEnabled?: boolean } = {}) {
   return {
     export_version: 1,
     created_at: new Date().toISOString(),
@@ -378,6 +353,7 @@ export function buildExportManifest(character: CharacterManifest, recipe: Kitbas
     recipe,
     apes: {
       first_class: true,
+      placeholder_mode_enabled: options.placeholderModeEnabled === true,
       jobs: apesJobs.map((job) => ({
         job_id: job.job_id,
         status: job.status,
