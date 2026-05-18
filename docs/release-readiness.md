@@ -23,8 +23,8 @@ Latest verification after the release hardening pass:
 - `npm run build:release`: passed
 - `npm run validate:release-package`: passed
 - `npm run test:preview-tools`: passed
-- `npm run test:browser`: passed, 17 Chromium tests
-- `npm run test:browser:all`: passed, 51 tests across Chromium, Firefox, and WebKit
+- `npm run test:browser`: passed, 18 Chromium tests
+- `npm run test:browser:all`: passed, 54 tests across Chromium, Firefox, and WebKit
 - `npm run test:private-assets`: optional/private-machine only
 - `npm run release:check`: passed
 
@@ -33,7 +33,7 @@ context-menu, missing-animation queue, and oversize-warning slices:
 
 - `npm run build`: passed
 - `npm run test:tools`: passed, 37 tests
-- `npx playwright test tests/browser/regression.spec.ts`: passed, 17 Chromium tests
+- `npx playwright test tests/browser/regression.spec.ts`: passed, 18 Chromium tests
 
 ```powershell
 npm run lint

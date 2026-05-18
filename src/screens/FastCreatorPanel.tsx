@@ -758,6 +758,7 @@ export function FastCreatorPanel({
                     />
                   </label>
                 </div>
+                {isLocked ? <p className="field-help">Unlock this layer before changing its source, approved part, visibility, or offsets.</p> : null}
               </article>
             </ContextMenuArea>
           )

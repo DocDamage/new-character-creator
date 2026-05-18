@@ -45,11 +45,11 @@ Latest verified automated run:
 - `npm run build:release`
 - `npm run validate:release-package`
 - `npm run test:preview-tools`
-- `npm run test:browser` passed, 17 Chromium tests
-- `npm run test:browser:all` passed, 51 Chromium/Firefox/WebKit tests
+- `npm run test:browser` passed, 18 Chromium tests
+- `npm run test:browser:all` passed, 54 Chromium/Firefox/WebKit tests
 - `npm run test:private-assets` optional/private-machine only
 - `npm run release:check` passed
-- latest focused gate passed with lint, source hygiene, 49 tool tests, public release build/package validation, tokenized preview local-tool smoke, 17 Chromium browser tests, and 51-test cross-browser matrix
+- latest focused gate passed with lint, source hygiene, 49 tool tests, public release build/package validation, tokenized preview local-tool smoke, 18 Chromium browser tests, and 54-test cross-browser matrix
 - latest LPC hybrid follow-up smoke passed with `npm run build`, 37 tool tests, and 17 Chromium browser regression tests
 
 Latest verified local app state:

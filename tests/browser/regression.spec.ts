@@ -3,7 +3,7 @@ import { copyFile, mkdir, readFile, rm, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import JSZip from 'jszip'
-import { expect, test } from '@playwright/test'
+import { expect, test, type Locator } from '@playwright/test'
 
 type RenderedFrameSetDownload = {
   format: string
@@ -217,6 +217,12 @@ test('creator cockpit filters parts and persists export target profile', async (
   await expect(page.getByRole('menu')).toHaveCount(0)
   await page.getByTestId('fast-part-search').fill('manual-only-no-match')
   await expect(page.getByLabel(/Approved part \(1\/1\)/).first()).toContainText(/selected outside filter/)
+  const lockedLayer = page.locator('[data-testid^="fast-layer-card-"]').filter({ hasText: /Approved part \(1\/1\)/ }).first()
+  await setCheckboxChecked(lockedLayer.getByLabel('Locked'), true)
+  await expect(lockedLayer.getByLabel(/Approved part \(1\/1\)/)).toBeDisabled()
+  await expect(lockedLayer.getByLabel(/x offset/i)).toBeDisabled()
+  await expect(lockedLayer.getByText(/Unlock this layer before/i).first()).toBeVisible()
+  await setCheckboxChecked(lockedLayer.getByLabel('Locked'), false)
 
   await page.getByTestId('export-target-profile').selectOption('rpg_maker_mz')
   await page.keyboard.press('Escape')
@@ -467,6 +473,24 @@ test('APES harness generation, reload, and pasted import stay usable', async ({ 
   await page.getByTestId('apes-report-json-input').fill(harnessText)
   await page.getByTestId('import-apes-report-json').click()
   await expect(page.getByTestId('apes-bridge-status')).toContainText(/Imported APES report from pasted JSON/i)
+  await page.getByTestId('apes-report-json-input').fill(JSON.stringify({
+    job_id: 'invalid_report',
+    masks: [
+      {
+        label: 'not_a_part',
+        path: 'C:\\private\\bad.png',
+        confidence: 2,
+        reviewed: 'no',
+      },
+    ],
+    semantic_mapping: {},
+    warnings: [],
+  }))
+  await page.getByTestId('import-apes-report-json').click()
+  await expect(page.getByTestId('apes-bridge-status')).toContainText(/APES report import rejected/i)
+  await page.getByTestId('nav-library').click()
+  await page.getByTestId('part-library-method-filter').selectOption('apes')
+  await expect(page.locator('.part-library-list').getByText('invalid_report')).toHaveCount(0)
 })
 
 test('APES prep actions surface fine-tune artifacts and queue Duelyst jobs', async ({ page }) => {
@@ -658,10 +682,61 @@ test('placeholder mode provenance and accessible release controls stay visible',
   await expect(page.getByTestId('apes-placeholder-warning')).toContainText(/not production segmentation/i)
 
   await page.getByRole('button', { name: 'Exports' }).click()
-  const genericManifest = await readJsonDownload<{ apes: { placeholder_mode_enabled: boolean } }>(page, async () => {
-    await page.getByRole('button', { name: 'Download generic manifest' }).click()
-  })
-  expect(genericManifest.apes.placeholder_mode_enabled).toBe(true)
+  await expect(page.getByTestId('export-generic-manifest')).toBeDisabled()
+  await expect(page.getByText(/placeholder APES fallback before release export/i)).toBeVisible()
+})
+
+test('keyboard canvas workflows and IndexedDB asset cleanup stay usable', async ({ page }, testInfo) => {
+  await page.getByTestId('nav-workstation').click()
+  await page.getByRole('button', { name: 'Pause' }).click()
+  const seedCanvas = page.locator('.pixel-stage canvas[tabindex="0"]').first()
+  await expect(seedCanvas).toBeVisible()
+  await seedCanvas.focus()
+  await page.keyboard.press('ArrowRight')
+  await page.keyboard.press('ArrowDown')
+  await page.keyboard.press('Enter')
+
+  await page.getByRole('button', { name: /Preset regions/i }).click()
+  await page.getByTestId('extract-current-region').click()
+  const maskCanvas = page.locator('.mask-canvas')
+  await maskCanvas.focus()
+  await page.keyboard.press('ArrowRight')
+  await page.keyboard.press('Space')
+  await page.getByTestId('save-mask-part').click()
+  await expect(page.getByText(/saved as a reviewed manual part/i)).toBeVisible()
+
+  await page.getByTestId('nav-library').click()
+  const bigDataUrl = `data:image/png;base64,${'A'.repeat(20_000)}`
+  const bundlePath = path.join(testInfo.outputDir, 'large-asset-bundle.json')
+  await mkdir(testInfo.outputDir, { recursive: true })
+  await writeFile(bundlePath, JSON.stringify({
+    format: 'pixel_creator_layer_bundle',
+    version: 1,
+    bundle_id: 'cleanup_bundle',
+    parts: [
+      {
+        id: 'cleanup_bundle_head',
+        label: 'head',
+        source_character: 'cleanup_source',
+        image: {
+          data_url: bigDataUrl,
+          path: 'cleanup_bundle_head.png',
+          bounds: { x: 0, y: 0, w: 64, h: 64 },
+        },
+        mask: {
+          data_url: bigDataUrl,
+          path: 'cleanup_bundle_head_mask.png',
+        },
+      },
+    ],
+  }, null, 2), 'utf8')
+  await page.getByTestId('import-layer-bundle-input').setInputFiles(bundlePath)
+  await expect(page.locator('.part-library-list').getByText('cleanup_bundle_head')).toBeVisible()
+  await expect.poll(() => readPartAssetKeys(page)).toEqual(expect.arrayContaining(['cleanup_bundle_head:image', 'cleanup_bundle_head:mask']))
+  const importedPart = page.locator('.part-library-list article').filter({ hasText: 'cleanup_bundle_head' })
+  await importedPart.getByRole('button', { name: 'Delete' }).click()
+  await expect(importedPart).toHaveCount(0)
+  await expect.poll(() => readPartAssetKeys(page)).not.toEqual(expect.arrayContaining(['cleanup_bundle_head:image', 'cleanup_bundle_head:mask']))
 })
 
 test('harvest workflows are exposed and produce usable app artifacts', async ({ page }, testInfo) => {
@@ -912,6 +987,32 @@ async function readCompositePixel(page: Parameters<typeof test>[0]['page'], x: n
     },
     { x, y },
   )
+}
+
+async function readPartAssetKeys(page: Parameters<typeof test>[0]['page']) {
+  return page.evaluate(() => new Promise<string[]>((resolve, reject) => {
+    const request = window.indexedDB.open('pixel_creator_part_assets', 1)
+    request.onupgradeneeded = () => {
+      request.result.createObjectStore('assets')
+    }
+    request.onerror = () => reject(request.error)
+    request.onsuccess = () => {
+      const db = request.result
+      const transaction = db.transaction('assets', 'readonly')
+      const keysRequest = transaction.objectStore('assets').getAllKeys()
+      keysRequest.onerror = () => reject(keysRequest.error)
+      keysRequest.onsuccess = () => resolve(keysRequest.result.filter((key): key is string => typeof key === 'string'))
+    }
+  }))
+}
+
+async function setCheckboxChecked(locator: Locator, checked: boolean) {
+  await locator.evaluate((element, nextChecked) => {
+    const input = element as HTMLInputElement
+    if (input.checked !== nextChecked) {
+      input.click()
+    }
+  }, checked)
 }
 
 async function setFrameSlider(page: Parameters<typeof test>[0]['page'], frameIndex: number) {

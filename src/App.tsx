@@ -1689,7 +1689,7 @@ function App() {
   function deletePart(partId: string) {
     const deleted = partLibrary.find((part) => part.part_id === partId)
     setPartLibrary((current) => current.filter((part) => part.part_id !== partId))
-    void deletePartLibraryAssets([deleted?.image_asset_key, deleted?.mask_asset_key])
+    void deletePartLibraryAssets([deleted?.image_asset_key, deleted?.mask_asset_key, `${partId}:image`, `${partId}:mask`])
   }
 
   function clearPartLibrary() {
@@ -1809,11 +1809,18 @@ function App() {
     return true
   }
 
+  function blockReleaseExportForPlaceholderMode() {
+    if (!apesAllowPlaceholder) return false
+    setExportStatus('Release export blocked: turn off placeholder APES fallback before release export.')
+    return true
+  }
+
   function getCurrentGenerationReleaseBlockers() {
     return currentGenerationReleaseBlockers
   }
 
   function blockReleaseExport() {
+    if (blockReleaseExportForPlaceholderMode()) return true
     if (blockReleaseExportForLpcCredits()) return true
     const blockers = getCurrentGenerationReleaseBlockers()
     if (blockers.length === 0) return false
@@ -2603,6 +2610,7 @@ function App() {
               exportTargetProfile={exportTargetProfile}
               setExportTargetProfile={setExportTargetProfile}
               recipeReadiness={recipeReadiness}
+              apesAllowPlaceholder={apesAllowPlaceholder}
               generationReleaseBlockCount={currentGenerationReleaseBlockers.length}
               generationReleaseBlockSummary={
                 currentGenerationReleaseBlockers.length > 0

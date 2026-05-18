@@ -46,6 +46,7 @@ type ExportsPanelProps = {
   exportTargetProfile: ExportTargetProfileId
   setExportTargetProfile: (value: ExportTargetProfileId) => void
   recipeReadiness: RecipeReadiness
+  apesAllowPlaceholder: boolean
   generationReleaseBlockCount: number
   generationReleaseBlockSummary: string
 }
@@ -94,6 +95,7 @@ export function ExportsPanel({
   exportTargetProfile,
   setExportTargetProfile,
   recipeReadiness,
+  apesAllowPlaceholder,
   generationReleaseBlockCount,
   generationReleaseBlockSummary,
 }: ExportsPanelProps) {
@@ -124,8 +126,11 @@ export function ExportsPanel({
   const lpcCreditReadiness = lpcCatalog && recipe?.recipe_mode === 'lpc_character'
     ? buildLpcSelectionCreditReadiness(lpcCatalog, recipe.lpc_selections ?? {})
     : null
-  const releaseExportBlocked = Boolean(lpcCreditReadiness?.release_blocking) || generationReleaseBlockCount > 0
+  const releaseExportBlocked = Boolean(lpcCreditReadiness?.release_blocking) || generationReleaseBlockCount > 0 || apesAllowPlaceholder
   const releaseBlockSummary = [
+    apesAllowPlaceholder
+      ? 'Turn off placeholder APES fallback before release export.'
+      : '',
     lpcCreditReadiness?.release_blocking
       ? `Resolve ${lpcCreditReadiness.missing_count} missing and ${lpcCreditReadiness.needs_review_count} review-needed LPC credit item(s).`
       : '',
