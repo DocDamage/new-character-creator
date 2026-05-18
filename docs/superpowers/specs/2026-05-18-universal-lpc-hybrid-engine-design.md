@@ -282,6 +282,51 @@ Use policy:
 
 This keeps AI as a first-class implemented capability without making it a hidden dependency.
 
+## Guided Animation Intake And Creation
+
+Adding an animation in the app must be wizard-driven. A user should be able to drop attack animations into the Training Inbox, but the app must walk through every required decision before those files can train, generate, or become active character frames.
+
+The wizard should support these entry points:
+
+- drop files/folders/ZIPs into the Training Inbox
+- right click an existing frame or animation and choose `Add to Training Library`
+- right click a missing animation warning and choose `Create missing animation`
+- start from the `AI/APES` tab with `New animation set`
+- start from the future rigging editor with `Bake as custom animation`
+
+Wizard steps:
+
+1. Choose goal: `reference motion`, `approved training example`, `before/after cleanup pair`, `missing animation set`, or `final custom animation`.
+2. Identify animation: name, aliases, direction set, frame count, frame size, row/column layout, and export profile.
+3. Identify style and family: LPC body type, sprite-pack style, Duelyst review source, or custom style pack.
+4. Map frames: direction, frame index, pivot, bounds, source rect, optional weapon/part context, and draw-order assumptions.
+5. Validate files: transparency, dimensions, duplicate frames, empty frames, inconsistent pivots, unsupported frame counts, and family mismatch.
+6. Preview on a target recipe: play the animation with onion skin, grid, pivot markers, and selected parts.
+7. Fix issues: relabel, reorder, crop, align pivot, split sheet, merge frames, mark ignored frames, or send to Workstation.
+8. Save to Training Library: write staged records with provenance, review state, and compatibility modes.
+9. Approve for use: only reviewed examples can train, generate references, or enter release exports.
+
+Guardrails:
+
+- Imported animation files stay staged until the wizard completes.
+- The app should autosuggest labels, but every uncertain label is review-required.
+- A `Train-ready` score should summarize size, transparency, alignment, labels, animation coverage, source-family match, and review state.
+- Red issues block approval. Yellow issues allow save-as-draft but block training/export until resolved or explicitly reviewed.
+- The wizard must show exactly what will be added before saving.
+- Completing the wizard creates new records; it never overwrites upstream LPC files or existing reviewed examples.
+- Each save creates an undoable/import batch record.
+- The app should preserve the original dropped files or references for provenance.
+- AI generation and rig baking must return through this same review flow before outputs become selectable.
+
+For the attack-animation case, the intended user flow is:
+
+1. Drop attack spritesheets or frames into the Training Inbox.
+2. Confirm the animation name and direction/frame layout.
+3. Confirm body/style and weapon context.
+4. Review pivots and playback.
+5. Save as reference/training/final custom frames.
+6. Use the approved examples when generating or baking a missing attack animation for another character.
+
 ## Composition Algorithm
 
 Input:
@@ -619,6 +664,8 @@ Phase 6: Oversize and mandatory AI integration
 
 - Add export profiles for oversize/custom animations.
 - Add missing-animation queue.
+- Add guided animation intake for dropped frames, spritesheets, folders, and ZIPs.
+- Add Training Inbox and Training Library records for reference, approved, cleanup-pair, missing-animation, and final custom animation sets.
 - Add PixelLab/AI provider configuration and generation job tracking.
 - Add provider handoff/import for workflows that cannot be fully automated.
 - PixelLab/AI outputs become reviewed custom parts or reviewed custom animation frames with provenance, never silent upstream replacements.
@@ -651,6 +698,9 @@ Tool tests:
 - verify baked custom animation frames retain source-family provenance and review status
 - create AI generation job records without selecting outputs automatically
 - keep generated outputs blocked from release export until reviewed
+- classify dropped animation files into draft Training Inbox records without approving them automatically
+- validate animation intake records for frame size, transparency, pivots, labels, direction coverage, and source-family compatibility
+- block train/export readiness when red validation issues remain
 
 Browser tests:
 
@@ -669,6 +719,9 @@ Browser tests:
 - metadata/details are hidden by default but available through `View info`
 - AI/APES tab is present even when no provider is configured and shows setup/manual handoff state
 - generated output import creates reviewed-pending custom frames instead of replacing upstream assets
+- dropping an attack spritesheet opens the animation intake wizard and requires goal, animation, layout, style/family, frame mapping, validation, preview, and approval steps
+- wizard draft saves do not make frames selectable until reviewed
+- wizard approval creates undoable/import batch records with provenance
 - after the rigging phase exists, a baked custom animation appears as a normal selectable/exportable animation profile with review warnings
 
 Visual/manual QA:
@@ -696,6 +749,8 @@ Visual/manual QA:
 - AI integration is implemented as a first-class workflow with provider configuration, generation jobs, output intake, review, and provenance.
 - The user can choose not to run AI for any given asset, and non-AI composition/export paths remain usable.
 - AI-generated output never overwrites upstream LPC assets and cannot enter release exports until reviewed.
+- Adding a new animation is guided by a wizard with validation, preview, fix-up, staging, provenance, and approval gates.
+- Dropped attack animations can become reference/training/final custom animation sets only after the wizard labels and validates them.
 - Bone/rig-based animation authoring is present in the roadmap as a mandatory later phase, gated behind stable composition, family separation, recipe migration, and exports.
 - Baked rig animations become reviewed custom animation frames with provenance and export readiness, not hidden procedural state.
 - Exported credits list selected upstream item credits with authors, licenses, URLs, and upstream commit.
@@ -714,5 +769,6 @@ Visual/manual QA:
 - Hide deep metadata by default while keeping blocking readiness warnings visible.
 - Implement the AI workflow as mandatory app capability, while keeping every AI run user-initiated and optional per asset.
 - Treat generated AI output as custom reviewed content with provenance, never as an upstream LPC replacement.
+- Require wizard-based animation intake and creation so dropped or generated animations cannot bypass labeling, validation, preview, provenance, and review.
 - Make bone/rig animation authoring a required future phase, but do not begin it until catalog composition, family boundaries, migration, and exports are stable.
 - Bake future rig output into spritesheet frames for export instead of requiring downstream games to run this app's rigging system.
