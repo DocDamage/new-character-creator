@@ -306,6 +306,34 @@ test('LPC motion source can borrow attack actions for bases that do not include 
   await expect(page.getByText(/Motion source drives pose and frame count/i)).toBeVisible()
 })
 
+test('LPC catalog picker persists metadata-backed selections in saved recipes', async ({ page }) => {
+  await page.route('**/data/lpc/lpc_catalog.json', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify(makeBrowserLpcCatalogFixture()),
+    })
+  })
+  await page.reload()
+  await page.locator('#character').waitFor()
+
+  await page.getByTestId('source-pack-filter').selectOption('lpc')
+  const humanBodyOption = page.locator('#character option', { hasText: 'LPC Entry Bodies / Human Male' })
+  await expect(humanBodyOption).toHaveCount(1)
+  await page.locator('#character').selectOption(await humanBodyOption.first().getAttribute('value') ?? '')
+  await page.getByTestId('fast-live-layer').selectOption('cloak_back')
+  await page.getByTestId('lpc-catalog-item-select').selectOption('cape:cape_solid')
+  await page.getByTestId('lpc-catalog-variant-select').selectOption('black')
+  await expect(page.getByText(/Solid stores 1 upstream layer record/)).toBeVisible()
+
+  await page.getByTestId('save-recipe-button').click()
+  const savedRecipes = await page.evaluate(() => JSON.parse(window.localStorage.getItem('pixel_creator_saved_recipes') || '[]'))
+  expect(savedRecipes[0].recipe_mode).toBe('lpc_character')
+  expect(savedRecipes[0].source_family).toBe('lpc')
+  expect(savedRecipes[0].lpc_selections.cloak_back.item_id).toBe('cape:cape_solid')
+  expect(savedRecipes[0].lpc_selections.cloak_back.variant).toBe('black')
+})
+
 test('workstation APES mode does not create fake rectangular APES parts', async ({ page }) => {
   await page.getByTestId('nav-workstation').click()
   await page.getByRole('button', { name: 'Pause' }).click()
@@ -772,6 +800,47 @@ async function setFrameSlider(page: Parameters<typeof test>[0]['page'], frameInd
     await slider.press('ArrowRight')
   }
   await expect(slider).toHaveValue(String(frameIndex))
+}
+
+function makeBrowserLpcCatalogFixture() {
+  return {
+    format: 'pixel_creator_lpc_catalog',
+    version: 1,
+    generated_at: '2026-05-18T00:00:00.000Z',
+    source: {
+      repo: 'https://example.test',
+      reference_root: '/tmp/lpc',
+      commit: 'abc123',
+      has_upstream_sources: false,
+      has_spritesheets: true,
+      has_sheet_definitions: true,
+      has_palette_definitions: false,
+      has_credits_csv: true,
+    },
+    summary: { item_count: 1, layer_count: 1, variant_count: 1, credit_count: 1, type_counts: { cape: 1 } },
+    items: {
+      'cape:cape_solid': {
+        item_id: 'cape:cape_solid',
+        name: 'Solid',
+        type_name: 'cape',
+        path: ['torso', 'cape'],
+        tags: ['cape', 'back'],
+        required_tags: [],
+        excluded_tags: [],
+        required_body_types: ['male'],
+        variants: ['black'],
+        animations: ['walk', 'idle'],
+        preview: { row: 0, column: 0, x_offset: 0, y_offset: 0 },
+        match_body_color: false,
+        recolors: [],
+        layers: [{ layer_id: 'layer_1', z_pos: 85, paths_by_body_type: { male: 'cape/solid/female/' } }],
+        credits: [{ file: 'cape/solid', notes: '', authors: ['Artist'], licenses: ['OGA-BY 3.0'], urls: ['https://example.test'] }],
+      },
+    },
+    category_tree: { id: 'root', label: 'LPC Catalog', item_ids: [], children: [] },
+    aliases: {},
+    palettes: { definition_count: 0, names: [] },
+  }
 }
 
 async function writeLocalApesAssetReport() {

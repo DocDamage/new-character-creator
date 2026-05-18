@@ -11,8 +11,10 @@ import {
 } from '../creatorCockpit'
 import { clampOffsetInput, clampSignedInput, clampUnsignedInput } from '../inputUtils'
 import { canUseLpcPartForAnimation, isLpcMannequin, isLpcPartSourceForLayer, isPartCompatibleWithMannequin } from '../lpcPartCompatibility'
+import { buildLpcCatalogPickerOptions, buildLpcSelectionCreditReadiness } from '../lpcCatalogPicker'
 import { layerOrder, palettePresets } from '../presets'
 import type { AnimationName, CharacterManifest, ComposerLayerSettings, Direction, ExtractedPart, KitbashRecipe, PaletteRules, PartLabel, RecipeModeId } from '../types'
+import type { LpcCatalog, LpcRecipeSelection } from '../lpcCatalog'
 import { slugLabel } from '../utils'
 
 type FastCreatorPanelProps = {
@@ -55,6 +57,9 @@ type FastCreatorPanelProps = {
   localToolsAvailable: boolean
   recipeMode: RecipeModeId
   setRecipeMode: (mode: RecipeModeId) => void
+  lpcCatalog: LpcCatalog | null
+  lpcSelections: Record<string, LpcRecipeSelection>
+  setLpcSelections: Dispatch<SetStateAction<Record<string, LpcRecipeSelection>>>
 }
 
 function partMatchesActiveFilter(
@@ -75,6 +80,16 @@ function partMatchesActiveFilter(
     ...part.warnings,
   ].join(' ').toLowerCase()
   return searchable.includes(normalizedQuery)
+}
+
+function inferLpcBodyType(character: CharacterManifest) {
+  const bodyLabel = [character.display_name, String(character.labels?.lpc_path ?? '')].join(' ').toLowerCase()
+  if (bodyLabel.includes('female') || bodyLabel.includes('feminine') || bodyLabel.includes('woman')) return 'female'
+  if (bodyLabel.includes('muscular')) return 'muscular'
+  if (bodyLabel.includes('pregnant')) return 'pregnant'
+  if (bodyLabel.includes('teen')) return 'teen'
+  if (bodyLabel.includes('child')) return 'child'
+  return 'male'
 }
 
 export function FastCreatorPanel({
@@ -117,11 +132,35 @@ export function FastCreatorPanel({
   localToolsAvailable,
   recipeMode,
   setRecipeMode,
+  lpcCatalog,
+  lpcSelections,
+  setLpcSelections,
 }: FastCreatorPanelProps) {
   const reviewedParts = partLibrary.filter((part) => part.reviewed && isPartCompatibleWithMannequin(part, selectedCharacter))
   const [partSearch, setPartSearch] = useState('')
+  const [lpcCatalogSearch, setLpcCatalogSearch] = useState('')
   const [partMethodFilter, setPartMethodFilter] = useState<ExtractedPart['extraction_method'] | 'all'>('all')
   const activeExportTarget = getExportTargetProfile(exportTargetProfile)
+  const lpcBodyType = inferLpcBodyType(selectedCharacter)
+  const lpcCatalogOptions = useMemo(
+    () => lpcCatalog && recipeMode === 'lpc_character'
+      ? buildLpcCatalogPickerOptions({
+          catalog: lpcCatalog,
+          slotId: activePartLabel,
+          selections: lpcSelections,
+          bodyType: lpcBodyType,
+          animation: currentAnimation,
+          query: lpcCatalogSearch,
+        }).slice(0, 160)
+      : [],
+    [activePartLabel, currentAnimation, lpcBodyType, lpcCatalog, lpcCatalogSearch, lpcSelections, recipeMode],
+  )
+  const activeLpcSelection = lpcSelections[activePartLabel]
+  const activeLpcItem = activeLpcSelection && lpcCatalog ? lpcCatalog.items[activeLpcSelection.item_id] : undefined
+  const lpcCreditReadiness = useMemo(
+    () => lpcCatalog ? buildLpcSelectionCreditReadiness(lpcCatalog, lpcSelections) : null,
+    [lpcCatalog, lpcSelections],
+  )
   const availableMethods = useMemo(
     () => Array.from(new Set(reviewedParts.map((part) => part.extraction_method))).sort(),
     [reviewedParts],
@@ -174,6 +213,37 @@ export function FastCreatorPanel({
     })
   }
 
+  function selectLpcCatalogItem(itemId: string) {
+    setLpcSelections((current) => {
+      const next = { ...current }
+      if (!itemId || !lpcCatalog) {
+        delete next[activePartLabel]
+        return next
+      }
+      const item = lpcCatalog.items[itemId]
+      if (!item) return current
+      next[activePartLabel] = {
+        slot_id: activePartLabel,
+        item_id: item.item_id,
+        variant: item.variants[0] ?? '',
+        type_name: item.type_name,
+        enabled: true,
+      }
+      return next
+    })
+  }
+
+  function updateActiveLpcSelection(patch: Partial<LpcRecipeSelection>) {
+    setLpcSelections((current) => {
+      const existing = current[activePartLabel]
+      if (!existing) return current
+      return {
+        ...current,
+        [activePartLabel]: { ...existing, ...patch },
+      }
+    })
+  }
+
   return (
     <section className="panel wide-panel">
       <div className="panel-heading">
@@ -212,6 +282,79 @@ export function FastCreatorPanel({
       ) : (
         <p className="mode-note">Sprite Kitbash mode uses sprite-pack sources and reviewed extracted parts. LPC catalog items stay in the LPC workflow.</p>
       )}
+      {recipeMode === 'lpc_character' ? (
+        <section className="lpc-catalog-picker-panel" aria-label="LPC catalog picker">
+          <div>
+            <strong>Catalog-backed selection</strong>
+            <span>{lpcCatalog ? `${lpcCatalog.summary.item_count} catalog item(s) loaded` : 'No catalog loaded. Build it from Asset Audit.'}</span>
+          </div>
+          <div className="lpc-catalog-controls">
+            <label className="field">
+              <span>Search catalog</span>
+              <input
+                data-testid="lpc-catalog-search"
+                value={lpcCatalogSearch}
+                onChange={(event) => setLpcCatalogSearch(event.target.value)}
+                placeholder="cape, hair, sword, author, license"
+                disabled={!lpcCatalog}
+              />
+            </label>
+            <label className="field">
+              <span>{slugLabel(activePartLabel)} catalog item</span>
+              <select
+                data-testid="lpc-catalog-item-select"
+                aria-label="LPC catalog item"
+                value={activeLpcSelection?.item_id ?? ''}
+                onChange={(event) => selectLpcCatalogItem(event.target.value)}
+                disabled={!lpcCatalog || lpcCatalogOptions.length === 0}
+              >
+                <option value="">{lpcCatalogOptions.length === 0 ? 'no compatible catalog items' : 'no catalog item selected'}</option>
+                {lpcCatalogOptions.map((option) => (
+                  <option key={option.item_id} value={option.item_id}>
+                    {option.name} / {option.type_name} / {option.compatibility_state}
+                    {option.warnings.length > 0 ? ` / ${option.warnings[0]}` : ''}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="field">
+              <span>Variant</span>
+              <select
+                data-testid="lpc-catalog-variant-select"
+                aria-label="LPC catalog variant"
+                value={activeLpcSelection?.variant ?? ''}
+                onChange={(event) => updateActiveLpcSelection({ variant: event.target.value })}
+                disabled={!activeLpcItem}
+              >
+                {(activeLpcItem?.variants ?? []).map((variant) => (
+                  <option key={variant} value={variant}>{variant || 'default'}</option>
+                ))}
+              </select>
+            </label>
+            <label className="checkbox-field lpc-reviewed-toggle">
+              <input
+                type="checkbox"
+                checked={activeLpcSelection?.enabled ?? false}
+                onChange={(event) => updateActiveLpcSelection({ enabled: event.target.checked })}
+                disabled={!activeLpcSelection}
+              />
+              <span>Enabled</span>
+            </label>
+          </div>
+          <div className="part-meta">
+            <span title="Catalog draw records are persisted now; renderer migration follows after parity tests.">metadata-backed</span>
+            <span title="Current body key used for catalog filtering">{lpcBodyType}</span>
+            <span title="Release-blocking selected-item credits">{lpcCreditReadiness?.missing_count ?? 0} missing credits</span>
+            <span title="Selected item credits needing attribution review">{lpcCreditReadiness?.needs_review_count ?? 0} needs review</span>
+            <span title="Enabled catalog selections">{lpcCreditReadiness?.selected_count ?? 0} selected</span>
+          </div>
+          {activeLpcSelection && activeLpcItem ? (
+            <p className="mode-note">
+              {activeLpcItem.name} stores {activeLpcItem.layers.length} upstream layer record(s), {activeLpcItem.credits.length} credit record(s), and {activeLpcItem.animations.length || 'fallback'} animation hint(s).
+            </p>
+          ) : null}
+        </section>
+      ) : null}
       <div className="recipe-controls">
         <label className="field">
           <span>Recipe name</span>

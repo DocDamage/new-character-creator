@@ -41,7 +41,7 @@ import { layerBundleToExtractedParts, lpcSheetsToExtractedParts, parseLayerBundl
 import { canUseLpcPartForAnimation, getCharacterLabelValue, isLpcExtractedPart, isLpcMannequin, isLpcPartSourceForLayer, isLpcSourceCharacterId, isPartCompatibleWithMannequin } from './lpcPartCompatibility'
 import { buildManualMaskPart } from './manualParts'
 import { buildLpcCharacterManifests } from './lpcCharacters'
-import type { LpcCatalog, RecipeModeId, SourceFamilyId } from './lpcCatalog'
+import type { LpcCatalog, LpcRecipeSelection, RecipeModeId, SourceFamilyId } from './lpcCatalog'
 import { hydratePartLibraryAssets, persistPartLibraryAssets } from './partAssetStore'
 import { CompositeCanvas } from './CompositeCanvas'
 import { PixelCanvas } from './PixelCanvas'
@@ -320,6 +320,7 @@ function App() {
   const [generationStyleNotes, setGenerationStyleNotes] = useState('Readable 64x64 RPG character parts with clean alpha, consistent floor contact, and reusable layer boundaries.')
   const [sourcePackFilter, setSourcePackFilter] = useState<SourcePackFilter>('all')
   const [recipeMode, setRecipeMode] = useState<RecipeModeId>('sprite_kitbash')
+  const [lpcSelections, setLpcSelections] = useState<Record<string, LpcRecipeSelection>>({})
 
   async function fetchManifest(signal?: AbortSignal) {
     const manifestUrls = import.meta.env.DEV
@@ -575,6 +576,7 @@ function App() {
         ...makeRecipe(selectedCharacter, selectedParts, partLibrary, selectedPartIds, layerSettings, recipeId, palette, paletteRules, animationSourceCharacter),
         recipe_mode: recipeMode,
         source_family: sourceFamilyForRecipeMode(recipeMode),
+        lpc_selections: recipeMode === 'lpc_character' ? lpcSelections : undefined,
       }
     : null
   const recipeReadiness = useMemo(
@@ -789,8 +791,11 @@ function App() {
     const savedRecipe: SavedComposerRecipe = {
       recipe_id: recipeId,
       name: recipeName.trim() || recipeId,
+      recipe_mode: recipeMode,
+      source_family: sourceFamilyForRecipeMode(recipeMode),
       base_character: selectedCharacter.character_id,
       animation_source_character: hasBorrowedAnimationSource ? animationSourceCharacter?.character_id : undefined,
+      lpc_selections: recipeMode === 'lpc_character' ? { ...lpcSelections } : undefined,
       selected_parts: { ...selectedParts },
       selected_part_ids: { ...selectedPartIds },
       layer_settings: { ...layerSettings },
@@ -827,6 +832,8 @@ function App() {
     }
     setRecipeId(savedRecipe.recipe_id)
     setRecipeName(savedRecipe.name)
+    setRecipeMode(savedRecipe.recipe_mode ?? (getSourcePackFilter(characters.find((character) => character.character_id === savedRecipe.base_character) ?? selectedCharacter) === 'lpc' ? 'lpc_character' : 'sprite_kitbash'))
+    setLpcSelections(savedRecipe.lpc_selections ?? {})
     setSelectedParts(savedRecipe.selected_parts)
     setSelectedPartIds(savedRecipe.selected_part_ids)
     setLayerSettings(savedRecipe.layer_settings ?? {})
@@ -841,6 +848,7 @@ function App() {
     setRecipeName('Draft kitbash')
     setSelectedParts({} as Record<PartLabel, string>)
     setSelectedPartIds({})
+    setLpcSelections({})
     setLayerSettings({})
     setAnimationSourceId('')
     setPaletteRules(defaultPaletteRules)
@@ -2232,6 +2240,9 @@ function App() {
               localToolsAvailable={localToolsAvailable}
               recipeMode={recipeMode}
               setRecipeMode={setRecipeMode}
+              lpcCatalog={lpcCatalog}
+              lpcSelections={lpcSelections}
+              setLpcSelections={setLpcSelections}
             />
           ) : null}
           {screen === 'workstation' ? (

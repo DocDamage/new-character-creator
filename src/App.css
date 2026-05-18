@@ -705,6 +705,37 @@ input {
   background: rgba(18, 25, 34, 0.9);
 }
 
+.lpc-catalog-picker-panel {
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+  margin: 0 0 14px;
+  border: 1px solid rgba(108, 214, 143, 0.36);
+  border-radius: 7px;
+  background: rgba(18, 25, 34, 0.9);
+}
+
+.lpc-catalog-picker-panel > div:first-child {
+  display: grid;
+  gap: 4px;
+}
+
+.lpc-catalog-picker-panel strong {
+  color: var(--text-strong);
+}
+
+.lpc-catalog-picker-panel span {
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.lpc-catalog-controls {
+  display: grid;
+  grid-template-columns: minmax(150px, 0.9fr) minmax(220px, 1.2fr) minmax(120px, 0.5fr) minmax(120px, 0.4fr);
+  gap: 10px;
+  align-items: end;
+}
+
 .part-picker-panel > div:first-child,
 .part-picker-controls {
   display: grid;
@@ -1538,7 +1569,8 @@ button.recommended-export {
 
   .main-grid,
   .workstation-grid,
-  .part-picker-panel {
+  .part-picker-panel,
+  .lpc-catalog-controls {
     grid-template-columns: 1fr;
   }
 

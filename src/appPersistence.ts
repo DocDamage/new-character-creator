@@ -1,10 +1,14 @@
-import type { ApesJob, ApesPreflightReport, ComposerLayerSettings, ExtractedPart, PaletteRules, PartLabel, VariationPreset } from './types'
+import type { ApesJob, ApesPreflightReport, ComposerLayerSettings, ExtractedPart, PaletteRules, PartLabel, RecipeModeId, SourceFamilyId, VariationPreset } from './types'
+import type { LpcRecipeSelection } from './lpcCatalog'
 
 export type SavedComposerRecipe = {
   recipe_id: string
   name: string
+  recipe_mode?: RecipeModeId
+  source_family?: SourceFamilyId
   base_character: string
   animation_source_character?: string
+  lpc_selections?: Record<string, LpcRecipeSelection>
   selected_parts: Record<PartLabel, string>
   selected_part_ids: Partial<Record<PartLabel, string>>
   layer_settings: Partial<Record<PartLabel, ComposerLayerSettings>>
