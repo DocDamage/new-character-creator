@@ -196,6 +196,49 @@ function isLpcPartSourceCharacter(character: CharacterManifest, label: PartLabel
     getCharacterLabelValue(character, 'lpc_part_label') === label
 }
 
+function sortLpcPartSources(left: CharacterManifest, right: CharacterManifest, currentAnimation: AnimationName) {
+  return lpcPartAnimationScore(left, currentAnimation) - lpcPartAnimationScore(right, currentAnimation) ||
+    lpcPartTemplateScore(left) - lpcPartTemplateScore(right) ||
+    lpcPartVisualScore(left) - lpcPartVisualScore(right) ||
+    left.display_name.localeCompare(right.display_name)
+}
+
+function lpcPartAnimationScore(character: CharacterManifest, currentAnimation: AnimationName) {
+  if (character.animation_names.includes(currentAnimation)) return 0
+  if (character.animation_names.includes('idle')) return 1
+  if (character.animation_names.includes('walk')) return 2
+  return 3
+}
+
+function lpcPartTemplateScore(character: CharacterManifest) {
+  const path = getCharacterLabelValue(character, 'lpc_path').replaceAll('\\', '/').toLowerCase()
+  const lastSegment = path.split('/').filter(Boolean).at(-1) ?? ''
+  if (path.includes('/hair/') && !path.includes('/_behind/') && !path.includes('/_front/')) return 1
+  return /^(pants|shirt|shoes|hair)\b/.test(lastSegment) ? 1 : 0
+}
+
+function lpcPartVisualScore(character: CharacterManifest) {
+  const path = getCharacterLabelValue(character, 'lpc_path').replaceAll('\\', '/').toLowerCase()
+  const colorScore = lpcColorPriority.findIndex((color) => path.includes(`/${color}/`) || path.endsWith(`/${color}`))
+  return (path.includes('/_behind/') ? 20 : 0) + (colorScore >= 0 ? colorScore : 12)
+}
+
+const lpcColorPriority = [
+  'black',
+  'blue',
+  'navy',
+  'red',
+  'green',
+  'forest',
+  'purple',
+  'gray',
+  'white',
+  'gold',
+  'brown',
+  'ash brown',
+  'amber',
+]
+
 function fileNameFromAssetPath(assetPath: string | undefined, fallback: string) {
   if (!assetPath) return fallback
   const normalized = assetPath.replaceAll('\\', '/')
@@ -506,8 +549,9 @@ function App() {
   const previewLpcPartOptions = useMemo(
     () => characters
       .filter((character) => isLpcPartSourceCharacter(character, selectedRegion))
+      .sort((left, right) => sortLpcPartSources(left, right, animation))
       .slice(0, 180),
-    [characters, selectedRegion],
+    [animation, characters, selectedRegion],
   )
   const previewSelectedSourceCharacter = selectedParts[selectedRegion]
     ? characters.find((character) => character.character_id === selectedParts[selectedRegion])
@@ -1955,7 +1999,7 @@ function App() {
                       <optgroup label="LPC sheet parts">
                         {previewLpcPartOptions.map((character) => (
                           <option key={character.character_id} value={`source:${character.character_id}`}>
-                            {character.display_name}
+                            {character.display_name} / {character.animation_names.slice(0, 4).join(', ')}
                           </option>
                         ))}
                       </optgroup>

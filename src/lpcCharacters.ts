@@ -195,6 +195,8 @@ function animationSortScore(animation: AnimationName) {
 function inferLpcPartLabelForCharacter(sheet: LpcAssetInventory['sheets'][number]): PartLabel {
   const path = sheet.path.replaceAll('\\', '/').toLowerCase()
   const fileName = sheet.file_name.toLowerCase()
+  if (fileName.startsWith('weapon_')) return fileName.includes('shield') ? 'shield' : 'weapon'
+  if (fileName.startsWith('belt_') || fileName.startsWith('body_')) return 'accessory'
   if (path.includes('/feet_') || fileName.startsWith('feet_')) return 'front_leg'
   if (path.includes('/hands_') || fileName.startsWith('hands_')) return 'front_arm'
   if (path.includes('/legs_') || fileName.startsWith('legs_')) return 'front_leg'

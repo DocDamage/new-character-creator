@@ -51,7 +51,8 @@ export function CompositeCanvas({
         if (!sourceCharacter) continue
 
         const sourcePart = partLibrary.find((part) => part.part_id === layer.source_part_id)
-        const bounds = sourcePart?.bounds ?? humanoid64Preset[layer.label]
+        const isLpcPartSource = !sourcePart && sourceCharacter.labels?.lpc_role === 'part'
+        const bounds = isLpcPartSource ? fullFrameBounds : sourcePart?.bounds ?? humanoid64Preset[layer.label]
         const sourceFrame =
           getFrameRef(sourceCharacter, animation, direction, frameIndex) ??
           getFrameRef(sourceCharacter, sourceCharacter.animation_names[0] ?? animation, direction, frameIndex)
@@ -85,6 +86,8 @@ export function CompositeCanvas({
     </figure>
   )
 }
+
+const fullFrameBounds: Rect = { x: 0, y: 0, w: 64, h: 64 }
 
 function drawLayer(
   context: CanvasRenderingContext2D,
