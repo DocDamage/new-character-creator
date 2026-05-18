@@ -202,6 +202,23 @@ test('LPC picker exposes canonical animations and compatible sheet parts', async
   expect(animationValues).not.toContain('magic')
   expect(animationValues).not.toContain('swing')
 
+  const humanBodyOption = page.locator('#character option', { hasText: 'LPC Entry Bodies / Human Male' })
+  await expect(humanBodyOption).toHaveCount(1)
+  await page.locator('#character').selectOption(await humanBodyOption.getAttribute('value') ?? undefined)
+  const humanBodyAnimationValues = await page.getByLabel('Animation').locator('option').evaluateAll((options) =>
+    options.map((option) => (option as HTMLOptionElement).value),
+  )
+  expect(humanBodyAnimationValues).toEqual(['walk', 'spellcast', 'shoot', 'slash', 'thrust', 'hurt'])
+
+  const skeletonBodyOption = page.locator('#character option', { hasText: 'LPC Entry Bodies / Skeleton' })
+  await expect(skeletonBodyOption).toHaveCount(1)
+  await page.locator('#character').selectOption(await skeletonBodyOption.getAttribute('value') ?? undefined)
+  const skeletonBodyAnimationValues = await page.getByLabel('Animation').locator('option').evaluateAll((options) =>
+    options.map((option) => (option as HTMLOptionElement).value),
+  )
+  expect(skeletonBodyAnimationValues).toEqual(['walk', 'spellcast', 'shoot', 'slash', 'hurt'])
+  await expect(page.locator('#character option', { hasText: 'Sitting - Chair' })).toHaveCount(0)
+
   for (const layer of ['torso', 'front_leg', 'back_leg', 'front_arm', 'back_arm', 'head', 'face', 'hair_hat_hood', 'weapon', 'shield', 'cloak_back', 'back_item', 'accessory', 'aura_effect', 'neck']) {
     await page.getByTestId('preview-live-layer').selectOption(layer)
     await expect(page.getByTestId('preview-live-part')).toBeEnabled()

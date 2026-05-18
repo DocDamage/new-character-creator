@@ -43,6 +43,13 @@ const classicLpcAnimationSlices: LpcAnimationSlice[] = [
   { name: 'hurt', rowStart: 20, rowCount: 1, frameCount: 6 },
 ]
 
+const lpcBodyBaseAliases = new Map<string, string>([
+  ['bodyanimation', 'Human Male'],
+  ['bodyhuman', 'Human Male'],
+  ['bodymale', 'Human Male'],
+  ['bodyskeleton', 'Skeleton'],
+])
+
 export function buildLpcCharacterManifests(inventory: LpcAssetInventory | null): CharacterManifest[] {
   if (!inventory) return []
 
@@ -86,7 +93,8 @@ export function buildLpcCharacterManifests(inventory: LpcAssetInventory | null):
         getRepresentativeFrame(animations, 'idle') ??
         getRepresentativeFrame(animations, 'walk') ??
         animations[0]?.directions.south?.[0]
-      const displayName = `LPC ${group.key.replace(/\.png$/i, '').replaceAll('\\', '/').split('/').filter(Boolean).slice(-3).join(' / ')}`
+      const displayPath = group.key.replace(/\.png$/i, '').replaceAll('\\', '/').split('/').filter(Boolean).slice(-3).join(' / ')
+      const displayName = displayPath.startsWith('LPC ') ? displayPath : `LPC ${displayPath}`
 
       return {
         character_id: `lpc-${slugLpcId(group.key)}-${String(index + 1).padStart(3, '0')}`,
@@ -136,6 +144,7 @@ function isSelectableLpcSheet(sheet: LpcAssetInventory['sheets'][number]) {
 }
 
 export function isLpcBaseSheet(sheet: LpcAssetInventory['sheets'][number]) {
+  if (isLpcBodyBaseSheet(sheet)) return true
   const normalized = [sheet.category, sheet.file_name, sheet.path, ...sheet.tags].join(' ').toLowerCase()
   const path = sheet.path.replaceAll('\\', '/').toLowerCase()
   const fileAndTags = [sheet.file_name, ...sheet.tags].join(' ').toLowerCase()
@@ -165,7 +174,7 @@ function groupLpcSheets(sheets: LpcSheet[]) {
 
 function isUsableLpcBaseGroup(group: LpcSheetGroup) {
   const animations = new Set(group.sheets.map((sheet) => inferLpcAnimation(sheet)))
-  return animations.has('idle') || animations.has('walk') || group.sheets.some(isClassicLpcSheet)
+  return animations.has('idle') || animations.has('walk') || group.sheets.some(isClassicLpcSheet) || group.sheets.some(isLpcBodyBaseSheet)
 }
 
 function buildLpcAnimations(inventory: LpcAssetInventory, sheets: LpcSheet[]): AnimationManifest[] {
@@ -217,11 +226,25 @@ function isClassicLpcSheet(sheet: LpcSheet) {
   return (sheet.frame_columns ?? 0) >= 13 && (sheet.frame_rows ?? 0) >= 21
 }
 
+function isLpcBodyBaseSheet(sheet: LpcSheet) {
+  return Boolean(getLpcBodyBaseGroupKey(sheet))
+}
+
+function getLpcBodyBaseGroupKey(sheet: LpcSheet) {
+  const normalizedPath = sheet.path.replaceAll('\\', '/').toLowerCase()
+  if (normalizedPath.includes('/combat_dummy/')) return undefined
+  const normalizedFile = normalizeActionSegment(sheet.file_name.replace(/\.png$/i, ''))
+  const alias = lpcBodyBaseAliases.get(normalizedFile)
+  return alias ? `LPC Entry Bodies/${alias}` : undefined
+}
+
 function getRepresentativeFrame(animations: AnimationManifest[], animationName: AnimationName) {
   return animations.find((animation) => animation.name === animationName)?.directions.south?.[0]
 }
 
 function buildLpcGroupKey(sheet: LpcSheet) {
+  const bodyBaseKey = getLpcBodyBaseGroupKey(sheet)
+  if (bodyBaseKey) return bodyBaseKey
   const normalizedPath = sheet.path.replaceAll('\\', '/')
   const pathWithoutExtension = normalizedPath.replace(/\.png$/i, '')
   const segments = pathWithoutExtension.split('/').filter(Boolean)

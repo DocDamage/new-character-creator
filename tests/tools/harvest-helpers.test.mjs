@@ -1,5 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
+import { readFile } from 'node:fs/promises'
 
 import { renderExportFilenameTemplate } from '../../src/filenameTemplates.ts'
 import { buildGenerationManifest } from '../../src/generationManifest.ts'
@@ -418,6 +419,97 @@ test('LPC inventory sheets can be exposed as cropped source characters', () => {
         tags: ['base'],
       },
       {
+        path: 'lpc_entry/png/spellcast/BODY_male.png',
+        category: 'lpc_entry',
+        file_name: 'BODY_male.png',
+        width: 448,
+        height: 256,
+        frame_width: 64,
+        frame_height: 64,
+        frame_columns: 7,
+        frame_rows: 4,
+        lpc_grid: true,
+        tags: ['body', 'male', 'spellcast'],
+      },
+      {
+        path: 'lpc_entry/png/thrust/BODY_animation.png',
+        category: 'lpc_entry',
+        file_name: 'BODY_animation.png',
+        width: 512,
+        height: 256,
+        frame_width: 64,
+        frame_height: 64,
+        frame_columns: 8,
+        frame_rows: 4,
+        lpc_grid: true,
+        tags: ['body', 'thrust'],
+      },
+      {
+        path: 'lpc_entry/png/walkcycle/BODY_male.png',
+        category: 'lpc_entry',
+        file_name: 'BODY_male.png',
+        width: 576,
+        height: 256,
+        frame_width: 64,
+        frame_height: 64,
+        frame_columns: 9,
+        frame_rows: 4,
+        lpc_grid: true,
+        tags: ['body', 'male', 'walkcycle'],
+      },
+      {
+        path: 'lpc_entry/png/slash/BODY_human.png',
+        category: 'lpc_entry',
+        file_name: 'BODY_human.png',
+        width: 384,
+        height: 256,
+        frame_width: 64,
+        frame_height: 64,
+        frame_columns: 6,
+        frame_rows: 4,
+        lpc_grid: true,
+        tags: ['body', 'human', 'slash'],
+      },
+      {
+        path: 'lpc_entry/png/bow/BODY_animation.png',
+        category: 'lpc_entry',
+        file_name: 'BODY_animation.png',
+        width: 832,
+        height: 256,
+        frame_width: 64,
+        frame_height: 64,
+        frame_columns: 13,
+        frame_rows: 4,
+        lpc_grid: true,
+        tags: ['body', 'bow'],
+      },
+      {
+        path: 'lpc_entry/png/hurt/BODY_male.png',
+        category: 'lpc_entry',
+        file_name: 'BODY_male.png',
+        width: 384,
+        height: 64,
+        frame_width: 64,
+        frame_height: 64,
+        frame_columns: 6,
+        frame_rows: 1,
+        lpc_grid: true,
+        tags: ['body', 'male', 'hurt'],
+      },
+      {
+        path: 'lpc_entry/png/combat_dummy/BODY_animation.png',
+        category: 'lpc_entry',
+        file_name: 'BODY_animation.png',
+        width: 512,
+        height: 64,
+        frame_width: 64,
+        frame_height: 64,
+        frame_columns: 8,
+        frame_rows: 1,
+        lpc_grid: true,
+        tags: ['body', 'combat_dummy'],
+      },
+      {
         path: 'Bases/Androgynous/Recolors/Copper/Sitting - Chair.png',
         category: 'Bases',
         file_name: 'Sitting - Chair.png',
@@ -459,7 +551,7 @@ test('LPC inventory sheets can be exposed as cropped source characters', () => {
     ],
   })
 
-  assert.equal(characters.length, 8)
+  assert.equal(characters.length, 9)
   const shirtPart = characters.find((character) => character.labels.lpc_path === 'Clothes/Blue/Shirt, Long-Sleeved')
   const runPart = characters.find((character) => character.labels.lpc_path === 'Clothes/Blue/Shirt')
   const pantsPart = characters.find((character) => character.labels.lpc_path === 'Clothes/Blue/Pants')
@@ -467,6 +559,8 @@ test('LPC inventory sheets can be exposed as cropped source characters', () => {
   const longEarsPart = characters.find((character) => character.labels.lpc_path === 'Long ears/LongEars_female_d')
   const magicBase = characters.find((character) => character.labels.lpc_path === 'Androgynous Bases/Copper')
   const standWalkBase = characters.find((character) => character.labels.lpc_path === 'Stand & Walk Bases/Copper')
+  const lpcBodyBase = characters.find((character) => character.labels.lpc_path === 'LPC Entry Bodies/Human Male')
+  const combatDummyBody = characters.find((character) => character.labels.lpc_path === 'lpc_entry/png/combat_dummy/BODY_animation')
   const partialSittingBase = characters.find((character) => character.labels.lpc_path === 'Bases/Androgynous/Recolors/Copper/Sitting - Chair')
   assert.equal(characters[0].class_type, 'lpc_character')
   assert.equal(characters[0].labels.lpc_role, 'base')
@@ -482,6 +576,11 @@ test('LPC inventory sheets can be exposed as cropped source characters', () => {
   assert.deepEqual(longEarsPart?.directions.north.hurt.frames[0].source_rect, { x: 0, y: 1280, w: 64, h: 64 })
   assert.deepEqual(magicBase?.animation_names, ['idle', 'walk', 'spellcast', 'shoot', 'slash', 'thrust', 'hurt'])
   assert.deepEqual(standWalkBase?.animation_names, ['idle', 'walk'])
+  assert.deepEqual(lpcBodyBase?.animation_names, ['walk', 'spellcast', 'shoot', 'slash', 'thrust', 'hurt'])
+  assert.equal(lpcBodyBase?.directions.south.walk.frame_count, 9)
+  assert.equal(lpcBodyBase?.directions.south.shoot.frame_count, 13)
+  assert.deepEqual(lpcBodyBase?.directions.south.thrust.frames[0].source_rect, { x: 0, y: 128, w: 64, h: 64 })
+  assert.equal(combatDummyBody, undefined)
   assert.equal(partialSittingBase, undefined)
   assert.equal(characters[0].directions.south.idle.frame_count, 5)
   assert.deepEqual(characters[0].directions.east.idle.frames[0].source_rect, { x: 0, y: 64, w: 64, h: 64 })
@@ -490,6 +589,29 @@ test('LPC inventory sheets can be exposed as cropped source characters', () => {
   assert.deepEqual(magicBase?.directions.north.hurt.frames[0].source_rect, { x: 0, y: 0, w: 64, h: 64 })
   assert.deepEqual(magicBase?.directions.south.hurt.frames[0].source_rect, { x: 0, y: 0, w: 64, h: 64 })
   assert.equal(characters[0].representative_frame, '/assets/lpc sprite generator stuff/Adult Female/Base, Adult Female.png')
+})
+
+test('real LPC inventory exposes all available base animation families', async () => {
+  const inventory = JSON.parse(await readFile(new URL('../../data/lpc/lpc_asset_inventory.json', import.meta.url), 'utf8'))
+  const characters = buildLpcCharacterManifests(inventory)
+
+  const humanBody = characters.find((character) => character.labels.lpc_path === 'LPC Entry Bodies/Human Male')
+  const skeletonBody = characters.find((character) => character.labels.lpc_path === 'LPC Entry Bodies/Skeleton')
+  const copperAndrogynous = characters.find((character) => character.labels.lpc_path === 'Androgynous Bases/Copper')
+  const copperStandWalk = characters.find((character) => character.labels.lpc_path === 'Stand & Walk Bases/Copper')
+  const chairFragments = characters.filter((character) => String(character.labels.lpc_path).includes('Sitting - Chair'))
+
+  assert.deepEqual(humanBody?.animation_names, ['walk', 'spellcast', 'shoot', 'slash', 'thrust', 'hurt'])
+  assert.equal(humanBody?.directions.south.walk.frame_count, 9)
+  assert.equal(humanBody?.directions.south.spellcast.frame_count, 7)
+  assert.equal(humanBody?.directions.south.shoot.frame_count, 13)
+  assert.equal(humanBody?.directions.south.slash.frame_count, 6)
+  assert.equal(humanBody?.directions.south.thrust.frame_count, 8)
+  assert.equal(humanBody?.directions.south.hurt.frame_count, 6)
+  assert.deepEqual(skeletonBody?.animation_names, ['walk', 'spellcast', 'shoot', 'slash', 'hurt'])
+  assert.deepEqual(copperAndrogynous?.animation_names, ['idle', 'walk', 'spellcast', 'shoot', 'slash', 'thrust', 'hurt'])
+  assert.deepEqual(copperStandWalk?.animation_names, ['idle', 'walk'])
+  assert.equal(chairFragments.length, 0)
 })
 
 test('creator cockpit readiness summarizes selected reviewed parts and warnings', () => {
