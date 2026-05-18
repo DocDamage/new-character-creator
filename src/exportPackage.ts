@@ -7,12 +7,14 @@ import {
   buildRpgMakerMzMetadata,
   buildUnity2DMetadata,
   downloadBlob,
+  getFrameRef,
   getFramePath,
   getFrames,
 } from './utils'
 
 const exportDirections: Direction[] = ['south', 'east', 'north', 'west']
 const imageLoadCache = new Map<string, Promise<HTMLImageElement>>()
+const fullFrameBounds: Rect = { x: 0, y: 0, w: 64, h: 64 }
 
 type RenderRecipeFrameOptions = {
   recipe: KitbashRecipe
@@ -84,14 +86,16 @@ export async function renderRecipeFrameToDataUrl({
     if (!sourceCharacter) continue
 
     const sourcePart = partLibrary.find((part) => part.part_id === layer.source_part_id)
-    const bounds = sourcePart?.bounds ?? humanoid64Preset[layer.label]
-    const sourceFrame = sourcePart?.source_frame_path ?? getFramePath(sourceCharacter, animation, direction, frameIndex)
-    const source = sourcePart?.image_data_url ?? sourceFrame
+    const isLpcPartSource = !sourcePart && sourceCharacter.labels?.lpc_role === 'part'
+    const bounds = isLpcPartSource ? fullFrameBounds : sourcePart?.bounds ?? humanoid64Preset[layer.label]
+    const matchingFrame = getFrameRef(sourceCharacter, animation, direction, frameIndex)
+    const fallbackFramePath = isLpcPartSource ? undefined : getFramePath(sourceCharacter, animation, direction, frameIndex)
+    const source = sourcePart?.image_data_url ?? sourcePart?.source_frame_path ?? matchingFrame?.path ?? fallbackFramePath
     if (!source) continue
 
     const image = await loadImage(source)
     const maskImage = sourcePart?.mask_data_url ? await loadImage(sourcePart.mask_data_url) : undefined
-    drawLayer(context, image, maskImage, bounds, layer.offset, recipe, Boolean(sourcePart?.image_data_url))
+    drawLayer(context, image, maskImage, bounds, layer.offset, recipe, Boolean(sourcePart?.image_data_url), sourcePart ? undefined : matchingFrame?.source_rect)
   }
 
   return canvas.toDataURL('image/png')
@@ -552,12 +556,25 @@ function drawLayer(
   offset: [number, number],
   recipe: KitbashRecipe,
   isExtractedPart: boolean,
+  frameSourceRect?: Rect,
 ) {
   context.save()
   context.imageSmoothingEnabled = false
   context.filter = `hue-rotate(${recipe.palette.hue_shift}deg) saturate(${recipe.palette.saturation}%) brightness(${recipe.palette.brightness}%)`
   if (isExtractedPart) {
     drawExtractedLayer(context, image, maskImage, bounds, offset, 1)
+  } else if (frameSourceRect) {
+    context.drawImage(
+      image,
+      frameSourceRect.x + bounds.x,
+      frameSourceRect.y + bounds.y,
+      bounds.w,
+      bounds.h,
+      bounds.x + offset[0],
+      bounds.y + offset[1],
+      bounds.w,
+      bounds.h,
+    )
   } else {
     context.drawImage(
       image,

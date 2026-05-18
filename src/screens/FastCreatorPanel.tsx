@@ -128,9 +128,10 @@ export function FastCreatorPanel({
   const lpcPartsForActiveLabel = useMemo(
     () => isLpcMannequin(selectedCharacter) ? characters
       .filter((character) => isLpcPartSourceForLayer(character, activePartLabel))
+      .filter((character) => character.animation_names.includes(currentAnimation))
       .sort((left, right) => left.display_name.localeCompare(right.display_name))
       .slice(0, 180) : [],
-    [activePartLabel, characters, selectedCharacter],
+    [activePartLabel, characters, currentAnimation, selectedCharacter],
   )
   const selectedActiveSource = selectedParts[activePartLabel]
   const selectedActiveSourceCharacter = selectedActiveSource
@@ -138,7 +139,10 @@ export function FastCreatorPanel({
     : undefined
   const activePickerValue = selectedActivePart
     ? `library:${selectedActivePart}`
-    : selectedActiveSource && selectedActiveSourceCharacter && isLpcPartSourceForLayer(selectedActiveSourceCharacter, activePartLabel)
+    : selectedActiveSource &&
+        selectedActiveSourceCharacter &&
+        isLpcPartSourceForLayer(selectedActiveSourceCharacter, activePartLabel) &&
+        selectedActiveSourceCharacter.animation_names.includes(currentAnimation)
       ? `source:${selectedActiveSource}`
       : ''
 

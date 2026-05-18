@@ -67,11 +67,10 @@ export function buildLpcCharacterManifests(inventory: LpcAssetInventory | null):
   for (const group of sheetGroups) {
     if (group.role === 'base') continue
     const bucket = partGroupsByLabel.get(group.label) ?? []
-    if (bucket.length >= maxLpcPartSheetsPerLabel) continue
     bucket.push(group)
     partGroupsByLabel.set(group.label, bucket)
   }
-  const partGroups = Array.from(partGroupsByLabel.values()).flat()
+  const partGroups = Array.from(partGroupsByLabel.values()).flatMap(limitLpcPartGroups)
 
   return [...baseGroups, ...partGroups]
     .map((group, index) => {
@@ -175,6 +174,34 @@ function groupLpcSheets(sheets: LpcSheet[]) {
 function isUsableLpcBaseGroup(group: LpcSheetGroup) {
   const animations = new Set(group.sheets.map((sheet) => inferLpcAnimation(sheet)))
   return animations.has('idle') || animations.has('walk') || group.sheets.some(isClassicLpcSheet) || group.sheets.some(isLpcBodyBaseSheet)
+}
+
+function limitLpcPartGroups(groups: LpcSheetGroup[]) {
+  if (groups.length <= maxLpcPartSheetsPerLabel) return groups
+  const selected: LpcSheetGroup[] = []
+  const selectedKeys = new Set<string>()
+  const buckets = animationOrder.map((animation) => groups.filter((group) => groupHasAnimation(group, animation as AnimationName)))
+  const maxBucketLength = Math.max(...buckets.map((bucket) => bucket.length))
+  for (let index = 0; index < maxBucketLength && selected.length < maxLpcPartSheetsPerLabel; index += 1) {
+    for (const bucket of buckets) {
+      const group = bucket[index]
+      if (!group || selectedKeys.has(group.key)) continue
+      selected.push(group)
+      selectedKeys.add(group.key)
+      if (selected.length >= maxLpcPartSheetsPerLabel) break
+    }
+  }
+  for (const group of groups) {
+    if (selected.length >= maxLpcPartSheetsPerLabel) break
+    if (selectedKeys.has(group.key)) continue
+    selected.push(group)
+    selectedKeys.add(group.key)
+  }
+  return selected
+}
+
+function groupHasAnimation(group: LpcSheetGroup, animation: AnimationName) {
+  return group.sheets.some((sheet) => getLpcAnimationSlices(sheet).some((slice) => slice.name === animation))
 }
 
 function buildLpcAnimations(inventory: LpcAssetInventory, sheets: LpcSheet[]): AnimationManifest[] {

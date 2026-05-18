@@ -600,6 +600,12 @@ test('real LPC inventory exposes all available base animation families', async (
   const copperAndrogynous = characters.find((character) => character.labels.lpc_path === 'Androgynous Bases/Copper')
   const copperStandWalk = characters.find((character) => character.labels.lpc_path === 'Stand & Walk Bases/Copper')
   const chairFragments = characters.filter((character) => String(character.labels.lpc_path).includes('Sitting - Chair'))
+  const lpcPartGroups = characters.filter((character) => character.labels.lpc_role === 'part')
+  const slashPartLabels = new Set(
+    lpcPartGroups
+      .filter((character) => character.animation_names.includes('slash'))
+      .map((character) => character.labels.lpc_part_label),
+  )
 
   assert.deepEqual(humanBody?.animation_names, ['walk', 'spellcast', 'shoot', 'slash', 'thrust', 'hurt'])
   assert.equal(humanBody?.directions.south.walk.frame_count, 9)
@@ -611,6 +617,10 @@ test('real LPC inventory exposes all available base animation families', async (
   assert.deepEqual(skeletonBody?.animation_names, ['walk', 'spellcast', 'shoot', 'slash', 'hurt'])
   assert.deepEqual(copperAndrogynous?.animation_names, ['idle', 'walk', 'spellcast', 'shoot', 'slash', 'thrust', 'hurt'])
   assert.deepEqual(copperStandWalk?.animation_names, ['idle', 'walk'])
+  assert.equal(slashPartLabels.has('torso'), true)
+  assert.equal(slashPartLabels.has('front_leg'), true)
+  assert.equal(slashPartLabels.has('accessory'), true)
+  assert.equal(slashPartLabels.has('weapon'), true)
   assert.equal(chairFragments.length, 0)
 })
 

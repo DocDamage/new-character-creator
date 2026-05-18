@@ -543,6 +543,7 @@ function App() {
   const previewLpcPartOptions = useMemo(
     () => isLpcMannequin(selectedCharacter) ? characters
       .filter((character) => isLpcPartSourceCharacter(character, selectedRegion))
+      .filter((character) => character.animation_names.includes(animation))
       .sort((left, right) => sortLpcPartSources(left, right, animation))
       .slice(0, 180) : [],
     [animation, characters, selectedCharacter, selectedRegion],
@@ -552,7 +553,10 @@ function App() {
     : undefined
   const previewPickerValue = selectedPartIds[selectedRegion]
     ? `library:${selectedPartIds[selectedRegion]}`
-    : selectedParts[selectedRegion] && previewSelectedSourceCharacter && isLpcPartSourceCharacter(previewSelectedSourceCharacter, selectedRegion)
+    : selectedParts[selectedRegion] &&
+        previewSelectedSourceCharacter &&
+        isLpcPartSourceCharacter(previewSelectedSourceCharacter, selectedRegion) &&
+        previewSelectedSourceCharacter.animation_names.includes(animation)
       ? `source:${selectedParts[selectedRegion]}`
       : ''
 

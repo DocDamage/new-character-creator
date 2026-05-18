@@ -219,13 +219,23 @@ test('LPC picker exposes canonical animations and compatible sheet parts', async
   expect(skeletonBodyAnimationValues).toEqual(['walk', 'spellcast', 'shoot', 'slash', 'hurt'])
   await expect(page.locator('#character option', { hasText: 'Sitting - Chair' })).toHaveCount(0)
 
+  await page.locator('#character').selectOption(await humanBodyOption.getAttribute('value') ?? undefined)
+  await page.getByLabel('Animation').selectOption('slash')
   for (const layer of ['torso', 'front_leg', 'back_leg', 'front_arm', 'back_arm', 'head', 'face', 'hair_hat_hood', 'weapon', 'shield', 'cloak_back', 'back_item', 'accessory', 'aura_effect', 'neck']) {
     await page.getByTestId('preview-live-layer').selectOption(layer)
     await expect(page.getByTestId('preview-live-part')).toBeEnabled()
     const optionCount = await page.getByTestId('preview-live-part').locator('option').count()
-    expect(optionCount, `${layer} should expose at least one source option plus the fallback option`).toBeGreaterThan(1)
+    expect(optionCount, `${layer} should expose at least one slash-compatible source option plus the fallback option`).toBeGreaterThan(1)
   }
+  await page.getByTestId('preview-live-layer').selectOption('weapon')
+  await expect(page.getByTestId('preview-live-part')).toContainText(/slash/i)
 
+  await page.locator('#character').selectOption(await copperOption.getAttribute('value') ?? undefined)
+  await page.getByLabel('Animation').selectOption('idle')
+  await page.getByTestId('preview-live-layer').selectOption('weapon')
+  await expect(page.getByTestId('preview-live-part').locator('optgroup[label="LPC sheet parts"]')).toHaveCount(0)
+
+  await page.getByLabel('Animation').selectOption('slash')
   await page.getByTestId('preview-live-layer').selectOption('torso')
   await expect(page.getByTestId('preview-live-part').locator('optgroup[label="LPC sheet parts"]')).toHaveCount(1)
   await page.getByTestId('source-pack-filter').selectOption('sprite')
