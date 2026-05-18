@@ -1,4 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
+import { getCharacterLabelValue, isLpcMannequin } from './lpcPartCompatibility'
+import { buildLpcReplacementRegions } from './lpcReplacement'
 import { humanoid64Preset } from './presets'
 import type { AnimationName, CharacterManifest, Direction, ExtractedPart, KitbashRecipe, Rect } from './types'
 import { getFrameRef } from './utils'
@@ -45,12 +47,27 @@ export function CompositeCanvas({
     setRenderError('')
 
     async function drawComposite() {
+      const baseCharacter = characters.find((character) => character.character_id === recipe.base_character)
+      if (baseCharacter && isLpcMannequin(baseCharacter)) {
+        await drawCharacterFrame(
+          drawContext,
+          baseCharacter,
+          animation,
+          direction,
+          frameIndex,
+          scale,
+          recipe,
+          buildLpcReplacementRegions(recipe, characters, partLibrary),
+        )
+      }
+
       for (const layer of recipe.layers) {
         if (cancelled || !layer.visible) continue
         const sourceCharacter = characters.find((character) => character.character_id === layer.source_character) ?? characters[0]
         if (!sourceCharacter) continue
 
         const sourcePart = partLibrary.find((part) => part.part_id === layer.source_part_id)
+        if (!sourcePart && isLpcBaseFallbackLayer(sourceCharacter, baseCharacter, recipe.base_character)) continue
         const isLpcPartSource = !sourcePart && sourceCharacter.labels?.lpc_role === 'part'
         const bounds = isLpcPartSource ? fullFrameBounds : sourcePart?.bounds ?? humanoid64Preset[layer.label]
         const matchingFrame = getFrameRef(sourceCharacter, animation, direction, frameIndex)
@@ -89,6 +106,44 @@ export function CompositeCanvas({
 }
 
 const fullFrameBounds: Rect = { x: 0, y: 0, w: 64, h: 64 }
+
+async function drawCharacterFrame(
+  context: CanvasRenderingContext2D,
+  character: CharacterManifest,
+  animation: AnimationName,
+  direction: Direction,
+  frameIndex: number,
+  scale: number,
+  recipe: KitbashRecipe,
+  replacementRegions: Rect[] = [],
+) {
+  const frame = getFrameRef(character, animation, direction, frameIndex) ??
+    getFrameRef(character, character.animation_names[0] ?? animation, direction, frameIndex)
+  if (!frame) return
+  const image = await loadImage(frame.path)
+  const scratch = document.createElement('canvas')
+  scratch.width = 64
+  scratch.height = 64
+  const scratchContext = scratch.getContext('2d')
+  if (!scratchContext) return
+  scratchContext.imageSmoothingEnabled = false
+  drawLayer(scratchContext, image, undefined, fullFrameBounds, [0, 0], 1, recipe, false, frame.source_rect)
+  scratchContext.globalCompositeOperation = 'destination-out'
+  for (const region of replacementRegions) {
+    scratchContext.fillRect(region.x, region.y, region.w, region.h)
+  }
+  scratchContext.globalCompositeOperation = 'source-over'
+  context.drawImage(scratch, 0, 0, 64 * scale, 64 * scale)
+}
+
+function isLpcBaseFallbackLayer(sourceCharacter: CharacterManifest, baseCharacter: CharacterManifest | undefined, baseCharacterId: string) {
+  return Boolean(
+    baseCharacter &&
+    sourceCharacter.character_id === baseCharacterId &&
+    isLpcMannequin(baseCharacter) &&
+    getCharacterLabelValue(sourceCharacter, 'lpc_role') !== 'part',
+  )
+}
 
 function drawLayer(
   context: CanvasRenderingContext2D,

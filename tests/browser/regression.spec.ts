@@ -230,6 +230,11 @@ test('LPC picker exposes canonical animations and compatible sheet parts', async
   await page.getByTestId('preview-live-layer').selectOption('weapon')
   await expect(page.getByTestId('preview-live-part')).toContainText(/slash/i)
 
+  await page.getByTestId('preview-live-layer').selectOption('torso')
+  await page.getByTestId('preview-live-part').selectOption('source:lpc-androgynous-long-sleeve-shirt-black-251')
+  await expect.poll(() => readCompositePixel(page, 32, 42)).toEqual([59, 60, 64, 255])
+  await expect.poll(() => readCompositePixel(page, 32, 32)).toEqual([24, 32, 42, 255])
+
   await page.locator('#character').selectOption(await copperOption.getAttribute('value') ?? undefined)
   await page.getByLabel('Animation').selectOption('idle')
   await page.getByTestId('preview-live-layer').selectOption('weapon')
@@ -689,6 +694,19 @@ async function readTextDownload(page: Parameters<typeof test>[0]['page'], trigge
   }
 
   return readFile(filePath, 'utf8')
+}
+
+async function readCompositePixel(page: Parameters<typeof test>[0]['page'], x: number, y: number) {
+  return page.locator('.composite-stage canvas').first().evaluate(
+    (canvas, point) => {
+      const context = canvas.getContext('2d')
+      if (!context) return []
+      const sourceX = Math.floor((point.x * canvas.width) / 64)
+      const sourceY = Math.floor((point.y * canvas.height) / 64)
+      return Array.from(context.getImageData(sourceX, sourceY, 1, 1).data)
+    },
+    { x, y },
+  )
 }
 
 async function writeLocalApesAssetReport() {
