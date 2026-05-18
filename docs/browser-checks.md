@@ -7,7 +7,7 @@ the production bundle through Vite preview so it exercises release behavior.
 
 ```bash
 npm run dev -- --host 127.0.0.1 --port 8002 --strictPort
-npm run build
+npm run build:local-tools
 npm run preview -- --host 127.0.0.1 --port 4173 --strictPort
 ```
 
@@ -42,18 +42,21 @@ Latest verified automated run:
 - `npm run check:source-hygiene`
 - `npm run test:tools`
 - `npm run build`
+- `npm run build:release`
 - `npm run validate:release-package`
 - `npm run test:preview-tools`
-- `npm run test:browser`
-- `npm run test:browser:all`
-- `npm run test:private-assets`
-- `npm run release:check`
-- latest full release gate passed with lint, source-hygiene, 18 tool tests, build, release package validation, preview local-tool smoke, 15 Chromium browser tests, 45 Chromium/Firefox/WebKit browser-matrix tests, and private Duelyst audit
+- `npm run test:browser` passed, 17 Chromium tests
+- `npm run test:browser:all` passed, 51 Chromium/Firefox/WebKit tests
+- `npm run test:private-assets` optional/private-machine only
+- `npm run release:check` passed
+- latest focused gate passed with lint, source hygiene, 49 tool tests, public release build/package validation, tokenized preview local-tool smoke, 17 Chromium browser tests, and 51-test cross-browser matrix
 - latest LPC hybrid follow-up smoke passed with `npm run build`, 37 tool tests, and 17 Chromium browser regression tests
 
 Latest verified local app state:
 
 - `npm run build` passes
+- `npm run build:release && npm run validate:release-package` passes with no private/local references in emitted text assets
+- local APES/LPC/Duelyst/repair POST routes require the generated local session token and reject tokenless or cross-origin requests
 - dev server verified at `http://127.0.0.1:8002/`
 - Duelyst audit scanned 7145 assets, found 696 sprite sheets, staged candidates, and opened `duelyst_f1_elyxstormblade` in the workstation
 - APES env preflight is ready in `apes-gpu-modern`

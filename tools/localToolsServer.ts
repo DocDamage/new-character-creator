@@ -4,7 +4,11 @@ import fs from 'node:fs'
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import path from 'node:path'
 
-export function createLocalAssetToolsPlugin(appRoot: string) {
+type LocalAssetToolsOptions = {
+  sessionToken: string
+}
+
+export function createLocalAssetToolsPlugin(appRoot: string, options: LocalAssetToolsOptions) {
   const allowedFsRoots = [
     path.resolve(appRoot, 'assets'),
     path.resolve(appRoot, 'data', 'apes', 'output'),
@@ -17,10 +21,11 @@ export function createLocalAssetToolsPlugin(appRoot: string) {
     name: 'local-asset-tools',
     configurePreviewServer(server: PreviewServer) {
       server.middlewares.use(async (req: IncomingMessage, res: ServerResponse, next: Connect.NextFunction) => {
+        if (!validateLoopbackRequest(req, res)) return
         if (serveLocalAssetRequest(req, res, next, appRoot) || serveLocalDataRequest(req, res, next, appRoot) || serveLocalFsRequest(req, res, next, allowedFsRoots) || serveApesOutputRequest(req, res, next, appRoot)) {
           return
         }
-        if (await serveLocalToolRequest(req, res, appRoot)) {
+        if (await serveLocalToolRequest(req, res, appRoot, options.sessionToken)) {
           return
         }
         next()
@@ -28,11 +33,12 @@ export function createLocalAssetToolsPlugin(appRoot: string) {
     },
     configureServer(server: ViteDevServer) {
       server.middlewares.use(async (req: IncomingMessage, res: ServerResponse, next: Connect.NextFunction) => {
+        if (!validateLoopbackRequest(req, res)) return
         if (serveLocalAssetRequest(req, res, next, appRoot) || serveLocalDataRequest(req, res, next, appRoot) || serveLocalFsRequest(req, res, next, allowedFsRoots) || serveApesOutputRequest(req, res, next, appRoot)) {
           return
         }
 
-        if (await serveLocalToolRequest(req, res, appRoot)) {
+        if (await serveLocalToolRequest(req, res, appRoot, options.sessionToken)) {
           return
         }
 
@@ -137,14 +143,51 @@ function serveLocalHealthRequest(req: IncomingMessage, res: ServerResponse) {
   return true
 }
 
-async function serveLocalToolRequest(req: IncomingMessage, res: ServerResponse, appRoot: string) {
+function validateLoopbackRequest(req: IncomingMessage, res: ServerResponse) {
+  const requestPath = getRequestPath(req.url)
+  if (!requestPath?.startsWith('/__local/') && !requestPath?.startsWith('/@fs/')) return true
+  const host = (req.headers.host ?? '').split(':')[0]?.toLowerCase()
+  if (!host || !['127.0.0.1', 'localhost', '::1', '[::1]'].includes(host)) {
+    sendJson(res, 403, { error: 'Local tool routes only accept loopback Host headers.' })
+    return false
+  }
+  if (!validateSameOriginHeader(req.headers.origin, req.headers.host) || !validateSameOriginHeader(req.headers.referer, req.headers.host)) {
+    sendJson(res, 403, { error: 'Local tool routes only accept same-origin requests.' })
+    return false
+  }
+  return true
+}
+
+function validateLocalToolMutation(req: IncomingMessage, res: ServerResponse, sessionToken: string) {
+  if (req.method !== 'POST') return true
+  if (!sessionToken || req.headers['x-pixel-creator-local-token'] !== sessionToken) {
+    sendJson(res, 403, { error: 'Missing or invalid local tool session token.' })
+    return false
+  }
+  return true
+}
+
+function validateSameOriginHeader(value: string | string[] | undefined, requestHost: string | undefined) {
+  const headerValue = Array.isArray(value) ? value[0] : value
+  if (!headerValue) return true
+  try {
+    const parsed = new URL(headerValue)
+    return parsed.host === requestHost
+  } catch {
+    return false
+  }
+}
+
+async function serveLocalToolRequest(req: IncomingMessage, res: ServerResponse, appRoot: string, sessionToken: string) {
   if (serveLocalHealthRequest(req, res)) return true
   const requestPath = getRequestPath(req.url)
   if (requestPath === '/__local/apes-tools') {
+    if (!validateLocalToolMutation(req, res, sessionToken)) return true
     await handleApesToolRequest(req, res, appRoot)
     return true
   }
   if (requestPath === '/__local/asset-tools') {
+    if (!validateLocalToolMutation(req, res, sessionToken)) return true
     await handleAssetToolRequest(req, res, appRoot)
     return true
   }
@@ -182,6 +225,10 @@ async function handleApesToolRequest(req: IncomingMessage, res: ServerResponse, 
 
   if (!action) {
     sendJson(res, 400, { error: 'Expected a valid APES action.' })
+    return
+  }
+  if (!validatePythonPath(pythonPath)) {
+    sendJson(res, 400, { error: 'APES pythonPath must be python, py, or an existing python executable path.' })
     return
   }
   if (action === 'run-job' && !job?.job_id) {
@@ -229,6 +276,14 @@ async function handleApesToolRequest(req: IncomingMessage, res: ServerResponse, 
   })
   const payload = await collectApesToolPayload(action, pythonPath, command, outputDir, outputRoot, job, appRoot)
   sendJson(res, command.status === 0 ? 200 : 500, payload)
+}
+
+function validatePythonPath(pythonPath: string) {
+  const normalized = pythonPath.trim()
+  if (normalized === 'python' || normalized === 'python3' || normalized === 'py') return true
+  if (!path.isAbsolute(normalized) || !fs.existsSync(normalized)) return false
+  const base = path.basename(normalized).toLowerCase()
+  return base === 'python.exe' || base === 'python3.exe' || base === 'py.exe' || base === 'python'
 }
 
 async function handleAssetToolRequest(req: IncomingMessage, res: ServerResponse, appRoot: string) {

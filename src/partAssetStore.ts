@@ -24,6 +24,30 @@ export async function hydratePartLibraryAssets(parts: ExtractedPart[]) {
   }
 }
 
+export async function deletePartLibraryAssets(keys: Array<string | undefined>) {
+  if (!canUseIndexedDb()) return
+  const activeKeys = keys.filter((key): key is string => Boolean(key))
+  if (activeKeys.length === 0) return
+  try {
+    const db = await openAssetDb()
+    await deleteAssets(db, activeKeys)
+  } catch {
+    // Asset cleanup is best-effort; persisted JSON still remains the source of truth.
+  }
+}
+
+export async function compactPartLibraryAssets(activeParts: ExtractedPart[]) {
+  if (!canUseIndexedDb()) return
+  try {
+    const db = await openAssetDb()
+    const activeKeys = new Set(activeParts.flatMap((part) => [part.image_asset_key, part.mask_asset_key]).filter((key): key is string => Boolean(key)))
+    const keys = await readAllKeys(db)
+    await deleteAssets(db, keys.filter((key) => !activeKeys.has(key)))
+  } catch {
+    // Compaction should never block UI state updates.
+  }
+}
+
 async function persistPartAssets(db: IDBDatabase, part: ExtractedPart): Promise<ExtractedPart> {
   const imageAsset = await persistAssetIfLarge(db, part.image_asset_key ?? `${part.part_id}:image`, part.image_data_url)
   const maskAsset = await persistAssetIfLarge(db, part.mask_asset_key ?? `${part.part_id}:mask`, part.mask_data_url)
@@ -86,5 +110,26 @@ function readAsset(db: IDBDatabase, assetKey: string) {
     const request = transaction.objectStore(storeName).get(assetKey)
     request.onsuccess = () => resolve(typeof request.result === 'string' ? request.result : undefined)
     request.onerror = () => reject(request.error)
+  })
+}
+
+function readAllKeys(db: IDBDatabase) {
+  return new Promise<string[]>((resolve, reject) => {
+    const transaction = db.transaction(storeName, 'readonly')
+    const request = transaction.objectStore(storeName).getAllKeys()
+    request.onsuccess = () => resolve(request.result.filter((key): key is string => typeof key === 'string'))
+    request.onerror = () => reject(request.error)
+  })
+}
+
+function deleteAssets(db: IDBDatabase, assetKeys: string[]) {
+  return new Promise<void>((resolve, reject) => {
+    const transaction = db.transaction(storeName, 'readwrite')
+    const store = transaction.objectStore(storeName)
+    for (const assetKey of assetKeys) {
+      store.delete(assetKey)
+    }
+    transaction.oncomplete = () => resolve()
+    transaction.onerror = () => reject(transaction.error)
   })
 }

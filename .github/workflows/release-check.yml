@@ -32,3 +32,30 @@ jobs:
 
       - name: Run release gate
         run: npm run release:check
+
+  browser-matrix:
+    name: Cross-browser release gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    if: github.event_name == 'push' || startsWith(github.head_ref, 'release/')
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install browsers
+        run: npm run test:browser:install-all -- --with-deps
+
+      - name: Run cross-browser matrix
+        env:
+          PIXEL_CREATOR_BROWSER_MATRIX: '1'
+        run: npm run test:browser:all

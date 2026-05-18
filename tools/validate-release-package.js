@@ -6,6 +6,14 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const appRoot = path.resolve(__dirname, '..')
 const cliArgs = process.argv.slice(2)
 const privateManifestNames = new Set(['characters.local.json', 'duelyst.private.json'])
+const textAssetExtensions = new Set(['.html', '.js', '.css', '.json', '.svg', '.txt', '.map'])
+const forbiddenTextPatterns = [
+  { pattern: /\/@fs\//, label: '/@fs/' },
+  { pattern: /\/__local\//, label: '/__local/' },
+  { pattern: /[A-Z]:[\\/][\w .()[\]-]+[\\/]/i, label: 'Windows absolute path' },
+  { pattern: /characters\.local\.json|duelyst\.private\.json/, label: 'private manifest name' },
+  { pattern: /Animated-Pixel-Pack-Characters-V1|Duelyst-Unit-Animations|lpc sprite generator stuff/i, label: 'private asset root' },
+]
 
 function getOptionValue(name, fallback) {
   const inline = cliArgs.find((arg) => arg.startsWith(`${name}=`))
@@ -32,6 +40,13 @@ function main() {
 function validateReleasePackage(distRoot) {
   const failures = []
   const manifestRoot = path.resolve(distRoot, 'data', 'manifests')
+  if (!fs.existsSync(distRoot)) {
+    return [`Release dist folder is missing: ${distRoot}`]
+  }
+
+  for (const failure of scanDistTextAssets(distRoot)) {
+    failures.push(failure)
+  }
 
   for (const manifestName of privateManifestNames) {
     const manifestPath = path.resolve(manifestRoot, manifestName)
@@ -68,6 +83,34 @@ function validateReleasePackage(distRoot) {
   }
 
   return failures
+}
+
+function scanDistTextAssets(distRoot) {
+  const failures = []
+  for (const filePath of walkFiles(distRoot)) {
+    if (!textAssetExtensions.has(path.extname(filePath).toLowerCase())) continue
+    const relativePath = path.relative(distRoot, filePath).replaceAll(path.sep, '/')
+    const text = fs.readFileSync(filePath, 'utf8')
+    for (const rule of forbiddenTextPatterns) {
+      if (rule.pattern.test(text)) {
+        failures.push(`Forbidden ${rule.label} reference in dist text asset: ${relativePath}`)
+      }
+    }
+  }
+  return failures
+}
+
+function walkFiles(root) {
+  const files = []
+  for (const entry of fs.readdirSync(root, { withFileTypes: true })) {
+    const entryPath = path.resolve(root, entry.name)
+    if (entry.isDirectory()) {
+      files.push(...walkFiles(entryPath))
+    } else if (entry.isFile()) {
+      files.push(entryPath)
+    }
+  }
+  return files
 }
 
 function collectManifestAssetPaths(manifest) {

@@ -1,4 +1,5 @@
 import type { Direction, ExtractedPart, LayerBundleManifest, LpcAssetInventory, PartLabel, Rect } from './types'
+import { localFsPathPrefix, localToolPath } from './localToolsClient.ts'
 
 export type LpcSheetImportOptions = {
   sheetPaths?: string[]
@@ -136,7 +137,7 @@ function validateSafeSource(source: string, label: string) {
   if (normalized.split('/').includes('..')) {
     throw new Error(`Layer bundle ${label} must not contain path traversal segments.`)
   }
-  if (normalized.startsWith('/@fs/') || normalized.startsWith('/__local/')) {
+  if (normalized.startsWith(localFsPathPrefix()) || normalized.startsWith(localToolPath(''))) {
     throw new Error(`Layer bundle ${label} must not use local server-only paths.`)
   }
 }

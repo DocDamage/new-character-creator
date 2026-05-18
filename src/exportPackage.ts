@@ -20,7 +20,7 @@ import {
   getFrames,
 } from './utils'
 
-const exportDirections: Direction[] = ['south', 'east', 'north', 'west']
+const exportDirectionOrder: Direction[] = ['south', 'east', 'north', 'west', 'southeast', 'southwest', 'northeast', 'northwest']
 const imageLoadCache = new Map<string, Promise<HTMLImageElement>>()
 const fullFrameBounds: Rect = { x: 0, y: 0, w: 64, h: 64 }
 
@@ -251,7 +251,7 @@ export async function buildRenderedFrameSet(
   const animationSourceCharacter = getRecipeAnimationSourceCharacter(recipe, characters) ?? character
 
   for (const animation of animationSourceCharacter.animation_names) {
-    for (const direction of exportDirections) {
+    for (const direction of getExportDirections(animationSourceCharacter, animation)) {
       const sourceFrames = getFrames(animationSourceCharacter, animation, direction)
       if (sourceFrames.length === 0) continue
 
@@ -376,6 +376,19 @@ export async function buildFullPackageManifest(
       }
     }),
   }
+}
+
+function getExportDirections(character: CharacterManifest, animation: AnimationName) {
+  const directions = new Set<Direction>()
+  const animationEntry = character.animations.find((item) => item.name === animation)
+  for (const direction of Object.keys(animationEntry?.directions ?? {}) as Direction[]) {
+    if ((animationEntry?.directions[direction]?.length ?? 0) > 0) directions.add(direction)
+  }
+  for (const direction of Object.keys(character.directions ?? {}) as Direction[]) {
+    if ((character.directions[direction]?.[animation]?.frames.length ?? 0) > 0) directions.add(direction)
+  }
+  const ordered = exportDirectionOrder.filter((direction) => directions.has(direction))
+  return ordered.length > 0 ? ordered : exportDirectionOrder.slice(0, 4)
 }
 
 export { buildCreditsReport } from './creditsReport'

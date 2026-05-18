@@ -80,7 +80,7 @@ The `Settings` screen now also exposes a `Copy browser regression command` actio
 
 Use `npm run release:check` before handoff. It runs lint, source-hygiene checks, tool tests, production build, release package validation, preview local-tool smoke, and the browser regression harness in order.
 The checked-in GitHub Actions workflow runs the same release gate on push and pull request for `main`.
-The release gate also runs `npm run test:preview-tools`, which starts the production preview server and verifies the `/__local` tool endpoints used by Settings, APES Lab, Duelyst audit, and LPC intake. It also checks the restricted app-root `/@fs` route used for local staged preview assets. `npm run test:private-assets` is available for machines that have `assets/Duelyst-Unit-Animations.unitypackage`; it runs the heavier private Duelyst audit path explicitly and skips cleanly when the package is absent.
+Public release builds use `npm run build:release` and do not install the private local-tool middleware. Private machine workflows use `npm run build:local-tools` or `npm run dev`; those builds inject the generated `.local-tools-token` so APES, Duelyst, LPC, repair, and reindex POST requests can pass the loopback/same-origin/token checks. `npm run test:preview-tools` builds the local-tools preview bundle and verifies tokenless requests fail while authorized local requests still reach the tool handlers. `npm run test:private-assets` is available for machines that have `assets/Duelyst-Unit-Animations.unitypackage`; it runs the heavier private Duelyst audit path explicitly and skips cleanly when the package is absent.
 For an optional local cross-browser smoke pass after installing all Playwright browsers, run `npm run test:browser:install-all` once and then `npm run test:browser:all`.
 
 `Settings` also exposes a `Download local setup bundle` action. It writes a machine-ready markdown checklist with your current asset root, APES interpreter, setup commands, and browser regression command filled in so you can move the workflow to another PC without rebuilding the commands by hand.
@@ -110,7 +110,7 @@ For an optional local cross-browser smoke pass after installing all Playwright b
 - APES CLI bridge tools for preparing and running private Duelyst job batches from `data/apes/input/`, including partial-failure recording and strict opt-in failure mode.
 - Export panel for generic manifests, rendered frame/package downloads, Godot scenes, SpriteFrames resources, batch queues, selected upstream LPC credit readiness, and a credits/provenance report for selected parts and catalog items.
 - Production-oriented full package zip with rendered PNGs, Godot 4 `SpriteFrames` resources, Unity import settings and Editor importer script, RPG Maker MZ single-character sheet, Aseprite import script/spec, credits report, and useful local metadata.
-- Release package validator that rejects private manifests, local `/@fs/` and `/__local/` paths, and missing bundled manifest assets.
+- Release package validator that rejects private manifests, local `/@fs/` and `/__local/` references anywhere in emitted text assets, Windows absolute paths, private asset-root names, and missing bundled manifest assets.
 - Browser-side spritesheet downloads for the current animation/direction and all directions of the current action.
 - CLI character export under `data/exports/<character_id>/` with `package_manifest.json`, rendered frames/sheets, engine metadata, and source-frame references.
 - APES bridge contract under `tools/apes_bridge/`.

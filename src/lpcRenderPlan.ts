@@ -2,6 +2,7 @@ import type { AnimationName, Direction, FrameRef, KitbashRecipe, Rect } from './
 import type { LpcCatalog, LpcDrawRecord } from './lpcCatalog.ts'
 import { getLpcExportProfileForTarget, type ExportTargetProfileId } from './creatorCockpit.ts'
 import { buildLpcDrawRecords } from './lpcComposition.ts'
+import { localFsPathPrefix } from './localToolsClient.ts'
 import type { LpcExportProfile } from './lpcAssetResolver.ts'
 
 export type LpcRenderRecord = {
@@ -95,7 +96,7 @@ export function hasCatalogRenderSelections(recipe: KitbashRecipe | null | undefi
 function toLocalReferenceUrl(referenceRoot: string, sourcePath: string) {
   const normalizedRoot = referenceRoot.replaceAll('\\', '/').replace(/\/+$/, '')
   const normalizedSource = sourcePath.replaceAll('\\', '/').replace(/^\/+/, '')
-  return `/@fs/${normalizedRoot}/${normalizedSource}`
+  return `${localFsPathPrefix()}${normalizedRoot}/${normalizedSource}`
 }
 
 function kindScore(kind: LpcRenderRecord['kind']) {

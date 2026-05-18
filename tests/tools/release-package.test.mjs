@@ -97,3 +97,34 @@ test('release validator accepts bundled manifest assets', async () => {
     await rm(distRoot, { recursive: true, force: true })
   }
 })
+
+test('release validator scans every emitted text asset for private references', async () => {
+  const distRoot = await mkdtemp(path.join(tmpdir(), 'pixel-creator-release-text-bad-'))
+  try {
+    await mkdir(path.join(distRoot, 'assets'), { recursive: true })
+    await mkdir(path.join(distRoot, 'data', 'manifests'), { recursive: true })
+    await mkdir(path.join(distRoot, 'data', 'sprites', 'fixture'), { recursive: true })
+    await writeFile(path.join(distRoot, 'data', 'sprites', 'fixture', 'frame.png'), 'png', 'utf8')
+    await writeFile(path.join(distRoot, 'data', 'manifests', 'characters.json'), JSON.stringify({
+      characters: [
+        {
+          character_id: 'fixture',
+          representative_frame: '/data/sprites/fixture/frame.png',
+          rotation_preview_paths: [{ path: '/data/sprites/fixture/frame.png' }],
+          animations: [{ name: 'idle', directions: { south: [{ path: '/data/sprites/fixture/frame.png' }] } }],
+        },
+      ],
+    }), 'utf8')
+    await writeFile(path.join(distRoot, 'assets', 'index.js'), 'fetch("/__local/asset-tools")\n', 'utf8')
+
+    const result = spawnSync(process.execPath, [validatorPath, '--dist', distRoot], {
+      cwd: repoRoot,
+      encoding: 'utf8',
+    })
+
+    assert.notEqual(result.status, 0)
+    assert.match(result.stderr, /Forbidden \/__local\/ reference in dist text asset/)
+  } finally {
+    await rm(distRoot, { recursive: true, force: true })
+  }
+})

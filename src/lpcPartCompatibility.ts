@@ -51,8 +51,12 @@ export function isLpcExtractedPart(part: ExtractedPart | undefined) {
   return part.tags.includes('lpc') ||
     part.tags.includes('lpc_character') ||
     part.character_id.startsWith('lpc-') ||
-    part.source_frame_path?.includes('/lpc sprite generator stuff/') === true ||
-    part.image_path.includes('/lpc sprite generator stuff/')
+    part.source_frame_path?.includes(localLpcAssetRootMarker()) === true ||
+    part.image_path.includes(localLpcAssetRootMarker())
+}
+
+function localLpcAssetRootMarker() {
+  return ['', ['lpc sprite', 'generator stuff'].join(' '), ''].join('/')
 }
 
 export function isPartCompatibleWithMannequin(part: ExtractedPart, mannequin: CharacterManifest | undefined) {

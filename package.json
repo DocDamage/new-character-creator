@@ -18,7 +18,7 @@
     "qa:apes-harness": "node tools/generate-apes-qa-harness.js",
     "check:source-hygiene": "node tools/check-source-hygiene.js",
     "validate:release-package": "node tools/validate-release-package.js",
-    "test:preview-tools": "node tools/check-preview-local-tools.js",
+    "test:preview-tools": "npm run build:local-tools && node tools/check-preview-local-tools.js",
     "test:private-assets": "node tools/run-private-asset-tests.js",
     "test:tools": "node --test tests/tools/*.test.mjs",
     "test:browser": "playwright test",
@@ -28,6 +28,7 @@
     "test:browser:install-all": "playwright install chromium firefox webkit",
     "build": "tsc -b && vite build",
     "build:release": "tsc -b && vite build --mode release",
+    "build:local-tools": "tsc -b && vite build --mode local-tools",
     "release:check": "npm run lint && npm run check:source-hygiene && npm run test:tools && npm run build:release && npm run validate:release-package && npm run test:preview-tools && npm run test:browser",
     "lint": "eslint .",
     "preview": "vite preview"

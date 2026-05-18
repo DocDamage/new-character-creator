@@ -361,13 +361,15 @@ export function FastCreatorPanel({
       {
         id: 'clear-layer-selection',
         label: 'Clear layer selection',
-        disabled: !selectedPartId && !selectedSourceId,
-        disabledReason: 'This layer is already using the base source character.',
+        disabled: settings.locked || (!selectedPartId && !selectedSourceId),
+        disabledReason: settings.locked ? 'Unlock this layer before changing its source or approved part.' : 'This layer is already using the base source character.',
         onSelect: () => clearLayerSelection(label),
       },
       {
         id: 'toggle-visible',
         label: settings.visible ? 'Hide layer' : 'Show layer',
+        disabled: settings.locked,
+        disabledReason: 'Unlock this layer before changing visibility.',
         onSelect: () => updateLayerSetting(label, { visible: !settings.visible }),
       },
       {
@@ -670,6 +672,7 @@ export function FastCreatorPanel({
           })
           const totalApprovedOptions = reviewedParts.filter((part) => part.label === label).length
           const settings = layerSettings[label] ?? { offset: [0, 0], visible: true, locked: false }
+          const isLocked = settings.locked
           const layerActions = buildLayerActions(label, settings)
           return (
             <ContextMenuArea key={label} label={`Actions for ${slugLabel(label)} recipe layer`} actions={layerActions}>
@@ -684,6 +687,8 @@ export function FastCreatorPanel({
                   <select
                     value={selectedParts[label] ?? selectedCharacter.character_id}
                     onChange={(event) => setSelectedParts((current) => ({ ...current, [label]: event.target.value }))}
+                    disabled={isLocked}
+                    title={isLocked ? 'Unlock this layer before changing its source.' : undefined}
                   >
                     {characters.map((character) => (
                       <option key={character.character_id} value={character.character_id}>
@@ -697,7 +702,8 @@ export function FastCreatorPanel({
                   <select
                     value={selectedPartIds[label] ?? ''}
                     onChange={(event) => setLayerSelectedPart(label, event.target.value)}
-                    disabled={approvedOptions.length === 0}
+                    disabled={isLocked || approvedOptions.length === 0}
+                    title={isLocked ? 'Unlock this layer before changing its approved part.' : undefined}
                   >
                     <option value="">{approvedOptions.length === 0 ? 'no reviewed parts' : 'use source character'}</option>
                     {approvedOptions.map((part) => (
@@ -714,6 +720,8 @@ export function FastCreatorPanel({
                       type="checkbox"
                       checked={settings.visible}
                       onChange={(event) => updateLayerSetting(label, { visible: event.target.checked })}
+                      disabled={isLocked}
+                      title={isLocked ? 'Unlock this layer before changing visibility.' : undefined}
                     />
                     <span>Visible</span>
                   </label>
@@ -733,6 +741,8 @@ export function FastCreatorPanel({
                       inputMode="numeric"
                       value={settings.offset[0]}
                       onChange={(event) => updateLayerSetting(label, { offset: [clampOffsetInput(event.target.value), settings.offset[1]] })}
+                      disabled={isLocked}
+                      title={isLocked ? 'Unlock this layer before editing offsets.' : undefined}
                     />
                   </label>
                   <label>
@@ -743,6 +753,8 @@ export function FastCreatorPanel({
                       inputMode="numeric"
                       value={settings.offset[1]}
                       onChange={(event) => updateLayerSetting(label, { offset: [settings.offset[0], clampOffsetInput(event.target.value)] })}
+                      disabled={isLocked}
+                      title={isLocked ? 'Unlock this layer before editing offsets.' : undefined}
                     />
                   </label>
                 </div>

@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import type { KeyboardEvent } from 'react'
 import type { Rect } from './types'
 
 type PixelCanvasProps = {
@@ -89,9 +90,40 @@ export function PixelCanvas({ src, scale = 5, region, sourceRect, onionSrc, onio
     onPixelClick({ x, y })
   }
 
+  function handleKeyDown(event: KeyboardEvent<HTMLCanvasElement>) {
+    if (!onPixelClick) return
+    const current = seed ?? { x: 32, y: 32 }
+    const delta = event.shiftKey ? 4 : 1
+    const next = { ...current }
+    if (event.key === 'ArrowLeft') next.x -= delta
+    else if (event.key === 'ArrowRight') next.x += delta
+    else if (event.key === 'ArrowUp') next.y -= delta
+    else if (event.key === 'ArrowDown') next.y += delta
+    else if (event.key === 'Enter' || event.key === ' ') {
+      onPixelClick(current)
+      event.preventDefault()
+      return
+    } else {
+      return
+    }
+    event.preventDefault()
+    onPixelClick({
+      x: Math.max(0, Math.min(63, next.x)),
+      y: Math.max(0, Math.min(63, next.y)),
+    })
+  }
+
   return (
     <figure className="pixel-stage" aria-label={label}>
-      <canvas ref={canvasRef} onClick={handleClick} className={onPixelClick ? 'clickable' : undefined} />
+      <canvas
+        ref={canvasRef}
+        onClick={handleClick}
+        onKeyDown={handleKeyDown}
+        tabIndex={onPixelClick ? 0 : undefined}
+        role={onPixelClick ? 'img' : undefined}
+        aria-label={onPixelClick ? `${label ?? 'Pixel canvas'}; use arrow keys to move the seed and Enter to place it.` : undefined}
+        className={onPixelClick ? 'clickable' : undefined}
+      />
       {label ? <figcaption>{label}</figcaption> : null}
       {visibleLoadError ? <span className="canvas-error" role="status">{visibleLoadError}</span> : null}
     </figure>

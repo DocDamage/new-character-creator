@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import type { PointerEvent } from 'react'
+import type { KeyboardEvent, PointerEvent } from 'react'
 import {
   fillMask,
   getMaskBounds,
@@ -39,6 +39,7 @@ export function MaskEditor({ parts, selectedRegion, region, sourceFramePath, onS
   const [tool, setTool] = useState<MaskTool>('pencil')
   const [brushSize, setBrushSize] = useState(1)
   const [dragging, setDragging] = useState(false)
+  const [keyboardCursor, setKeyboardCursor] = useState(() => ({ x: region.x, y: region.y }))
   const [revision, setRevision] = useState(0)
   const [statusMessage, setStatusMessage] = useState('Choose an extracted part or start a new manual cleanup pass.')
 
@@ -134,6 +135,29 @@ export function MaskEditor({ parts, selectedRegion, region, sourceFramePath, onS
     setRevision((value) => value + 1)
   }
 
+  function paintAt(point: { x: number; y: number }) {
+    maskRef.current = tool === 'fill'
+      ? fillMask(maskRef.current, point.x, point.y, true)
+      : paintMaskPixel(maskRef.current, point.x, point.y, tool === 'pencil', brushSize)
+    setRevision((value) => value + 1)
+  }
+
+  function handleCanvasKeyDown(event: KeyboardEvent<HTMLCanvasElement>) {
+    const delta = event.shiftKey ? 4 : 1
+    if (event.key === 'ArrowLeft' || event.key === 'ArrowRight' || event.key === 'ArrowUp' || event.key === 'ArrowDown') {
+      event.preventDefault()
+      setKeyboardCursor((current) => ({
+        x: Math.max(0, Math.min(63, current.x + (event.key === 'ArrowLeft' ? -delta : event.key === 'ArrowRight' ? delta : 0))),
+        y: Math.max(0, Math.min(63, current.y + (event.key === 'ArrowUp' ? -delta : event.key === 'ArrowDown' ? delta : 0))),
+      }))
+      return
+    }
+    if (event.key === ' ' || event.key === 'Enter') {
+      event.preventDefault()
+      paintAt(keyboardCursor)
+    }
+  }
+
   function saveMask() {
     const bounds = getMaskBounds(maskRef.current)
     if (!bounds) {
@@ -169,6 +193,10 @@ export function MaskEditor({ parts, selectedRegion, region, sourceFramePath, onS
       <canvas
         ref={canvasRef}
         className="mask-canvas"
+        tabIndex={0}
+        role="img"
+        aria-label="Mask cleanup canvas; use arrow keys to move the paint cursor and Space or Enter to paint."
+        onKeyDown={handleCanvasKeyDown}
         onPointerDown={(event) => {
           setDragging(true)
           paint(event)

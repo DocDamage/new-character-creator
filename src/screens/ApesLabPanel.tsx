@@ -335,10 +335,17 @@ export function ApesLabPanel({
             onChange={(event) => {
               const file = event.target.files?.[0]
               if (!file) return
-              file
-                .text()
+              file.text()
                 .then((text) => {
                   importApesReport(text, { statusSource: 'file-import', sourceLabel: file.name })
+                })
+                .catch((error: unknown) => {
+                  importApesReport(JSON.stringify({
+                    job_id: '',
+                    masks: [],
+                    semantic_mapping: {},
+                    warnings: [`Could not read ${file.name}: ${error instanceof Error ? error.message : String(error)}`],
+                  }), { statusSource: 'file-import', sourceLabel: file.name })
                 })
               event.currentTarget.value = ''
             }}
@@ -354,7 +361,7 @@ export function ApesLabPanel({
         <button data-testid="download-generation-manifest" onClick={downloadGenerationManifest}>Download generation manifest</button>
       </div>
       <div className="settings-card" data-testid="ai-provider-status">
-        <strong>PixelLab / future AI provider</strong>
+        <strong>Manual generation handoff</strong>
         <span>
           {aiProviderConfig.name}: {aiProviderConfig.configured ? 'configured' : 'manual handoff required'}.
           Manual handoff is {aiProviderConfig.manual_handoff.enabled ? aiProviderConfig.manual_handoff.status : 'disabled'}.
@@ -641,7 +648,7 @@ export function ApesLabPanel({
             </div>
           </article>
         ))}
-        {generationJobs.length === 0 ? <p className="empty">No PixelLab/future AI generation jobs yet. Create them from the missing animation queue above.</p> : null}
+          {generationJobs.length === 0 ? <p className="empty">No manual generation handoff jobs yet. Create them from the missing animation queue above.</p> : null}
       </div>
       <div className="job-list">
         {jobs.map((job) => (

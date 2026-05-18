@@ -1,5 +1,5 @@
 import { spawn } from 'node:child_process'
-import { existsSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import { createServer } from 'node:net'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -13,6 +13,7 @@ async function main() {
   }
 
   const port = await getAvailablePort()
+  const localToolsToken = readFileSync(path.resolve(appRoot, '.local-tools-token'), 'utf8').trim()
   const viteCli = path.resolve(appRoot, 'node_modules', 'vite', 'bin', 'vite.js')
   const preview = spawn(process.execPath, [viteCli, 'preview', '--host', '127.0.0.1', '--port', String(port), '--strictPort'], {
     cwd: appRoot,
@@ -34,6 +35,23 @@ async function main() {
 
     const apesTools = await fetch(`http://127.0.0.1:${port}/__local/apes-tools`)
     assert(apesTools.status === 405, `apes-tools GET should return 405, received ${apesTools.status}`)
+
+    const unauthorized = await fetch(`http://127.0.0.1:${port}/__local/apes-tools`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Origin: 'http://127.0.0.1:65535' },
+      body: JSON.stringify({ action: 'preflight', pythonPath: 'python' }),
+    })
+    assert(unauthorized.status === 403, `tokenless/cross-origin POST should return 403, received ${unauthorized.status}`)
+
+    const authorized = await fetch(`http://127.0.0.1:${port}/__local/apes-tools`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Pixel-Creator-Local-Token': localToolsToken,
+      },
+      body: JSON.stringify({ action: 'preflight', pythonPath: 'definitely-not-python.exe' }),
+    })
+    assert(authorized.status === 400, `authorized POST should reach APES validation, received ${authorized.status}`)
 
     const fixturePath = path.resolve(appRoot, 'public', 'data', 'qa', 'apes_report_harness.json').replaceAll(path.sep, '/')
     const fsFixture = await waitForJson(`http://127.0.0.1:${port}/@fs/${fixturePath}`, 10_000)

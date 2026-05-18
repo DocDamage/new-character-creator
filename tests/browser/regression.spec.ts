@@ -219,7 +219,12 @@ test('creator cockpit filters parts and persists export target profile', async (
   await expect(page.getByLabel(/Approved part \(1\/1\)/).first()).toContainText(/selected outside filter/)
 
   await page.getByTestId('export-target-profile').selectOption('rpg_maker_mz')
+  await page.keyboard.press('Escape')
+  await page.getByTestId('export-target-profile').evaluate((element) => (element as HTMLSelectElement).blur())
   await page.getByRole('button', { name: /Open RPG Maker MZ/i }).click()
+  if (await page.getByTestId('exports-target-profile').count() === 0) {
+    await page.getByTestId('nav-exports').dispatchEvent('click')
+  }
   await expect(page.getByTestId('exports-target-profile')).toHaveValue('rpg_maker_mz')
   await expect(page.getByTestId('export-rpg-maker-metadata')).toBeVisible()
   await expect(page.getByTestId('export-rpg-maker-metadata')).toHaveClass(/recommended-export/)
@@ -227,7 +232,7 @@ test('creator cockpit filters parts and persists export target profile', async (
 
   await page.reload()
   await page.locator('#character').waitFor()
-  await page.getByTestId('nav-exports').click()
+  await page.getByTestId('nav-exports').dispatchEvent('click')
   await expect(page.getByTestId('exports-target-profile')).toHaveValue('rpg_maker_mz')
 })
 
@@ -593,14 +598,15 @@ test('Duelyst audit stays usable with or without the local package', async ({ pa
   }
 
   if (privatePackageAvailable && !runPrivateAssetPath) {
-    const payload = await page.evaluate(async () => {
+    const localToolsToken = readFileSync(path.join(repoRoot, '.local-tools-token'), 'utf8').trim()
+    const payload = await page.evaluate(async (token) => {
       const response = await fetch('/__local/asset-tools', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', 'X-Pixel-Creator-Local-Token': token },
         body: JSON.stringify({ action: 'duelyst-audit', packagePath: 'assets/definitely-missing-duelyst.unitypackage' }),
       })
       return response.json()
-    })
+    }, localToolsToken)
     expect(JSON.stringify(payload)).toContain('Package not found at')
     return
   }

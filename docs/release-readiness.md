@@ -4,8 +4,9 @@ Date: 2026-05-18
 
 ## Status
 
-The app/tooling release is GO for private use as of the latest full release
-check.
+The app/tooling release is conditionally GO for the public static package after
+the May 18, 2026 hardening pass. Private/local tool flows are now a separate
+local-tools build path and are not part of the distributable static bundle.
 
 Source metadata is optional private debugging data. It is kept in exports where
 useful, but it is not a release gate, browser-test requirement, or blocker for
@@ -17,13 +18,14 @@ Latest verification after the release hardening pass:
 
 - `npm run lint`: passed
 - `npm run check:source-hygiene`: passed
-- `npm run test:tools`: passed, 18 tests
+- `npm run test:tools`: passed, 49 tests
 - `npm run build`: passed
+- `npm run build:release`: passed
 - `npm run validate:release-package`: passed
 - `npm run test:preview-tools`: passed
-- `npm run test:browser`: passed, 15 tests
-- `npm run test:browser:all`: passed, 45 tests across Chromium, Firefox, and WebKit
-- `npm run test:private-assets`: passed
+- `npm run test:browser`: passed, 17 Chromium tests
+- `npm run test:browser:all`: passed, 51 tests across Chromium, Firefox, and WebKit
+- `npm run test:private-assets`: optional/private-machine only
 - `npm run release:check`: passed
 
 Latest LPC hybrid follow-up verification after the catalog renderer, credits,
@@ -85,6 +87,13 @@ suite exercises the production bundle rather than the Vite dev transform path.
 - `npm run release:check` now runs the release gate in one command: lint,
   source-hygiene checks, tool tests, production build, release-package
   validation, preview local-tool smoke, and browser regression.
+- `npm run build:release` creates the public static package without installing
+  local tool middleware. `npm run build:local-tools` creates the private preview
+  bundle used only for local APES/LPC/Duelyst/repair workflows.
+- Local tool POST endpoints require a loopback host, same-origin request
+  metadata where present, and the generated `.local-tools-token` session token.
+  The token is injected only into dev/local-tools builds and is ignored by the
+  public release build.
 - GitHub Actions runs the same release gate on pushes and pull requests to
   `main`.
 - `npm run test:browser:all` is available for optional local Chromium, Firefox,
@@ -96,8 +105,9 @@ suite exercises the production bundle rather than the Vite dev transform path.
 - Production builds rewrite the release manifest from bundled public assets and
   remove private/local manifests from `dist`.
 - `npm run validate:release-package` rejects private manifests, local `/@fs/`
-  and `/__local/` asset paths, Windows absolute manifest paths, and missing
-  manifest assets.
+  and `/__local/` references anywhere in emitted text assets, Windows absolute
+  paths, private manifest names, private asset-root names, and missing manifest
+  assets.
 - `npm run index:assets` preserves the checked-in fallback
   `public/data/manifests/characters.json` when scanning ignored in-repo assets
   or external asset roots. Local scans write `characters.local.json` unless
@@ -117,9 +127,13 @@ suite exercises the production bundle rather than the Vite dev transform path.
   LPC credit/license warning, and APES QA provenance signals.
 - Canvas preview and manual mask editor image failures now surface visible UI
   status instead of console-only errors.
+- Canvas seed placement and manual mask cleanup are keyboard reachable through
+  focusable canvases, arrow-key movement, and Enter/Space paint/place actions.
 - Browser-storage read failures fall back to safe defaults, and write failures
-  surface a visible persistence warning so users can export library/job data
-  before reload.
+  are tracked per storage key so a later successful write does not hide an
+  unrelated failed write.
+- APES report imports are schema-validated before they mutate APES jobs or the
+  Part Library.
 - APES batch execution records per-job success/failure counts and failure
   kinds. The default batch command completes with recorded content failures;
   `-- --fail-on-job-error` restores strict non-zero behavior.
@@ -167,6 +181,8 @@ suite exercises the production bundle rather than the Vite dev transform path.
 - Large imported part images and masks are persisted in IndexedDB by asset key
   so localStorage stores lightweight part metadata and reloads hydrate the real
   assets back into the app.
+- Deleted and cleared Part Library records now trigger best-effort IndexedDB
+  asset deletion/compaction so orphaned large image records do not accumulate.
 - Part Library results are paged in 100-part batches so large imports stay
   usable without rendering every imported part card at once. Visible bulk review
   and visible JSON export are scoped to the currently rendered page.

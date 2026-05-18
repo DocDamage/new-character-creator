@@ -1,5 +1,6 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
+import crypto from 'node:crypto'
 import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -7,6 +8,22 @@ import { createLocalAssetToolsPlugin } from './tools/localToolsServer'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const appRoot = __dirname
+const localToolsTokenPath = path.resolve(appRoot, '.local-tools-token')
+
+function getLocalToolsToken() {
+  if (process.env.PIXEL_CREATOR_LOCAL_TOOLS_TOKEN) {
+    return process.env.PIXEL_CREATOR_LOCAL_TOOLS_TOKEN
+  }
+  try {
+    const existing = fs.readFileSync(localToolsTokenPath, 'utf8').trim()
+    if (existing) return existing
+  } catch {
+    // Generate once and reuse so built local-tool previews match the preview server token.
+  }
+  const token = crypto.randomBytes(32).toString('hex')
+  fs.writeFileSync(localToolsTokenPath, `${token}\n`, { encoding: 'utf8', mode: 0o600 })
+  return token
+}
 
 function releasePackagePlugin() {
   return {
@@ -25,36 +42,43 @@ function releasePackagePlugin() {
 }
 
 function writeBundledReleaseManifest(distRoot: string) {
-  const sourceRoot = path.resolve(appRoot, 'data', 'exports', '1-warrior-woman', 'individual_frames')
-  if (!fs.existsSync(sourceRoot)) {
-    throw new Error(`Release sprite fixture is missing: ${sourceRoot}`)
+  const exportsRoot = path.resolve(appRoot, 'data', 'exports')
+  const releaseInputs = listDirectories(exportsRoot)
+    .map((characterId) => ({
+      characterId,
+      sourceRoot: path.resolve(exportsRoot, characterId, 'individual_frames'),
+    }))
+    .filter((item) => fs.existsSync(item.sourceRoot))
+  if (releaseInputs.length === 0) {
+    throw new Error(`No release sprite exports found under ${exportsRoot}`)
   }
-
-  const spriteRoot = path.resolve(distRoot, 'data', 'sprites', '1-warrior-woman')
-  fs.rmSync(spriteRoot, { recursive: true, force: true })
-  fs.cpSync(sourceRoot, path.resolve(spriteRoot, 'animations'), { recursive: true })
 
   const manifestRoot = path.resolve(distRoot, 'data', 'manifests')
   fs.mkdirSync(manifestRoot, { recursive: true })
-  const character = buildBundledReleaseCharacter(path.resolve(spriteRoot, 'animations'))
+  const characters = releaseInputs.map((input) => {
+    const spriteRoot = path.resolve(distRoot, 'data', 'sprites', input.characterId)
+    fs.rmSync(spriteRoot, { recursive: true, force: true })
+    fs.cpSync(input.sourceRoot, path.resolve(spriteRoot, 'animations'), { recursive: true })
+    return buildBundledReleaseCharacter(input.characterId, path.resolve(spriteRoot, 'animations'))
+  })
   const manifest = {
     generated_at: new Date().toISOString(),
     asset_root: 'data/sprites',
-    total_characters: 1,
+    total_characters: characters.length,
     canonical_directions: ['north', 'south', 'east', 'west'],
     canonical_animations: ['idle', 'walk', 'running_jump', 'attack'],
-    characters: [character],
+    characters,
   }
   fs.writeFileSync(path.resolve(manifestRoot, 'characters.json'), `${JSON.stringify(manifest, null, 2)}\n`, 'utf8')
 }
 
-function buildBundledReleaseCharacter(animationRoot: string) {
+function buildBundledReleaseCharacter(characterId: string, animationRoot: string) {
   const directions: Record<string, Record<string, { frame_count: number; frames: Array<Record<string, unknown>> }>> = {}
   const animations = listDirectories(animationRoot).map((animationName) => {
     const directionFrames: Record<string, Array<Record<string, unknown>>> = {}
     for (const directionName of listDirectories(path.resolve(animationRoot, animationName))) {
       const frames = listPngFiles(path.resolve(animationRoot, animationName, directionName)).map((fileName, index) => {
-        const publicPath = `/data/sprites/1-warrior-woman/animations/${animationName}/${directionName}/${fileName}`
+        const publicPath = `/data/sprites/${characterId}/animations/${animationName}/${directionName}/${fileName}`
         return {
           index,
           path: publicPath,
@@ -80,10 +104,10 @@ function buildBundledReleaseCharacter(animationRoot: string) {
   const representativeFrame = directions.south?.idle?.frames[0]?.path as string | undefined
 
   return {
-    character_id: '1-warrior-woman',
-    display_name: '1 Warrior Woman',
-    class_type: 'warrior_woman',
-    source_folder: '/data/sprites/1-warrior-woman',
+    character_id: characterId,
+    display_name: characterId.split(/[-_]+/).map((part) => part.charAt(0).toUpperCase() + part.slice(1)).join(' '),
+    class_type: characterId.replace(/^\d+[-_]?/, '').replaceAll('-', '_'),
+    source_folder: `/data/sprites/${characterId}`,
     canvas_size: { width: 64, height: 64 },
     directions,
     animations,
@@ -121,15 +145,21 @@ function listPngFiles(folder: string) {
 }
 
 // https://vite.dev/config/
-export default defineConfig(({ mode }) => ({
+export default defineConfig(({ mode }) => {
+  const localToolsToken = getLocalToolsToken()
+  const includeLocalTools = mode !== 'release'
+  return {
   plugins: [
     react(),
-    createLocalAssetToolsPlugin(appRoot),
+    ...(includeLocalTools ? [createLocalAssetToolsPlugin(appRoot, { sessionToken: localToolsToken })] : []),
     ...(mode === 'release' ? [releasePackagePlugin()] : []),
   ],
+  define: {
+    'import.meta.env.VITE_LOCAL_TOOLS_TOKEN': JSON.stringify(includeLocalTools ? localToolsToken : ''),
+  },
   server: {
     fs: {
       allow: [__dirname, path.resolve(__dirname, '..')],
     },
   },
-}))
+}})
