@@ -39,6 +39,21 @@ test('LPC catalog picker clears required-tag warnings when compatible base is se
   assert.deepEqual(options[0].warnings, [])
 })
 
+test('LPC catalog picker marks oversize custom animation layers as degraded in standard export', () => {
+  const catalog = makeCatalog()
+  const options = buildLpcCatalogPickerOptions({
+    catalog,
+    slotId: 'weapon',
+    selections: {},
+    bodyType: 'male',
+    animation: 'walk',
+  })
+
+  const longsword = options.find((option) => option.item_id === 'weapon:weapon_sword_longsword')
+  assert.equal(longsword.compatibility_state, 'degraded')
+  assert.match(longsword.warnings.join(' '), /oversize export profile/)
+})
+
 test('LPC selected-item credit readiness reports missing and review-needed credits', () => {
   const catalog = makeCatalog()
   const readiness = buildLpcSelectionCreditReadiness(catalog, {
@@ -139,7 +154,10 @@ function makeCatalog() {
         preview: { row: 0, column: 0, x_offset: 0, y_offset: 0 },
         match_body_color: false,
         recolors: [],
-        layers: [{ layer_id: 'layer_1', z_pos: 140, paths_by_body_type: { male: 'weapon/sword/longsword/' } }],
+        layers: [
+          { layer_id: 'layer_1', z_pos: 140, paths_by_body_type: { male: 'weapon/sword/longsword/' } },
+          { layer_id: 'layer_2', z_pos: -1, custom_animation: 'slash_oversize', paths_by_body_type: { male: 'weapon/sword/longsword/attack_slash/behind/' } },
+        ],
         credits: [{ file: 'weapon/sword/longsword', notes: '', authors: [], licenses: [], urls: [] }],
       },
     },

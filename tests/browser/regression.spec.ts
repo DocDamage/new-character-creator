@@ -370,6 +370,11 @@ test('LPC catalog picker persists metadata-backed selections in saved recipes', 
     licenses: ['OGA-BY 3.0'],
     urls: ['https://example.test'],
   })
+
+  await page.getByTestId('nav-fast').click()
+  await page.getByTestId('fast-live-layer').selectOption('weapon')
+  await page.getByTestId('lpc-catalog-item-select').selectOption('weapon:weapon_sword_longsword')
+  await expect(page.getByTestId('lpc-catalog-selection-warnings')).toContainText(/oversize export profile/i)
 })
 
 test('workstation APES mode does not create fake rectangular APES parts', async ({ page }) => {
@@ -860,7 +865,7 @@ function makeBrowserLpcCatalogFixture() {
       has_palette_definitions: false,
       has_credits_csv: true,
     },
-    summary: { item_count: 1, layer_count: 1, variant_count: 1, credit_count: 1, type_counts: { cape: 1 } },
+    summary: { item_count: 2, layer_count: 3, variant_count: 2, credit_count: 2, type_counts: { cape: 1, weapon: 1 } },
     items: {
       'cape:cape_solid': {
         item_id: 'cape:cape_solid',
@@ -878,6 +883,26 @@ function makeBrowserLpcCatalogFixture() {
         recolors: [],
         layers: [{ layer_id: 'layer_1', z_pos: 85, paths_by_body_type: { male: 'cape/solid/female/' } }],
         credits: [{ file: 'cape/solid', notes: '', authors: ['Artist'], licenses: ['OGA-BY 3.0'], urls: ['https://example.test'] }],
+      },
+      'weapon:weapon_sword_longsword': {
+        item_id: 'weapon:weapon_sword_longsword',
+        name: 'Longsword',
+        type_name: 'weapon',
+        path: ['weapons', 'sword'],
+        tags: ['weapon'],
+        required_tags: [],
+        excluded_tags: [],
+        required_body_types: ['male'],
+        variants: ['longsword'],
+        animations: ['walk', 'slash_oversize'],
+        preview: { row: 0, column: 0, x_offset: 0, y_offset: 0 },
+        match_body_color: false,
+        recolors: [],
+        layers: [
+          { layer_id: 'layer_1', z_pos: 140, paths_by_body_type: { male: 'weapon/sword/longsword/' } },
+          { layer_id: 'layer_2', z_pos: -1, custom_animation: 'slash_oversize', paths_by_body_type: { male: 'weapon/sword/longsword/attack_slash/behind/' } },
+        ],
+        credits: [{ file: 'weapon/sword/longsword', notes: '', authors: ['Artist'], licenses: ['OGA-BY 3.0'], urls: ['https://example.test'] }],
       },
     },
     category_tree: { id: 'root', label: 'LPC Catalog', item_ids: [], children: [] },
