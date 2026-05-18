@@ -299,21 +299,75 @@ test('LPC inventory sheets can be exposed as cropped source characters', () => {
         lpc_grid: true,
         tags: ['base'],
       },
+      {
+        path: 'Androgynous Bases/Copper/idle.png',
+        category: 'Androgynous Bases',
+        file_name: 'idle.png',
+        width: 832,
+        height: 256,
+        frame_width: 64,
+        frame_height: 64,
+        frame_columns: 13,
+        frame_rows: 4,
+        lpc_grid: true,
+        tags: ['base'],
+      },
+      {
+        path: 'Androgynous Bases/Copper/shoot.png',
+        category: 'Androgynous Bases',
+        file_name: 'shoot.png',
+        width: 832,
+        height: 256,
+        frame_width: 64,
+        frame_height: 64,
+        frame_columns: 13,
+        frame_rows: 4,
+        lpc_grid: true,
+        tags: ['base'],
+      },
+      {
+        path: 'Clothes/Blue/Pants/Idle.png',
+        category: 'Clothes',
+        file_name: 'Idle.png',
+        width: 320,
+        height: 256,
+        frame_width: 64,
+        frame_height: 64,
+        frame_columns: 5,
+        frame_rows: 4,
+        lpc_grid: true,
+        tags: ['pants', 'blue'],
+      },
+      {
+        path: 'Clothes/Blue/Pants/Run.png',
+        category: 'Clothes',
+        file_name: 'Run.png',
+        width: 320,
+        height: 256,
+        frame_width: 64,
+        frame_height: 64,
+        frame_columns: 5,
+        frame_rows: 4,
+        lpc_grid: true,
+        tags: ['pants', 'blue'],
+      },
     ],
   })
 
-  assert.equal(characters.length, 5)
-  const shirtPart = characters.find((character) => character.labels.lpc_path === 'Clothes/Blue/Shirt, Long-Sleeved.png')
-  const runPart = characters.find((character) => character.labels.lpc_path === 'Clothes/Blue/Shirt/Run.png')
-  const bowPart = characters.find((character) => character.labels.lpc_path === 'lpc_entry/png/bow/WEAPON_bow.png')
-  const magicBase = characters.find((character) => character.labels.lpc_path === 'Androgynous Bases/Copper/magic.png')
+  assert.equal(characters.length, 6)
+  const shirtPart = characters.find((character) => character.labels.lpc_path === 'Clothes/Blue/Shirt, Long-Sleeved')
+  const runPart = characters.find((character) => character.labels.lpc_path === 'Clothes/Blue/Shirt')
+  const pantsPart = characters.find((character) => character.labels.lpc_path === 'Clothes/Blue/Pants')
+  const bowPart = characters.find((character) => character.labels.lpc_path === 'lpc_entry/png/WEAPON_bow')
+  const magicBase = characters.find((character) => character.labels.lpc_path === 'Androgynous Bases/Copper')
   assert.equal(characters[0].class_type, 'lpc_character')
   assert.equal(characters[0].labels.lpc_role, 'base')
   assert.equal(shirtPart?.labels.lpc_role, 'part')
   assert.equal(shirtPart?.labels.lpc_part_label, 'torso')
   assert.deepEqual(runPart?.animation_names, ['run'])
+  assert.deepEqual(pantsPart?.animation_names, ['idle', 'run'])
   assert.deepEqual(bowPart?.animation_names, ['bow'])
-  assert.deepEqual(magicBase?.animation_names, ['magic'])
+  assert.deepEqual(magicBase?.animation_names, ['idle', 'magic', 'shoot'])
   assert.equal(characters[0].directions.south.idle.frame_count, 5)
   assert.deepEqual(characters[0].directions.east.idle.frames[0].source_rect, { x: 0, y: 64, w: 64, h: 64 })
   assert.deepEqual(characters[0].directions.south.idle.frames[0].source_rect, { x: 0, y: 128, w: 64, h: 64 })

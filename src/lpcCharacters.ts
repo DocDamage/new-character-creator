@@ -9,6 +9,15 @@ const lpcDirectionRows: Array<[Direction, number]> = [
 
 const maxLpcBaseSheets = 360
 const maxLpcPartSheetsPerLabel = 180
+const animationOrder = ['idle', 'walk', 'walkcycle', 'run', 'jump', 'sitting', 'emotes', 'magic', 'shoot', 'swing', 'thrust', 'slash', 'bow', 'spellcast', 'attack', 'hurt']
+const lpcActionSegments = new Set([...animationOrder, 'sit', 'emote', 'spell'])
+type LpcSheet = LpcAssetInventory['sheets'][number]
+type LpcSheetGroup = {
+  key: string
+  role: 'base' | 'part'
+  label: PartLabel
+  sheets: LpcSheet[]
+}
 
 export function buildLpcCharacterManifests(inventory: LpcAssetInventory | null): CharacterManifest[] {
   if (!inventory) return []
@@ -17,77 +26,69 @@ export function buildLpcCharacterManifests(inventory: LpcAssetInventory | null):
     .filter(isSelectableLpcSheet)
     .sort((left, right) => lpcSheetSortScore(left) - lpcSheetSortScore(right) || left.path.localeCompare(right.path))
 
-  const baseSheets = selectableSheets
-    .filter(isLpcBaseSheet)
-    .slice(0, maxLpcBaseSheets)
-  const partSheetsByLabel = new Map<PartLabel, LpcAssetInventory['sheets']>()
-  for (const sheet of selectableSheets) {
-    if (isLpcBaseSheet(sheet)) continue
-    const label = inferLpcPartLabelForCharacter(sheet)
-    const bucket = partSheetsByLabel.get(label) ?? []
-    if (bucket.length >= maxLpcPartSheetsPerLabel) continue
-    bucket.push(sheet)
-    partSheetsByLabel.set(label, bucket)
-  }
-  const partSheets = Array.from(partSheetsByLabel.values()).flat()
+  const sheetGroups = Array.from(groupLpcSheets(selectableSheets).values())
+    .sort((left, right) => lpcSheetSortScore(left.sheets[0]) - lpcSheetSortScore(right.sheets[0]) || left.key.localeCompare(right.key))
 
-  return [...baseSheets, ...partSheets]
-    .map((sheet, index) => {
-      const path = buildLpcSheetUrl(inventory, sheet.path) ?? sheet.path
-      const animation = inferLpcAnimation(sheet)
-      const role = isLpcBaseSheet(sheet) ? 'base' : 'part'
-      const partLabel = inferLpcPartLabelForCharacter(sheet)
-      const framesByDirection = Object.fromEntries(
-        lpcDirectionRows.map(([direction, row]) => [
-          direction,
-          buildLpcFrames(path, sheet.file_name, sheet.frame_columns ?? 1, row, sheet.frame_width || 64, sheet.frame_height || 64),
-        ]),
-      ) as Partial<Record<Direction, FrameRef[]>>
-      const animations: AnimationManifest[] = [{
-        name: animation,
-        source_names: [sheet.file_name],
-        directions: framesByDirection,
-        preview_gifs: [],
-      }]
+  const baseGroups = sheetGroups
+    .filter((group) => group.role === 'base')
+    .slice(0, maxLpcBaseSheets)
+  const partGroupsByLabel = new Map<PartLabel, LpcSheetGroup[]>()
+  for (const group of sheetGroups) {
+    if (group.role === 'base') continue
+    const bucket = partGroupsByLabel.get(group.label) ?? []
+    if (bucket.length >= maxLpcPartSheetsPerLabel) continue
+    bucket.push(group)
+    partGroupsByLabel.set(group.label, bucket)
+  }
+  const partGroups = Array.from(partGroupsByLabel.values()).flat()
+
+  return [...baseGroups, ...partGroups]
+    .map((group, index) => {
+      const animations = buildLpcAnimations(inventory, group.sheets)
+      const animationNames = animations.map((animation) => animation.name)
       const directionRecords = Object.fromEntries(
         lpcDirectionRows.map(([direction]) => [
           direction,
-          {
-            [animation]: {
-              frame_count: framesByDirection[direction]?.length ?? 0,
-              frames: framesByDirection[direction] ?? [],
+          Object.fromEntries(animations.map((animation) => [
+            animation.name,
+            {
+              frame_count: animation.directions[direction]?.length ?? 0,
+              frames: animation.directions[direction] ?? [],
             },
-          },
+          ])),
         ]),
       ) as CharacterManifest['directions']
-      const representativeFrame = framesByDirection.south?.[0]
-      const displayName = `LPC ${sheet.path.replace(/\.png$/i, '').replaceAll('\\', '/').split('/').filter(Boolean).slice(-3).join(' / ')}`
+      const representativeFrame =
+        getRepresentativeFrame(animations, 'idle') ??
+        getRepresentativeFrame(animations, 'walk') ??
+        animations[0]?.directions.south?.[0]
+      const displayName = `LPC ${group.key.replace(/\.png$/i, '').replaceAll('\\', '/').split('/').filter(Boolean).slice(-3).join(' / ')}`
 
       return {
-        character_id: `lpc-${slugLpcId(sheet.path)}-${String(index + 1).padStart(3, '0')}`,
+        character_id: `lpc-${slugLpcId(group.key)}-${String(index + 1).padStart(3, '0')}`,
         display_name: displayName,
         class_type: 'lpc_character',
         labels: {
           source_pack: 'lpc',
-          lpc_path: sheet.path,
-          lpc_category: sheet.category,
-          lpc_role: role,
-          lpc_part_label: partLabel,
+          lpc_path: group.key,
+          lpc_category: group.sheets[0]?.category,
+          lpc_role: group.role,
+          lpc_part_label: group.label,
         },
-        source_folder: path,
+        source_folder: buildLpcSheetUrl(inventory, group.sheets[0]?.path ?? group.key) ?? group.key,
         canvas_size: { width: 64, height: 64 },
         directions: directionRecords,
         animations,
-        animation_names: [animation],
+        animation_names: animationNames,
         source_quality_warnings: [
           'LPC source sheet is used by cropping 64x64 cells; verify row/action mapping before production export.',
           'Verify LPC attribution/license metadata before release.',
         ],
         rotation_preview_paths: lpcDirectionRows.map(([direction]) => ({
           direction,
-          path,
+          path: representativeFrame?.path ?? buildLpcSheetUrl(inventory, group.sheets[0]?.path ?? group.key) ?? group.key,
         })),
-        representative_frame: representativeFrame?.path ?? path,
+        representative_frame: representativeFrame?.path ?? buildLpcSheetUrl(inventory, group.sheets[0]?.path ?? group.key) ?? group.key,
         extraction_status: {
           frame_chopped: true,
           preset_regions_available: true,
@@ -119,6 +120,76 @@ function lpcSheetSortScore(sheet: LpcAssetInventory['sheets'][number]) {
   if (isLpcBaseSheet(sheet)) return 0
   if (/\b(hair|hat|hood|helmet|shirt|pants|shoe|armor|weapon|shield|cape|cloak)\b/.test(normalized)) return 1
   return 2
+}
+
+function groupLpcSheets(sheets: LpcSheet[]) {
+  const groups = new Map<string, LpcSheetGroup>()
+  for (const sheet of sheets) {
+    const role = isLpcBaseSheet(sheet) ? 'base' : 'part'
+    const label = inferLpcPartLabelForCharacter(sheet)
+    const key = buildLpcGroupKey(sheet)
+    const group = groups.get(key) ?? { key, role, label, sheets: [] }
+    group.sheets.push(sheet)
+    groups.set(key, group)
+  }
+  return groups
+}
+
+function buildLpcAnimations(inventory: LpcAssetInventory, sheets: LpcSheet[]): AnimationManifest[] {
+  const animationSheets = [...sheets].sort((left, right) => animationSortScore(inferLpcAnimation(left)) - animationSortScore(inferLpcAnimation(right)) || left.path.localeCompare(right.path))
+  const usedAnimations = new Set<string>()
+  const animations: AnimationManifest[] = []
+  for (const sheet of animationSheets) {
+    const animation = inferLpcAnimation(sheet)
+    if (usedAnimations.has(animation)) continue
+    usedAnimations.add(animation)
+    const path = buildLpcSheetUrl(inventory, sheet.path) ?? sheet.path
+    const framesByDirection = Object.fromEntries(
+      lpcDirectionRows.map(([direction, row]) => [
+        direction,
+        buildLpcFrames(path, sheet.file_name, sheet.frame_columns ?? 1, row, sheet.frame_width || 64, sheet.frame_height || 64),
+      ]),
+    ) as Partial<Record<Direction, FrameRef[]>>
+    animations.push({
+      name: animation,
+      source_names: [sheet.file_name],
+      directions: framesByDirection,
+      preview_gifs: [],
+    })
+  }
+  return animations
+}
+
+function getRepresentativeFrame(animations: AnimationManifest[], animationName: AnimationName) {
+  return animations.find((animation) => animation.name === animationName)?.directions.south?.[0]
+}
+
+function buildLpcGroupKey(sheet: LpcSheet) {
+  const normalizedPath = sheet.path.replaceAll('\\', '/')
+  const pathWithoutExtension = normalizedPath.replace(/\.png$/i, '')
+  const segments = pathWithoutExtension.split('/').filter(Boolean)
+  const fileSegment = segments.at(-1) ?? ''
+  if (isActionSegment(fileSegment)) {
+    return segments.slice(0, -1).join('/')
+  }
+  const actionSegmentIndex = segments.findIndex((segment, index) => index < segments.length - 1 && isActionSegment(segment))
+  if (actionSegmentIndex >= 0) {
+    return segments.filter((_, index) => index !== actionSegmentIndex).join('/')
+  }
+  return pathWithoutExtension
+}
+
+function isActionSegment(segment: string) {
+  return lpcActionSegments.has(normalizeActionSegment(segment))
+}
+
+function normalizeActionSegment(segment: string) {
+  return segment.toLowerCase().replace(/[^a-z0-9]+/g, '')
+}
+
+function animationSortScore(animation: AnimationName) {
+  const index = animationOrder.indexOf(animation)
+  return index >= 0 ? index : animationOrder.length
 }
 
 function inferLpcPartLabelForCharacter(sheet: LpcAssetInventory['sheets'][number]): PartLabel {
