@@ -232,7 +232,7 @@ The rigging system should add:
 - keyframed pose editing with onion-skin previews
 - animation-profile output so a newly authored action can become normal spritesheet frames
 - frame baking that writes reviewed custom animation frames, not hidden procedural state
-- optional AI/APES/PixelLab assistance for missing frames, cleanup, in-betweens, and consistency checks
+- AI/APES/PixelLab assistance hooks for missing frames, cleanup, in-betweens, and consistency checks
 - provenance for every generated or edited frame
 
 The rigging system should not replace Universal LPC metadata. It should consume catalog-backed draw records and custom parts, then bake new frames into the same reviewed asset pipeline used by exports. Game exports should still receive spritesheets, frame metadata, and credits; they should not need this app's rig runtime.
@@ -253,6 +253,34 @@ Deferred rigging scope:
 - physics simulation for capes, hair, or cloth
 
 This phase becomes eligible only when the prior phases meet their acceptance criteria and the preview/export renderer uses one shared composition path.
+
+## Mandatory AI Integration Policy
+
+AI implementation is mandatory. AI use is optional.
+
+The app must ship with an AI-assisted asset workflow after the stable LPC/catalog foundation is complete, but it must never require the user to run AI to compose, edit, review, or export a character. AI actions are explicit commands inside the `AI/APES` workflow and context menus, not automatic background mutations.
+
+Required AI implementation:
+
+- provider configuration for PixelLab and future AI backends
+- a missing-animation queue fed by unsupported/missing draw records
+- generation job records with source frames, target animation profile, prompt/settings, provider, status, logs, outputs, and provenance
+- export/import handoff for providers that cannot be automated directly
+- reviewed output intake that turns generated frames into custom parts or custom animation frames
+- comparison views for source, generated output, cleanup edits, and final reviewed frame
+- hard separation between upstream LPC assets and generated/custom assets
+- credits/provenance reporting for generated/custom output
+
+Use policy:
+
+- AI generation must be user-started.
+- AI-generated frames are not selected automatically.
+- AI output cannot overwrite upstream LPC assets.
+- AI output cannot enter release exports until reviewed.
+- If no provider is configured, the AI/APES tab still exists and shows setup/status plus manual import/export handoff.
+- Local deterministic tools and manual editing remain available for users who choose not to use AI on a given asset.
+
+This keeps AI as a first-class implemented capability without making it a hidden dependency.
 
 ## Composition Algorithm
 
@@ -587,11 +615,14 @@ Phase 5: Recipe and credits migration
 - Replace broad LPC credit warnings with selected-item credit readiness.
 - Store selected recipe mode/family and custom-part compatibility modes.
 
-Phase 6: Oversize and AI extension
+Phase 6: Oversize and mandatory AI integration
 
 - Add export profiles for oversize/custom animations.
 - Add missing-animation queue.
-- PixelLab/AI outputs become reviewed custom parts with provenance, never silent upstream replacements.
+- Add PixelLab/AI provider configuration and generation job tracking.
+- Add provider handoff/import for workflows that cannot be fully automated.
+- PixelLab/AI outputs become reviewed custom parts or reviewed custom animation frames with provenance, never silent upstream replacements.
+- Keep AI use optional for each asset; keep AI implementation present in the app.
 
 Phase 7: Mandatory future rigging and animation authoring
 
@@ -618,6 +649,8 @@ Tool tests:
 - produce selected-item credits report entries
 - serialize future rig definitions separately from baked spritesheet frames
 - verify baked custom animation frames retain source-family provenance and review status
+- create AI generation job records without selecting outputs automatically
+- keep generated outputs blocked from release export until reviewed
 
 Browser tests:
 
@@ -634,6 +667,8 @@ Browser tests:
 - context menus open by right click and keyboard, stay in the viewport, and return focus on close
 - icon buttons, badges, and disabled actions expose tooltips on hover and focus
 - metadata/details are hidden by default but available through `View info`
+- AI/APES tab is present even when no provider is configured and shows setup/manual handoff state
+- generated output import creates reviewed-pending custom frames instead of replacing upstream assets
 - after the rigging phase exists, a baked custom animation appears as a normal selectable/exportable animation profile with review warnings
 
 Visual/manual QA:
@@ -658,6 +693,9 @@ Visual/manual QA:
 - File paths, frame geometry, full credits, cache paths, and debug counts are hidden by default and available through `View info`.
 - Right-click/context-menu actions exist for preview frames, source/part rows, recipe layers, and export/credit records.
 - Every icon-only action, readiness badge, disabled menu item, and compatibility indicator has a hover/focus tooltip.
+- AI integration is implemented as a first-class workflow with provider configuration, generation jobs, output intake, review, and provenance.
+- The user can choose not to run AI for any given asset, and non-AI composition/export paths remain usable.
+- AI-generated output never overwrites upstream LPC assets and cannot enter release exports until reviewed.
 - Bone/rig-based animation authoring is present in the roadmap as a mandatory later phase, gated behind stable composition, family separation, recipe migration, and exports.
 - Baked rig animations become reviewed custom animation frames with provenance and export readiness, not hidden procedural state.
 - Exported credits list selected upstream item credits with authors, licenses, URLs, and upstream commit.
@@ -674,5 +712,7 @@ Visual/manual QA:
 - Preserve a read-only all-source audit view, but keep composition pickers family-scoped.
 - Build one shared context-menu, tooltip, and details-drawer system instead of one-off menus inside each panel.
 - Hide deep metadata by default while keeping blocking readiness warnings visible.
+- Implement the AI workflow as mandatory app capability, while keeping every AI run user-initiated and optional per asset.
+- Treat generated AI output as custom reviewed content with provenance, never as an upstream LPC replacement.
 - Make bone/rig animation authoring a required future phase, but do not begin it until catalog composition, family boundaries, migration, and exports are stable.
 - Bake future rig output into spritesheet frames for export instead of requiring downstream games to run this app's rigging system.
