@@ -247,13 +247,30 @@ test('LPC inventory sheets can be exposed as cropped source characters', () => {
         lpc_grid: true,
         tags: ['adult_female', 'base'],
       },
+      {
+        path: 'Clothes/Blue/Shirt, Long-Sleeved.png',
+        category: 'Clothes',
+        file_name: 'Shirt, Long-Sleeved.png',
+        width: 320,
+        height: 256,
+        frame_width: 64,
+        frame_height: 64,
+        frame_columns: 5,
+        frame_rows: 4,
+        lpc_grid: true,
+        tags: ['shirt', 'blue'],
+      },
     ],
   })
 
-  assert.equal(characters.length, 1)
+  assert.equal(characters.length, 2)
   assert.equal(characters[0].class_type, 'lpc_character')
+  assert.equal(characters[0].labels.lpc_role, 'base')
+  assert.equal(characters[1].labels.lpc_role, 'part')
+  assert.equal(characters[1].labels.lpc_part_label, 'torso')
   assert.equal(characters[0].directions.south.idle.frame_count, 5)
-  assert.deepEqual(characters[0].directions.east.idle.frames[0].source_rect, { x: 0, y: 128, w: 64, h: 64 })
+  assert.deepEqual(characters[0].directions.east.idle.frames[0].source_rect, { x: 0, y: 64, w: 64, h: 64 })
+  assert.deepEqual(characters[0].directions.south.idle.frames[0].source_rect, { x: 0, y: 128, w: 64, h: 64 })
   assert.equal(characters[0].representative_frame, '/assets/lpc sprite generator stuff/Adult Female/Base, Adult Female.png')
 })
 

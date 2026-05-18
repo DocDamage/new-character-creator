@@ -238,7 +238,7 @@ input {
 .main-grid {
   padding: 18px;
   display: grid;
-  grid-template-columns: 390px minmax(0, 1fr);
+  grid-template-columns: minmax(510px, 0.92fr) minmax(360px, 1fr);
   gap: 18px;
 }
 
@@ -256,6 +256,39 @@ input {
   gap: 14px;
   min-width: 0;
   min-height: 520px;
+}
+
+.preview-stage-grid {
+  display: grid;
+  grid-template-columns: minmax(260px, 1fr) minmax(190px, 220px);
+  gap: 14px;
+  align-items: stretch;
+}
+
+.preview-stage-main {
+  min-width: 0;
+  display: grid;
+  align-content: start;
+}
+
+.preview-part-picker {
+  min-width: 0;
+  display: grid;
+  align-content: start;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid rgba(108, 214, 143, 0.42);
+  border-radius: 7px;
+  background: rgba(25, 58, 88, 0.48);
+}
+
+.preview-part-picker strong {
+  color: var(--text-strong);
+}
+
+.preview-part-picker span {
+  color: var(--text-muted);
+  font-size: 12px;
 }
 
 .pixel-stage {
@@ -1323,6 +1356,16 @@ button.recommended-export {
   box-shadow: inset 0 0 0 1px rgba(108, 214, 143, 0.18);
 }
 
+@media (max-width: 1200px) {
+  .main-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .preview-panel {
+    min-height: 0;
+  }
+}
+
 @media (max-width: 980px) {
   .app-shell {
     grid-template-columns: 1fr;
@@ -1386,6 +1429,10 @@ button.recommended-export {
     min-height: 0;
   }
 
+  .preview-stage-grid {
+    grid-template-columns: minmax(260px, 1fr) minmax(190px, 220px);
+  }
+
   .cockpit-controls,
   .readiness-strip {
     grid-template-columns: repeat(auto-fit, minmax(min(100%, 150px), 1fr));
@@ -1420,6 +1467,10 @@ button.recommended-export {
   .wide-panel,
   .preview-panel {
     padding: 12px;
+  }
+
+  .preview-stage-grid {
+    grid-template-columns: 1fr;
   }
 
   .direction-preview-grid {

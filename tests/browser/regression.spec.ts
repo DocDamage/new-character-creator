@@ -157,6 +157,9 @@ test('creator cockpit filters parts and persists export target profile', async (
 
   await page.getByTestId('nav-fast').click()
   await expect(page.getByRole('region', { name: 'Recipe readiness' })).toBeVisible()
+  await expect(page.getByRole('region', { name: 'Preview part picker' })).toBeVisible()
+  await expect(page.getByTestId('preview-live-layer')).toBeVisible()
+  await expect(page.getByTestId('preview-live-part')).toBeVisible()
   await expect(page.getByTestId('fast-part-search')).toBeVisible()
   await page.getByTestId('fast-part-method-filter').selectOption('preset_region')
   await page.getByTestId('fast-part-search').fill('manual-only-no-match')

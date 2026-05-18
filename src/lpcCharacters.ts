@@ -1,32 +1,24 @@
-import type { AnimationName, AnimationManifest, CharacterManifest, Direction, FrameRef, LpcAssetInventory } from './types'
+import type { AnimationName, AnimationManifest, CharacterManifest, Direction, FrameRef, LpcAssetInventory, PartLabel } from './types'
 
 const lpcDirectionRows: Array<[Direction, number]> = [
-  ['south', 0],
-  ['west', 1],
-  ['east', 2],
-  ['north', 3],
+  ['north', 0],
+  ['east', 1],
+  ['south', 2],
+  ['west', 3],
 ]
-
-const preferredLpcCategories = new Set([
-  'Adult Female',
-  'Adult Male',
-  'Adult Female, Pregnant',
-  'Adult Male, Muscular',
-  'Teen',
-  'Androgynous Bases',
-  'Stand & Walk Bases',
-  'Bases',
-])
 
 export function buildLpcCharacterManifests(inventory: LpcAssetInventory | null): CharacterManifest[] {
   if (!inventory) return []
 
   return inventory.sheets
-    .filter(isSelectableLpcCharacterSheet)
-    .slice(0, 320)
+    .filter(isSelectableLpcSheet)
+    .sort((left, right) => lpcSheetSortScore(left) - lpcSheetSortScore(right) || left.path.localeCompare(right.path))
+    .slice(0, 900)
     .map((sheet, index) => {
       const path = buildLpcSheetUrl(inventory, sheet.path) ?? sheet.path
       const animation = inferLpcAnimation(sheet.file_name)
+      const role = isLpcBaseSheet(sheet) ? 'base' : 'part'
+      const partLabel = inferLpcPartLabelForCharacter(sheet)
       const framesByDirection = Object.fromEntries(
         lpcDirectionRows.map(([direction, row]) => [
           direction,
@@ -61,6 +53,8 @@ export function buildLpcCharacterManifests(inventory: LpcAssetInventory | null):
           source_pack: 'lpc',
           lpc_path: sheet.path,
           lpc_category: sheet.category,
+          lpc_role: role,
+          lpc_part_label: partLabel,
         },
         source_folder: path,
         canvas_size: { width: 64, height: 64 },
@@ -87,13 +81,48 @@ export function buildLpcCharacterManifests(inventory: LpcAssetInventory | null):
     })
 }
 
-function isSelectableLpcCharacterSheet(sheet: LpcAssetInventory['sheets'][number]) {
+function isSelectableLpcSheet(sheet: LpcAssetInventory['sheets'][number]) {
   if (!sheet.lpc_grid || sheet.frame_rows !== 4 || !sheet.frame_columns || sheet.frame_columns < 1) return false
-  if (!preferredLpcCategories.has(sheet.category)) return false
   const normalized = [sheet.file_name, sheet.path, ...sheet.tags].join(' ').toLowerCase()
   if (normalized.includes('headless')) return false
-  return /\bbase\b|stand|walk|idle|man_|woman_|child_|teen|adult/.test(normalized)
+  return isLpcBaseSheet(sheet) || /\b(hair|hat|hood|helmet|shirt|pants|skirt|dress|shoe|boot|armor|weapon|sword|bow|shield|cape|cloak|beard|eyes|ears|gloves?)\b/.test(normalized)
 }
+
+export function isLpcBaseSheet(sheet: LpcAssetInventory['sheets'][number]) {
+  const normalized = [sheet.category, sheet.file_name, sheet.path, ...sheet.tags].join(' ').toLowerCase()
+  const path = sheet.path.replaceAll('\\', '/').toLowerCase()
+  const fileAndTags = [sheet.file_name, ...sheet.tags].join(' ').toLowerCase()
+  if (/\b(clothes?|hair|helmet|weapon|shield|armor|pants|shirt|shoe|cape|cloak|hat|hood|beard|eyes|ears|gloves?)\b/.test(normalized)) return false
+  return /\bbase\b/.test(fileAndTags) || path.includes('/bases/') || sheet.category.toLowerCase().includes('bases')
+}
+
+function lpcSheetSortScore(sheet: LpcAssetInventory['sheets'][number]) {
+  const normalized = [sheet.category, sheet.file_name, sheet.path, ...sheet.tags].join(' ').toLowerCase()
+  if (isLpcBaseSheet(sheet)) return 0
+  if (/\b(hair|hat|hood|helmet|shirt|pants|shoe|armor|weapon|shield|cape|cloak)\b/.test(normalized)) return 1
+  return 2
+}
+
+function inferLpcPartLabelForCharacter(sheet: LpcAssetInventory['sheets'][number]): PartLabel {
+  const normalized = [sheet.category, sheet.file_name, ...sheet.tags].join(' ').toLowerCase()
+  return lpcPartLabelHints.find(([, hints]) => hints.some((hint) => normalized.includes(hint)))?.[0] ?? 'accessory'
+}
+
+const lpcPartLabelHints: Array<[PartLabel, string[]]> = [
+  ['hair_hat_hood', ['hair', 'hat', 'hood', 'helmet']],
+  ['head', ['head', 'face_skin', 'skin']],
+  ['face', ['face', 'eyes', 'nose', 'mouth', 'beard']],
+  ['torso', ['torso', 'body', 'shirt', 'armor', 'dress', 'chest']],
+  ['front_arm', ['arm', 'sleeve', 'glove']],
+  ['front_leg', ['leg', 'pants', 'trousers']],
+  ['feet', ['feet', 'boot', 'shoe']],
+  ['weapon', ['weapon', 'sword', 'bow', 'axe', 'staff', 'wand']],
+  ['shield', ['shield']],
+  ['cloak_back', ['cloak', 'cape']],
+  ['back_item', ['backpack', 'quiver', 'wings']],
+  ['aura_effect', ['aura', 'effect', 'magic']],
+  ['accessory', ['accessory', 'jewelry', 'earring', 'belt']],
+]
 
 function inferLpcAnimation(fileName: string): AnimationName {
   const normalized = fileName.toLowerCase()

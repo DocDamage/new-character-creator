@@ -40,6 +40,7 @@ import { layerBundleToExtractedParts, lpcSheetsToExtractedParts, parseLayerBundl
 import { buildManualMaskPart } from './manualParts'
 import { buildLpcCharacterManifests } from './lpcCharacters'
 import { hydratePartLibraryAssets, persistPartLibraryAssets } from './partAssetStore'
+import { CompositeCanvas } from './CompositeCanvas'
 import { PixelCanvas } from './PixelCanvas'
 import { humanoid64Preset, layerOrder, palettePresets } from './presets'
 import { ApesLabPanel } from './screens/ApesLabPanel'
@@ -178,6 +179,21 @@ function getSourcePackFilter(character: CharacterManifest): SourcePackFilter {
   if (character.class_type === 'lpc_character' || character.character_id.startsWith('lpc-')) return 'lpc'
   if (character.character_id.startsWith('duelyst-') || character.source_folder.includes('/__local/duelyst')) return 'duelyst'
   return 'sprite'
+}
+
+function getCharacterLabelValue(character: CharacterManifest, key: string) {
+  const value = character.labels?.[key]
+  return typeof value === 'string' ? value : ''
+}
+
+function isMainSourceCharacter(character: CharacterManifest) {
+  return getSourcePackFilter(character) !== 'lpc' || getCharacterLabelValue(character, 'lpc_role') !== 'part'
+}
+
+function isLpcPartSourceCharacter(character: CharacterManifest, label: PartLabel) {
+  return getSourcePackFilter(character) === 'lpc' &&
+    getCharacterLabelValue(character, 'lpc_role') === 'part' &&
+    getCharacterLabelValue(character, 'lpc_part_label') === label
 }
 
 function fileNameFromAssetPath(assetPath: string | undefined, fallback: string) {
@@ -467,7 +483,7 @@ function App() {
   const characters = useMemo(() => [...(manifest?.characters ?? []), ...(duelystAudit?.staged_manifest.characters ?? []), ...lpcCharacters], [manifest, duelystAudit, lpcCharacters])
   const selectedCharacter = characters.find((character) => character.character_id === selectedId) ?? characters[0]
   const sourceCharacterOptions = useMemo(
-    () => characters.filter((character) => sourcePackFilter === 'all' || getSourcePackFilter(character) === sourcePackFilter),
+    () => characters.filter((character) => isMainSourceCharacter(character) && (sourcePackFilter === 'all' || getSourcePackFilter(character) === sourcePackFilter)),
     [characters, sourcePackFilter],
   )
   const frame = getFrameRef(selectedCharacter, animation, direction, frameIndex)
@@ -475,12 +491,54 @@ function App() {
   const framePath = frame?.path ?? getFramePath(selectedCharacter, animation, direction, frameIndex)
   const onionPath = onionFrame?.path ?? getFramePath(selectedCharacter, animation, direction, Math.max(frameIndex - 1, 0))
   const frames = getFrames(selectedCharacter, animation, direction)
-  const recipe = selectedCharacter ? makeRecipe(selectedCharacter, { ...selectedParts, [selectedRegion]: selectedId }, partLibrary, selectedPartIds, layerSettings, recipeId, palette, paletteRules) : null
+  const recipe = selectedCharacter ? makeRecipe(selectedCharacter, selectedParts, partLibrary, selectedPartIds, layerSettings, recipeId, palette, paletteRules) : null
   const recipeReadiness = useMemo(
     () => buildRecipeReadiness({ selectedPartIds, partLibrary, layerLabels: layerOrder }),
     [selectedPartIds, partLibrary],
   )
   const activeExportTargetProfile = getExportTargetProfile(exportTargetProfile)
+  const previewLibraryPartOptions = useMemo(
+    () => partLibrary
+      .filter((part) => part.label === selectedRegion)
+      .sort((left, right) => Number(right.reviewed) - Number(left.reviewed) || left.part_id.localeCompare(right.part_id)),
+    [partLibrary, selectedRegion],
+  )
+  const previewLpcPartOptions = useMemo(
+    () => characters
+      .filter((character) => isLpcPartSourceCharacter(character, selectedRegion))
+      .slice(0, 180),
+    [characters, selectedRegion],
+  )
+  const previewSelectedSourceCharacter = selectedParts[selectedRegion]
+    ? characters.find((character) => character.character_id === selectedParts[selectedRegion])
+    : undefined
+  const previewPickerValue = selectedPartIds[selectedRegion]
+    ? `library:${selectedPartIds[selectedRegion]}`
+    : selectedParts[selectedRegion] && previewSelectedSourceCharacter && isLpcPartSourceCharacter(previewSelectedSourceCharacter, selectedRegion)
+      ? `source:${selectedParts[selectedRegion]}`
+      : ''
+
+  function selectPreviewPart(value: string) {
+    const [kind, id] = value.split(':', 2)
+    setSelectedPartIds((current) => {
+      const next = { ...current }
+      if (kind === 'library' && id) {
+        next[selectedRegion] = id
+      } else {
+        delete next[selectedRegion]
+      }
+      return next
+    })
+    setSelectedParts((current) => {
+      const next = { ...current }
+      if (kind === 'source' && id) {
+        next[selectedRegion] = id
+      } else if (!value) {
+        delete next[selectedRegion]
+      }
+      return next
+    })
+  }
 
   useEffect(() => {
     if (!selectedCharacter) return
@@ -1824,7 +1882,7 @@ function App() {
         </section>
 
         <section className="sidebar-block stats">
-          <span>{characters.length} sources</span>
+          <span>{sourceCharacterOptions.length} sources</span>
           <span>{selectedCharacter.animation_names.length} actions</span>
           <span>{selectedCharacter.source_quality_warnings.length} warnings</span>
         </section>
@@ -1845,16 +1903,77 @@ function App() {
 
         <div className="main-grid">
           <section className="preview-panel">
-            <PixelCanvas
-              src={framePath}
-              sourceRect={frame?.source_rect}
-              onionSrc={screen === 'workstation' ? onionPath : undefined}
-              onionSourceRect={screen === 'workstation' ? onionFrame?.source_rect : undefined}
-              region={screen === 'workstation' ? regions[selectedRegion] : undefined}
-              seed={screen === 'workstation' ? connectedSeed : undefined}
-              onPixelClick={screen === 'workstation' ? setConnectedSeed : undefined}
-              label={`${animation} ${direction} frame ${frameIndex + 1}`}
-            />
+            <div className="preview-stage-grid">
+              <div className="preview-stage-main">
+                {recipe && screen !== 'workstation' ? (
+                  <CompositeCanvas
+                    recipe={recipe}
+                    characters={characters}
+                    partLibrary={partLibrary}
+                    animation={animation}
+                    direction={direction}
+                    frameIndex={frameIndex}
+                    label={`${animation} ${direction} frame ${frameIndex + 1}`}
+                  />
+                ) : (
+                  <PixelCanvas
+                    src={framePath}
+                    sourceRect={frame?.source_rect}
+                    onionSrc={screen === 'workstation' ? onionPath : undefined}
+                    onionSourceRect={screen === 'workstation' ? onionFrame?.source_rect : undefined}
+                    region={screen === 'workstation' ? regions[selectedRegion] : undefined}
+                    seed={screen === 'workstation' ? connectedSeed : undefined}
+                    onPixelClick={screen === 'workstation' ? setConnectedSeed : undefined}
+                    label={`${animation} ${direction} frame ${frameIndex + 1}`}
+                  />
+                )}
+              </div>
+              <section className="preview-part-picker" aria-label="Preview part picker">
+                <strong>Part picker</strong>
+                <label className="field">
+                  <span>Layer</span>
+                  <select
+                    data-testid="preview-live-layer"
+                    value={selectedRegion}
+                    onChange={(event) => setSelectedRegion(event.target.value as PartLabel)}
+                  >
+                    {layerOrder.map((label) => (
+                      <option key={label} value={label}>{slugLabel(label)}</option>
+                    ))}
+                  </select>
+                </label>
+                <label className="field">
+                  <span>Part</span>
+                  <select
+                    data-testid="preview-live-part"
+                    value={previewPickerValue}
+                    onChange={(event) => selectPreviewPart(event.target.value)}
+                    disabled={previewLibraryPartOptions.length === 0 && previewLpcPartOptions.length === 0}
+                  >
+                    <option value="">{previewLibraryPartOptions.length === 0 && previewLpcPartOptions.length === 0 ? 'no parts for this layer' : 'use source character'}</option>
+                    {previewLpcPartOptions.length > 0 ? (
+                      <optgroup label="LPC sheet parts">
+                        {previewLpcPartOptions.map((character) => (
+                          <option key={character.character_id} value={`source:${character.character_id}`}>
+                            {character.display_name}
+                          </option>
+                        ))}
+                      </optgroup>
+                    ) : null}
+                    {previewLibraryPartOptions.length > 0 ? (
+                      <optgroup label="Imported and extracted parts">
+                        {previewLibraryPartOptions.map((part) => (
+                          <option key={part.part_id} value={`library:${part.part_id}`}>
+                            {part.reviewed ? 'reviewed' : 'needs review'} / {slugLabel(part.extraction_method)} / {part.part_id}
+                          </option>
+                        ))}
+                      </optgroup>
+                    ) : null}
+                  </select>
+                </label>
+                <span>{previewLibraryPartOptions.length + previewLpcPartOptions.length} part option(s) for {slugLabel(selectedRegion)}</span>
+              </section>
+            </div>
             <div className="transport">
               <button onClick={() => setPlaying((value) => !value)}>{playing ? 'Pause' : 'Play'}</button>
               <select aria-label="Animation" value={animation} onChange={(event) => setAnimation(event.target.value)}>
