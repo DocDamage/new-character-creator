@@ -495,6 +495,7 @@ export function FastCreatorPanel({
             animation={currentAnimation}
             direction={currentDirection}
             frameIndex={currentFrameIndex}
+            lpcCatalog={lpcCatalog}
             scale={3}
             label={`composite ${currentAnimation} ${currentDirection} frame ${currentFrameIndex + 1}`}
           />

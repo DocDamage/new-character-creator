@@ -3,8 +3,10 @@ import { getRecipeAnimationSourceCharacter } from './animationSource'
 import { getCharacterLabelValue, isLpcMannequin } from './lpcPartCompatibility'
 import { getLpcPartFrameRef } from './lpcPartFrames'
 import { buildLpcReplacementRegions } from './lpcReplacement'
+import { buildLpcRenderPlan, hasCatalogRenderSelections, type LpcRenderRecord } from './lpcRenderPlan'
 import { humanoid64Preset } from './presets'
 import type { AnimationName, ApesJob, CharacterManifest, Direction, ExtractedPart, KitbashRecipe, Rect } from './types'
+import type { LpcCatalog } from './lpcCatalog'
 import {
   buildAsepriteReference,
   buildExportManifest,
@@ -27,6 +29,7 @@ type RenderRecipeFrameOptions = {
   animation: AnimationName
   direction: Direction
   frameIndex: number
+  lpcCatalog?: LpcCatalog | null
 }
 
 type RenderedFrameRecord = {
@@ -74,6 +77,7 @@ export async function renderRecipeFrameToDataUrl({
   animation,
   direction,
   frameIndex,
+  lpcCatalog,
 }: RenderRecipeFrameOptions) {
   const canvas = document.createElement('canvas')
   canvas.width = 64
@@ -86,6 +90,25 @@ export async function renderRecipeFrameToDataUrl({
 
   const baseCharacter = characters.find((character) => character.character_id === recipe.base_character)
   const animationSourceCharacter = getRecipeAnimationSourceCharacter(recipe, characters) ?? baseCharacter
+  const baseFrame = animationSourceCharacter
+    ? getFrameRef(animationSourceCharacter, animation, direction, frameIndex) ??
+      getFrameRef(animationSourceCharacter, animationSourceCharacter.animation_names[0] ?? animation, direction, frameIndex)
+    : undefined
+  if (hasCatalogRenderSelections(recipe, lpcCatalog) && lpcCatalog) {
+    const plan = buildLpcRenderPlan({
+      catalog: lpcCatalog,
+      recipe,
+      bodyType: inferLpcBodyType(baseCharacter),
+      baseFrame,
+      animation,
+      direction,
+      frameIndex,
+    })
+    for (const record of plan.records) {
+      await drawRenderRecord(context, record, recipe)
+    }
+    return canvas.toDataURL('image/png')
+  }
   if (baseCharacter && isLpcMannequin(baseCharacter)) {
     await drawCharacterFrame(
       context,
@@ -190,11 +213,32 @@ function shouldFlushDeferredCloaksAfter(layerLabel: string) {
   return layerLabel === 'front_arm'
 }
 
+async function drawRenderRecord(
+  context: CanvasRenderingContext2D,
+  record: LpcRenderRecord,
+  recipe: KitbashRecipe,
+) {
+  if (!record.source_path) return
+  const image = await loadImage(record.source_path)
+  drawLayer(context, image, undefined, record.dest_rect, [0, 0], recipe, false, record.source_rect ?? undefined)
+}
+
+function inferLpcBodyType(character: CharacterManifest | undefined) {
+  const bodyLabel = [character?.display_name ?? '', String(character?.labels?.lpc_path ?? '')].join(' ').toLowerCase()
+  if (bodyLabel.includes('female') || bodyLabel.includes('feminine') || bodyLabel.includes('woman')) return 'female'
+  if (bodyLabel.includes('muscular')) return 'muscular'
+  if (bodyLabel.includes('pregnant')) return 'pregnant'
+  if (bodyLabel.includes('teen')) return 'teen'
+  if (bodyLabel.includes('child')) return 'child'
+  return 'male'
+}
+
 export async function buildRenderedFrameSet(
   character: CharacterManifest,
   recipe: KitbashRecipe,
   characters: CharacterManifest[],
   partLibrary: ExtractedPart[],
+  lpcCatalog?: LpcCatalog | null,
 ): Promise<RenderedFrameSet> {
   const frames: RenderedFrameRecord[] = []
   const spritesheets: RenderedSpriteSheetRecord[] = []
@@ -218,6 +262,7 @@ export async function buildRenderedFrameSet(
             animation,
             direction,
             frameIndex: frame.index,
+            lpcCatalog,
           }),
         })),
       )
@@ -263,9 +308,10 @@ export async function buildFullPackageManifest(
   partLibrary: ExtractedPart[],
   apesJobs: ApesJob[],
   renderedFrameSet?: RenderedFrameSet,
+  lpcCatalog?: LpcCatalog | null,
   options: { placeholderModeEnabled?: boolean } = {},
 ) {
-  const resolvedRenderedFrameSet = renderedFrameSet ?? (await buildRenderedFrameSet(character, recipe, characters, partLibrary))
+  const resolvedRenderedFrameSet = renderedFrameSet ?? (await buildRenderedFrameSet(character, recipe, characters, partLibrary, lpcCatalog))
 
   return {
     format: 'pixel_creator_full_package',
@@ -397,8 +443,9 @@ export async function downloadRenderedFrameSetZip(
   recipe: KitbashRecipe,
   characters: CharacterManifest[],
   partLibrary: ExtractedPart[],
+  lpcCatalog?: LpcCatalog | null,
 ) {
-  const renderedFrameSet = await buildRenderedFrameSet(character, recipe, characters, partLibrary)
+  const renderedFrameSet = await buildRenderedFrameSet(character, recipe, characters, partLibrary, lpcCatalog)
   const zip = new JSZip()
   const rootPath = recipe.character_id
 
@@ -427,10 +474,11 @@ export async function downloadFullPackageZip(
   characters: CharacterManifest[],
   partLibrary: ExtractedPart[],
   apesJobs: ApesJob[],
+  lpcCatalog?: LpcCatalog | null,
   options: { placeholderModeEnabled?: boolean } = {},
 ) {
-  const renderedFrameSet = await buildRenderedFrameSet(character, recipe, characters, partLibrary)
-  const packageManifest = await buildFullPackageManifest(character, recipe, characters, partLibrary, apesJobs, renderedFrameSet, options)
+  const renderedFrameSet = await buildRenderedFrameSet(character, recipe, characters, partLibrary, lpcCatalog)
+  const packageManifest = await buildFullPackageManifest(character, recipe, characters, partLibrary, apesJobs, renderedFrameSet, lpcCatalog, options)
   const zip = new JSZip()
   const rootPath = recipe.character_id
   const selectedParts = recipe.layers
