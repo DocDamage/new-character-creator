@@ -248,6 +248,8 @@ async function handleAssetToolRequest(req: IncomingMessage, res: ServerResponse,
           ? 'duelyst-audit'
           : body.action === 'lpc-inventory'
             ? 'lpc-inventory'
+            : body.action === 'lpc-catalog'
+              ? 'lpc-catalog'
             : null
   const assetRoot = typeof body.assetRoot === 'string' ? body.assetRoot.trim() : ''
   if (!action) {
@@ -285,6 +287,25 @@ async function handleAssetToolRequest(req: IncomingMessage, res: ServerResponse,
       stdout: command.stdout ?? '',
       stderr: command.stderr ?? '',
       lpcInventory,
+    })
+    return
+  }
+
+  if (action === 'lpc-catalog') {
+    const scriptPath = path.resolve(appRoot, 'tools', 'build-lpc-catalog.js')
+    const referenceRoot = typeof body.referenceRoot === 'string' && body.referenceRoot.trim() ? body.referenceRoot.trim() : ''
+    const command = spawnSync(process.execPath, [scriptPath, ...(referenceRoot ? ['--reference-root', referenceRoot] : [])], {
+      cwd: appRoot,
+      encoding: 'utf8',
+    })
+    const catalogPath = path.resolve(appRoot, 'data', 'lpc', 'lpc_catalog.json')
+    const lpcCatalog = await readJsonFileIfExists(catalogPath)
+    sendJson(res, command.status === 0 ? 200 : 500, {
+      action,
+      status: command.status ?? 1,
+      stdout: command.stdout ?? '',
+      stderr: command.stderr ?? '',
+      lpcCatalog,
     })
     return
   }

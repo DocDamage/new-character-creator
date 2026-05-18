@@ -1,6 +1,8 @@
 export type Direction = 'north' | 'south' | 'east' | 'west' | 'northeast' | 'northwest' | 'southeast' | 'southwest'
 
 export type AnimationName = 'idle' | 'walk' | 'running_jump' | 'attack' | string
+export type SourceFamilyId = 'lpc' | 'sprite_pack' | 'duelyst' | 'custom'
+export type RecipeModeId = 'lpc_character' | 'sprite_kitbash' | 'duelyst_review'
 
 export type FrameRef = {
   index: number
@@ -200,6 +202,8 @@ export type ExtractedPart = {
     directions: Direction[]
   }
   reviewed: boolean
+  source_family?: SourceFamilyId
+  compatible_recipe_modes?: RecipeModeId[]
   tags: string[]
   warnings: string[]
 }
@@ -375,9 +379,19 @@ export type KitbashLayer = {
 
 export type KitbashRecipe = {
   character_id: string
+  recipe_mode?: RecipeModeId
+  source_family?: SourceFamilyId
   base_canvas: [number, number]
   base_character: string
   animation_source_character?: string
+  lpc_selections?: Record<string, {
+    slot_id: string
+    item_id: string
+    variant: string
+    type_name: string
+    enabled: boolean
+    palette_overrides?: Record<string, string>
+  }>
   layers: KitbashLayer[]
   palette: PaletteRules
   animation_coverage: AnimationName[]

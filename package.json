@@ -8,6 +8,7 @@
     "index:assets": "node tools/index-assets.js",
     "repair:manifest-paths": "node tools/repair-manifest-paths.js",
     "lpc:inventory": "node tools/build-lpc-local-inventory.js",
+    "lpc:catalog": "node tools/build-lpc-catalog.js",
     "export:character": "node tools/export-character.js",
     "duelyst:private-manifest": "node tools/build-duelyst-private-manifest.js",
     "apes:prepare-finetune": "micromamba run -n apes-gpu-modern python tools/apes_bridge/prepare_finetune_data.py",
