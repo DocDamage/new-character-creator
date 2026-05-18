@@ -57,6 +57,17 @@ export function inferRecipeModeForFamily(sourceFamily: SourceFamilyId): RecipeMo
   return 'sprite_kitbash'
 }
 
+export function sourceFamilyForRecipeMode(recipeMode: RecipeModeId): SourceFamilyId {
+  if (recipeMode === 'lpc_character') return 'lpc'
+  if (recipeMode === 'duelyst_review') return 'duelyst'
+  return 'sprite_pack'
+}
+
+export function canShowCharacterInRecipeMode(character: CharacterManifest, recipeMode: RecipeModeId) {
+  if (character.class_type === 'lpc_character' && character.labels?.lpc_role === 'part') return false
+  return inferSourceFamilyForCharacter(character) === sourceFamilyForRecipeMode(recipeMode)
+}
+
 export function inferRecipeCompatibility(recipe: KitbashRecipe, characters: CharacterManifest[]) {
   const baseCharacter = characters.find((character) => character.character_id === recipe.base_character)
   const sourceFamily = recipe.source_family ?? inferSourceFamilyForCharacter(baseCharacter)
