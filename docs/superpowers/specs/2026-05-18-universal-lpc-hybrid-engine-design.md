@@ -27,6 +27,10 @@ The first draft was directionally right but too vague. It did not name:
 - how saved recipes survive the model change
 - how the app behaves when the local cache has only definitions/assets but not upstream source scripts
 - which special-case cloak fixes are temporary and when they can be deleted
+- how LPC, non-LPC sprite-pack characters, Duelyst staged characters, and custom parts stay in separate compatibility spaces
+- how the UI moves from one crowded workspace into task tabs without hiding important warnings
+- how metadata, credits, file paths, and compatibility details move into contextual info surfaces instead of filling the main panels
+- what right-click actions and tooltips must exist so the app feels fast without becoming mysterious
 
 This revision fixes those gaps.
 
@@ -47,6 +51,16 @@ That was enough to discover LPC assets, but it is not enough to compose them cor
 
 Those relationships cannot be represented faithfully as one `cloak_back`, `hair_hat_hood`, or `weapon` layer.
 
+The current app also mixes incompatible source families too freely:
+
+- `App.tsx` combines the base manifest, staged Duelyst manifest, and generated LPC characters into one `characters` list.
+- The sidebar has a `Source pack` filter, including `All packs`, but the creation controls still share one global selected source.
+- The live part picker can show "LPC sheet parts" next to imported/extracted parts, even when the selected body is not an LPC body.
+- Duelyst entries are review/training sources, not body bases for LPC composition.
+- Non-LPC sprite-pack characters can be useful source art, but their parts do not follow Universal LPC layer metadata, body types, animation rows, or credit rules.
+
+The new design must make those boundaries visible in the data model and the UI. A filter is not enough.
+
 ## Target Architecture
 
 Add a real LPC engine boundary:
@@ -56,8 +70,43 @@ Add a real LPC engine boundary:
 - `lpcComposition`: converts selected catalog items into sorted draw records.
 - `lpcRecipeAdapter`: maps legacy pseudo-character selections and new catalog selections into one recipe model.
 - `lpcCredits`: extracts selected-item authors, licenses, URLs, and warnings for export.
+- `sourceFamilyRegistry`: separates LPC, sprite-pack, Duelyst, and custom/imported assets into compatible workspaces.
+- `uiDisclosure`: shared context-menu, tooltip, and details-drawer primitives for hidden metadata and quick actions.
 
 The renderer should know how to draw generic draw records. It should not know that capes need special layering or that long hair has a background layer. That belongs in `lpcComposition`.
+
+## Source Family Boundaries
+
+Treat source families as first-class compatibility domains:
+
+```ts
+type SourceFamilyId = 'lpc' | 'sprite_pack' | 'duelyst' | 'custom'
+type WorkspaceTabId = 'create' | 'parts' | 'sources' | 'workstation' | 'batch' | 'ai_apes' | 'export' | 'settings'
+type RecipeModeId = 'lpc_character' | 'sprite_kitbash' | 'duelyst_review'
+
+type SourceFamily = {
+  family_id: SourceFamilyId
+  label: string
+  role: 'composition' | 'reference' | 'training' | 'review'
+  compatible_recipe_modes: RecipeModeId[]
+  can_provide_body: boolean
+  can_provide_parts: boolean
+  can_provide_motion: boolean
+  default_tab: WorkspaceTabId
+}
+```
+
+Initial rules:
+
+- LPC catalog items can compose only with LPC-compatible bodies and catalog-backed custom parts.
+- Sprite-pack characters stay in the sprite kitbash workspace unless a part is explicitly extracted, reviewed, and tagged as custom compatible with a target recipe mode.
+- Duelyst staged characters stay in a Duelyst review/training workspace. They can feed APES review jobs and custom extraction, but they are not shown as LPC bodies or LPC part options.
+- Custom/imported parts live in the Part Library with explicit `source_family` and `compatible_recipe_modes`; they appear only in workspaces they have been reviewed for.
+- The app may keep a read-only "All sources" view in Asset Audit, but composition pickers should never default to cross-family mixing.
+
+Persisted recipes should record `recipe_mode` and `source_family`; the full recipe shape is defined in the Recipe Model section.
+
+Legacy recipes with no mode should be inferred from the base character. If inference is ambiguous, load the recipe in a compatibility review state instead of silently mixing families.
 
 ## Catalog Schema
 
@@ -224,6 +273,8 @@ Add a new optional field while keeping the existing model:
 
 ```ts
 type KitbashRecipe = {
+  recipe_mode?: RecipeModeId
+  source_family?: SourceFamilyId
   lpc_selections?: Record<string, LpcRecipeSelection>
 }
 
@@ -242,14 +293,42 @@ type LpcRecipeSelection = {
 Legacy migration:
 
 - Existing `selectedParts[label] = lpc-character-id` recipes continue to load.
+- Existing recipes infer `recipe_mode` and `source_family` from the base character and selected source ids.
 - On load, `lpcRecipeAdapter` attempts to map pseudo-character ids back to catalog item/variant.
 - If mapping succeeds, populate `lpc_selections`.
 - If mapping fails, keep the legacy selection and show a migration warning.
 - Saving a recipe writes both the new selection and enough legacy data for rollback during the transition.
+- If a saved recipe mixes families in a way the new model does not support, load it in compatibility review mode with rendering disabled for incompatible selections until the user resolves them.
 
 ## Picker UX
 
-Keep the current Fast Creator layout, but make the picker catalog-backed.
+Move the current crowded Fast Creator controls into a task-based tabbed interface, then make the picker catalog-backed inside the LPC workspace.
+
+Top-level tabs:
+
+- `Create`: active recipe workspace and composite preview.
+- `Parts`: reviewed custom parts, extraction outputs, and compatibility review.
+- `Sources`: source-family browsers for LPC catalog, sprite-pack sources, and Duelyst staged assets.
+- `Workstation`: manual masks, region extraction, and pixel inspection.
+- `Batch`: variant generation.
+- `AI/APES`: APES jobs, PixelLab/AI missing-animation work, and training data.
+- `Export`: package creation, credits, engine metadata, and readiness.
+- `Settings`: local tool status, repair, and cache configuration.
+
+Inside `Create`, use recipe-mode tabs:
+
+- `LPC Character`: Universal LPC bodies, catalog parts, LPC-compatible custom parts, LPC animation/export rules.
+- `Sprite Kitbash`: current non-LPC sprite-pack body/part workflow.
+- `Duelyst Review`: staged Duelyst source review and APES preparation; this is not a general character composer.
+
+Inside `Sources`, use family tabs:
+
+- `LPC Catalog`
+- `Sprite Pack`
+- `Duelyst`
+- `Custom/Imported`
+
+The current left nav can become the tab rail, but the selected recipe mode must drive available source families, part options, motion sources, and export warnings. `All packs` can remain only in read-only audit/search contexts.
 
 Required first version:
 
@@ -259,6 +338,9 @@ Required first version:
 - selected items remain selected when switching animations if fallback is available
 - required/excluded tag rules are shown and enforced gently
 - missing animation state has a visible warning, not a disabled mystery
+- non-LPC and Duelyst items do not appear in LPC catalog pickers unless they have been reviewed as custom LPC-compatible parts
+- source-family tabs show empty states with a next action instead of leaking options from another family
+- picker controls keep stable dimensions so warnings, badges, and long item names do not resize the preview
 
 Concrete examples:
 
@@ -266,6 +348,106 @@ Concrete examples:
 - Selecting `cape_trim` without a cape shows "requires cape" and does not render.
 - Long hair renders foreground and background layers from one item selection.
 - A longsword shows oversize/custom-animation status instead of pretending it is a regular 64x64 weapon.
+- A Duelyst staged unit can be opened in Duelyst Review or queued for APES, but it is not an option in the LPC body or cloak picker.
+- A sprite-pack character can be used in Sprite Kitbash, but its parts are not shown in LPC Character until extracted/reviewed as compatible custom parts.
+
+## Metadata Disclosure And Polish
+
+The main tabs should prioritize the task at hand. Operational data should be available, but not permanently visible.
+
+Keep visible:
+
+- selected recipe name and mode
+- current animation, direction, and frame
+- essential readiness badges: missing, unsupported, needs review, incompatible
+- selected item names and counts
+- primary actions for the active tab
+
+Hide behind context menus, info buttons, or a details drawer:
+
+- file paths
+- source rects, frame geometry, z-position, and draw-record ids
+- full credit/license blocks
+- upstream commit and cache paths
+- debug counts, category summaries, and warnings beyond the top status
+- migration details and fallback provenance
+
+Add a shared read-only `Details` drawer. Any context menu item named `View info` should open this drawer with the selected source, part, layer, recipe, or export record. The drawer should support copy buttons for ids/paths, but it must not be required for ordinary composition.
+
+Warnings remain visible as compact badges. A hidden details surface should never be the only place where the user can learn that an export is blocked or a part is incompatible.
+
+## Context Menus And Right-Click Actions
+
+Add one shared context-menu system used by previews, source rows, part rows, recipe layers, and export records.
+
+Behavior requirements:
+
+- right click opens the menu at the pointer
+- keyboard users can open the same menu with `Shift+F10`, the context-menu key, or a small visible menu button where needed
+- `Escape` closes the menu
+- clicking outside closes the menu
+- menu stays within the viewport
+- focus moves into the menu and returns to the invoking control on close
+- destructive actions require confirmation or an undoable state
+- unsupported actions are hidden or disabled with a tooltip explaining why
+
+Initial preview actions:
+
+- `View frame info`
+- `Copy frame reference`
+- `Toggle grid`
+- `Toggle onion skin` when available
+- `Reset zoom/pan` if zoom/pan is added
+- `Open source in Workstation`
+- `Prepare APES job` when the selected frame can be used as input
+
+Initial part/source actions:
+
+- `Select for active layer`
+- `Replace current selection`
+- `Clear from recipe`
+- `View info`
+- `Copy item id`
+- `Copy source path`
+- `Open in Workstation`
+- `Mark reviewed` for custom/imported parts
+- `Set compatible with current mode` for custom parts after review
+- `Queue missing animation`
+- `Hide incompatible in this picker`
+
+Initial recipe-layer actions:
+
+- `Solo layer`
+- `Mute layer`
+- `Lock layer`
+- `Reset offset`
+- `Duplicate selection to variant`
+- `View draw order`
+- `Remove layer selection`
+
+Initial export/credits actions:
+
+- `View credits`
+- `Copy attribution`
+- `Copy package path`
+- `Open export profile`
+- `Resolve readiness issue`
+
+The first implementation should favor high-value actions over a long menu. If an action would duplicate a visible primary button, include it only when it is useful in-place.
+
+## Tooltips
+
+Every icon-only button, badge, compatibility indicator, readiness state, and disabled action needs a tooltip.
+
+Tooltip rules:
+
+- show on hover and keyboard focus
+- attach with `aria-describedby`
+- keep text short and actionable
+- never require hover for critical warnings; critical warnings also appear as visible badges/status text
+- explain disabled states directly, for example "Requires a cape base" or "Unsupported in 64x64 export"
+- do not cover the sprite preview or active context menu
+- respect reduced-motion settings
 
 ## Credits And License Readiness
 
@@ -315,6 +497,18 @@ Asset Audit should expose an "LPC engine" panel:
 
 The builder should not fail just because upstream `sources/` or `scripts/` are absent in the local cache. It should parse the JSON sources directly. If the upstream source scripts are present, they can be used as a validation reference, not as the app's runtime dependency.
 
+## Robustness Rules
+
+The implementation should protect these invariants:
+
+- A recipe has one active recipe mode. Parts from another mode must be blocked, migrated, or explicitly reviewed as compatible custom parts.
+- Preview and export must use the same composition function and the same source-family rules.
+- Unsupported animation, missing file, missing credit, missing body type, and family mismatch states must produce visible readiness records instead of silent drops.
+- Context-menu actions must call the same underlying commands as visible buttons so right-click behavior cannot drift from normal behavior.
+- Tooltips and hidden details are progressive disclosure only. They cannot be the only path to critical warnings or destructive actions.
+- Any imported custom part must carry provenance: source family, source id/path if available, extraction method, reviewed state, and compatible recipe modes.
+- Degraded mode must be explicit: if catalog metadata is unavailable, the app may use legacy sheet inventory, but should label the result as degraded and avoid pretending it has upstream layer/credit fidelity.
+
 ## Migration Phases
 
 Phase 0: Fixture and parity groundwork
@@ -336,19 +530,31 @@ Phase 2: Composition engine
 - Route `CompositeCanvas` and `exportPackage` through the same draw-record output for catalog-backed LPC selections.
 - Delete renderer cloak special-cases only after cape catalog parity tests pass.
 
-Phase 3: Catalog-backed picker
+Phase 3: Source-family boundaries and tab shell
+
+- Add `sourceFamilyRegistry` and recipe-mode inference.
+- Split Create into LPC Character, Sprite Kitbash, and Duelyst Review modes.
+- Split Sources into LPC Catalog, Sprite Pack, Duelyst, and Custom/Imported tabs.
+- Remove `All packs` from composition pickers; keep it only for read-only audit/search.
+- Add compatibility review state for legacy recipes that mix families.
+
+Phase 4: Catalog-backed picker and disclosure UI
 
 - Replace pseudo-character LPC part options with catalog item/variant options.
 - Keep semantic layer filters as an affordance, not as the storage model.
 - Add required-tag prompts and animation/fallback badges.
+- Add shared context-menu and tooltip primitives.
+- Move file paths, full metadata, and deep credit details into the Details drawer.
+- Add first-pass right-click actions for preview frames, source rows, parts, recipe layers, and export records.
 
-Phase 4: Recipe and credits migration
+Phase 5: Recipe and credits migration
 
 - Add `lpc_selections` to persisted recipes.
 - Migrate saved recipes on load without losing legacy selections.
 - Replace broad LPC credit warnings with selected-item credit readiness.
+- Store selected recipe mode/family and custom-part compatibility modes.
 
-Phase 5: Oversize and AI extension
+Phase 6: Oversize and AI extension
 
 - Add export profiles for oversize/custom animations.
 - Add missing-animation queue.
@@ -361,6 +567,9 @@ Tool tests:
 - parse contiguous `layer_N` objects and stop at the first missing layer
 - preserve `zPos`, `custom_animation`, body path keys, variants, tags, required/excluded tags, recolors, aliases, preview hints, and credits
 - generate stable catalog ids from fixture definitions
+- infer `recipe_mode` and `source_family` for legacy recipes without mixing incompatible families
+- reject or mark incompatible cross-family selections instead of rendering them as if they were LPC parts
+- keep custom/imported parts hidden from a recipe mode until their compatible mode is reviewed
 - resolve cape foreground/background draw records in z-order
 - resolve xlong hair foreground/background draw records in z-order
 - classify longsword oversize layers as unsupported for standard 64x64 export
@@ -374,10 +583,19 @@ Browser tests:
 - weapon oversize option shows warning instead of corrupting the frame
 - preview and rendered export pixels match for the same catalog-backed recipe
 - saved legacy recipe loads and migrates to `lpc_selections`
+- LPC Character mode does not list Duelyst or non-LPC sprite-pack characters as bodies, parts, or motion sources
+- Sprite Kitbash mode does not show LPC catalog items unless the user is intentionally browsing the LPC source tab
+- Duelyst Review opens staged Duelyst entries and APES actions without making them LPC picker options
+- source-family tabs keep empty states scoped to the selected family instead of falling back to another family
+- context menus open by right click and keyboard, stay in the viewport, and return focus on close
+- icon buttons, badges, and disabled actions expose tooltips on hover and focus
+- metadata/details are hidden by default but available through `View info`
 
 Visual/manual QA:
 
 - screen capture for cape/hair/weapon ordering
+- screen capture for tab density at desktop and mobile widths
+- verify long item names, warnings, and tooltip text do not overflow controls
 - export a package and inspect Godot/RPG Maker metadata for selected item provenance
 
 ## Acceptance Criteria
@@ -388,6 +606,12 @@ Visual/manual QA:
 - An oversize weapon is visible as unsupported/degraded in standard 64x64 export rather than silently misdrawn.
 - The same composition function feeds preview and rendered exports.
 - Existing saved recipes still load, and migrated LPC selections are saved with stable item ids.
+- LPC, sprite-pack, Duelyst, and custom/imported assets are displayed in separate task/family tabs.
+- LPC composition pickers do not list Duelyst or non-LPC sprite-pack characters unless a part has been explicitly reviewed as compatible custom content.
+- The main UI uses tabs for tasks and recipe modes instead of one crowded mixed screen.
+- File paths, frame geometry, full credits, cache paths, and debug counts are hidden by default and available through `View info`.
+- Right-click/context-menu actions exist for preview frames, source/part rows, recipe layers, and export/credit records.
+- Every icon-only action, readiness badge, disabled menu item, and compatibility indicator has a hover/focus tooltip.
 - Exported credits list selected upstream item credits with authors, licenses, URLs, and upstream commit.
 - The app runs in degraded mode if upstream metadata is missing, with clear warnings and no crash.
 
@@ -398,3 +622,7 @@ Visual/manual QA:
 - Defer full upstream palette/recolor UI until catalog-backed composition and credits are stable.
 - Treat oversize/custom animations as a separate export profile problem, not a quick crop hack.
 - Keep the current pseudo-character LPC path only as a compatibility/degraded fallback.
+- Treat LPC, sprite-pack, Duelyst, and custom/imported assets as separate source families, not as one filtered character list.
+- Preserve a read-only all-source audit view, but keep composition pickers family-scoped.
+- Build one shared context-menu, tooltip, and details-drawer system instead of one-off menus inside each panel.
+- Hide deep metadata by default while keeping blocking readiness warnings visible.
