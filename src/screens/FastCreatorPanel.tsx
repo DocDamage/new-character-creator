@@ -12,7 +12,7 @@ import {
 import { clampOffsetInput, clampSignedInput, clampUnsignedInput } from '../inputUtils'
 import { canUseLpcPartForAnimation, isLpcMannequin, isLpcPartSourceForLayer, isPartCompatibleWithMannequin } from '../lpcPartCompatibility'
 import { layerOrder, palettePresets } from '../presets'
-import type { AnimationName, CharacterManifest, ComposerLayerSettings, Direction, ExtractedPart, KitbashRecipe, PaletteRules, PartLabel } from '../types'
+import type { AnimationName, CharacterManifest, ComposerLayerSettings, Direction, ExtractedPart, KitbashRecipe, PaletteRules, PartLabel, RecipeModeId } from '../types'
 import { slugLabel } from '../utils'
 
 type FastCreatorPanelProps = {
@@ -53,6 +53,8 @@ type FastCreatorPanelProps = {
   openSettingsRepair: () => void
   createApesJob: () => void
   localToolsAvailable: boolean
+  recipeMode: RecipeModeId
+  setRecipeMode: (mode: RecipeModeId) => void
 }
 
 function partMatchesActiveFilter(
@@ -113,6 +115,8 @@ export function FastCreatorPanel({
   openSettingsRepair,
   createApesJob,
   localToolsAvailable,
+  recipeMode,
+  setRecipeMode,
 }: FastCreatorPanelProps) {
   const reviewedParts = partLibrary.filter((part) => part.reviewed && isPartCompatibleWithMannequin(part, selectedCharacter))
   const [partSearch, setPartSearch] = useState('')
@@ -128,12 +132,12 @@ export function FastCreatorPanel({
   const reviewedPartsForActiveLabel = reviewedParts.filter((part) => part.label === activePartLabel)
   const selectedActivePart = selectedPartIds[activePartLabel]
   const lpcPartsForActiveLabel = useMemo(
-    () => isLpcMannequin(selectedCharacter) ? characters
+    () => recipeMode === 'lpc_character' && isLpcMannequin(selectedCharacter) ? characters
       .filter((character) => isLpcPartSourceForLayer(character, activePartLabel))
       .filter((character) => canUseLpcPartForAnimation(character, activePartLabel, currentAnimation))
       .sort((left, right) => left.display_name.localeCompare(right.display_name))
       .slice(0, 180) : [],
-    [activePartLabel, characters, currentAnimation, selectedCharacter],
+    [activePartLabel, characters, currentAnimation, recipeMode, selectedCharacter],
   )
   const selectedActiveSource = selectedParts[activePartLabel]
   const selectedActiveSourceCharacter = selectedActiveSource
@@ -182,6 +186,32 @@ export function FastCreatorPanel({
           <button className="primary" data-testid="save-recipe-button" onClick={saveCurrentRecipe}>Save recipe</button>
         </div>
       </div>
+      <div className="tab-row recipe-mode-tabs" role="tablist" aria-label="Recipe modes">
+        {[
+          ['lpc_character', 'LPC Character'],
+          ['sprite_kitbash', 'Sprite Kitbash'],
+          ['duelyst_review', 'Duelyst Review'],
+        ].map(([id, label]) => (
+          <button
+            key={id}
+            type="button"
+            role="tab"
+            aria-selected={recipeMode === id}
+            className={recipeMode === id ? 'active' : ''}
+            onClick={() => setRecipeMode(id as RecipeModeId)}
+            title={id === 'lpc_character' ? 'Universal LPC bodies, catalog parts, and LPC-compatible custom parts' : id === 'duelyst_review' ? 'Review staged Duelyst frames and prepare APES jobs' : 'Use sprite-pack bodies and reviewed extracted parts'}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+      {recipeMode === 'duelyst_review' ? (
+        <p className="mode-note">Duelyst Review keeps staged units in review/training space. They can feed APES and extraction, but they are not LPC bodies or LPC catalog parts.</p>
+      ) : recipeMode === 'lpc_character' ? (
+        <p className="mode-note">LPC Character mode scopes bodies, parts, and motion to LPC-compatible sources. Non-LPC parts must be reviewed as compatible custom content before use.</p>
+      ) : (
+        <p className="mode-note">Sprite Kitbash mode uses sprite-pack sources and reviewed extracted parts. LPC catalog items stay in the LPC workflow.</p>
+      )}
       <div className="recipe-controls">
         <label className="field">
           <span>Recipe name</span>

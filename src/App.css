@@ -109,6 +109,23 @@ small {
   gap: 6px;
 }
 
+.tab-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0 0 14px;
+}
+
+.tab-row button {
+  min-width: 120px;
+}
+
+.mode-note {
+  margin: -4px 0 14px;
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
 button,
 select,
 input {
@@ -1027,6 +1044,105 @@ input {
   align-items: center;
   justify-content: space-between;
   gap: 12px;
+}
+
+.row-with-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-width: 0;
+}
+
+.context-menu-wrap {
+  position: relative;
+  display: inline-flex;
+}
+
+.icon-button {
+  width: 34px;
+  min-width: 34px;
+  padding: 0;
+  font-family: var(--mono);
+}
+
+.context-menu {
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  z-index: 12;
+  width: 190px;
+  display: grid;
+  gap: 4px;
+  padding: 6px;
+  border: 1px solid var(--line-strong);
+  border-radius: 7px;
+  background: #0c1118;
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.35);
+}
+
+.context-menu button {
+  width: 100%;
+  text-align: left;
+  min-height: 30px;
+}
+
+.details-drawer {
+  position: fixed;
+  top: 88px;
+  right: 18px;
+  z-index: 11;
+  width: min(380px, calc(100vw - 36px));
+  max-height: calc(100vh - 112px);
+  overflow: auto;
+  display: grid;
+  gap: 12px;
+  padding: 14px;
+  border: 1px solid var(--line-strong);
+  border-radius: 8px;
+  background: #0c1118;
+  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.42);
+}
+
+.details-drawer-head {
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.details-drawer-head > div {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.details-drawer strong {
+  color: var(--text-strong);
+}
+
+.details-drawer span,
+.details-drawer dt {
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.details-drawer dl {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+}
+
+.details-drawer dl > div {
+  display: grid;
+  gap: 4px;
+}
+
+.details-drawer dd {
+  margin: 0;
+  color: var(--text);
+  font: 12px/1.45 var(--mono);
+  overflow-wrap: anywhere;
 }
 
 .part-library-list strong {

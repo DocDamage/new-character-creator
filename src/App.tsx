@@ -41,6 +41,7 @@ import { layerBundleToExtractedParts, lpcSheetsToExtractedParts, parseLayerBundl
 import { canUseLpcPartForAnimation, getCharacterLabelValue, isLpcExtractedPart, isLpcMannequin, isLpcPartSourceForLayer, isLpcSourceCharacterId, isPartCompatibleWithMannequin } from './lpcPartCompatibility'
 import { buildManualMaskPart } from './manualParts'
 import { buildLpcCharacterManifests } from './lpcCharacters'
+import type { LpcCatalog, RecipeModeId, SourceFamilyId } from './lpcCatalog'
 import { hydratePartLibraryAssets, persistPartLibraryAssets } from './partAssetStore'
 import { CompositeCanvas } from './CompositeCanvas'
 import { PixelCanvas } from './PixelCanvas'
@@ -115,16 +116,29 @@ type LocalApesToolPayload = {
 }
 
 type LocalAssetToolPayload = {
-  action: 'repair' | 'reindex' | 'duelyst-audit' | 'lpc-inventory'
+  action: 'repair' | 'reindex' | 'duelyst-audit' | 'lpc-inventory' | 'lpc-catalog'
   stdout?: string
   stderr?: string
   status?: number
   error?: string
   duelyst?: DuelystPackageAudit | null
   lpcInventory?: LpcAssetInventory | null
+  lpcCatalog?: LpcCatalog | null
 }
 
 type SourcePackFilter = 'all' | 'sprite' | 'duelyst' | 'lpc'
+
+function sourceFamilyForRecipeMode(recipeMode: RecipeModeId): SourceFamilyId {
+  if (recipeMode === 'lpc_character') return 'lpc'
+  if (recipeMode === 'duelyst_review') return 'duelyst'
+  return 'sprite_pack'
+}
+
+function sourcePackForRecipeMode(recipeMode: RecipeModeId): SourcePackFilter {
+  if (recipeMode === 'lpc_character') return 'lpc'
+  if (recipeMode === 'duelyst_review') return 'duelyst'
+  return 'sprite'
+}
 
 function normalizeDuelystAudit(payload: DuelystPackageAudit): DuelystPackageAudit {
   const stagedCount = payload.staged_manifest?.character_count ?? payload.staged_manifest?.characters?.length ?? 0
@@ -283,6 +297,7 @@ function App() {
   const [duelystStatus, setDuelystStatus] = useState('Loading the private Duelyst manifest if it exists. You can also rebuild it from the local unitypackage.')
   const [lpcBusy, setLpcBusy] = useState(false)
   const [lpcInventory, setLpcInventory] = useState<LpcAssetInventory | null>(null)
+  const [lpcCatalog, setLpcCatalog] = useState<LpcCatalog | null>(null)
   const [lpcStatus, setLpcStatus] = useState('Build an LPC inventory from the local asset folder to plan import, credits, and generator compatibility.')
   const [lpcImportStatus, setLpcImportStatus] = useState('No LPC sheets imported this session.')
   const [apesPythonPath, setApesPythonPath] = useState(() => loadStoredString(apesPythonPathStorageKey))
@@ -304,6 +319,7 @@ function App() {
   })
   const [generationStyleNotes, setGenerationStyleNotes] = useState('Readable 64x64 RPG character parts with clean alpha, consistent floor contact, and reusable layer boundaries.')
   const [sourcePackFilter, setSourcePackFilter] = useState<SourcePackFilter>('all')
+  const [recipeMode, setRecipeMode] = useState<RecipeModeId>('sprite_kitbash')
 
   async function fetchManifest(signal?: AbortSignal) {
     const manifestUrls = import.meta.env.DEV
@@ -429,6 +445,25 @@ function App() {
 
   useEffect(() => {
     const controller = new AbortController()
+    fetch('/data/lpc/lpc_catalog.json', { signal: controller.signal, cache: 'no-store' })
+      .then(async (response) => {
+        if (!response.ok) return
+        const payload = await response.json() as LpcCatalog
+        if (payload?.format === 'pixel_creator_lpc_catalog') {
+          setLpcCatalog(payload)
+          setLpcStatus((current) => current.startsWith('Build an LPC inventory')
+            ? `Loaded LPC catalog with ${payload.summary.item_count} item(s), ${payload.summary.layer_count} layer(s), and ${payload.summary.credit_count} credit record(s).`
+            : current)
+        }
+      })
+      .catch(() => {})
+    return () => {
+      controller.abort()
+    }
+  }, [])
+
+  useEffect(() => {
+    const controller = new AbortController()
     void loadPrivateDuelystManifest(controller.signal)
     return () => {
       controller.abort()
@@ -524,9 +559,10 @@ function App() {
   const animationSourceOptions = useMemo(() => getCompatibleAnimationSources(selectedCharacter, characters), [characters, selectedCharacter])
   const animationSourceCharacter = getActiveAnimationCharacter(selectedCharacter, animationSourceOptions, animationSourceId) ?? selectedCharacter
   const hasBorrowedAnimationSource = Boolean(animationSourceCharacter && selectedCharacter && animationSourceCharacter.character_id !== selectedCharacter.character_id)
+  const activeSourcePackFilter = sourcePackFilter === 'all' ? sourcePackForRecipeMode(recipeMode) : sourcePackFilter
   const sourceCharacterOptions = useMemo(
-    () => characters.filter((character) => isMainSourceCharacter(character) && (sourcePackFilter === 'all' || getSourcePackFilter(character) === sourcePackFilter)),
-    [characters, sourcePackFilter],
+    () => characters.filter((character) => isMainSourceCharacter(character) && getSourcePackFilter(character) === activeSourcePackFilter),
+    [activeSourcePackFilter, characters],
   )
   const frameCharacter = screen === 'workstation' ? selectedCharacter : animationSourceCharacter
   const frame = getFrameRef(frameCharacter, animation, direction, frameIndex)
@@ -534,7 +570,13 @@ function App() {
   const framePath = frame?.path ?? getFramePath(frameCharacter, animation, direction, frameIndex)
   const onionPath = onionFrame?.path ?? getFramePath(frameCharacter, animation, direction, Math.max(frameIndex - 1, 0))
   const frames = getFrames(animationSourceCharacter, animation, direction)
-  const recipe = selectedCharacter ? makeRecipe(selectedCharacter, selectedParts, partLibrary, selectedPartIds, layerSettings, recipeId, palette, paletteRules, animationSourceCharacter) : null
+  const recipe = selectedCharacter
+    ? {
+        ...makeRecipe(selectedCharacter, selectedParts, partLibrary, selectedPartIds, layerSettings, recipeId, palette, paletteRules, animationSourceCharacter),
+        recipe_mode: recipeMode,
+        source_family: sourceFamilyForRecipeMode(recipeMode),
+      }
+    : null
   const recipeReadiness = useMemo(
     () => buildRecipeReadiness({ selectedPartIds, partLibrary, layerLabels: layerOrder }),
     [selectedPartIds, partLibrary],
@@ -547,12 +589,12 @@ function App() {
     [partLibrary, selectedCharacter, selectedRegion],
   )
   const previewLpcPartOptions = useMemo(
-    () => isLpcMannequin(selectedCharacter) ? characters
+    () => recipeMode === 'lpc_character' && isLpcMannequin(selectedCharacter) ? characters
       .filter((character) => isLpcPartSourceCharacter(character, selectedRegion))
       .filter((character) => canUseLpcPartForAnimation(character, selectedRegion, animation))
       .sort((left, right) => sortLpcPartSources(left, right, animation))
       .slice(0, 180) : [],
-    [animation, characters, selectedCharacter, selectedRegion],
+    [animation, characters, recipeMode, selectedCharacter, selectedRegion],
   )
   const previewSelectedSourceCharacter = selectedParts[selectedRegion]
     ? characters.find((character) => character.character_id === selectedParts[selectedRegion])
@@ -641,6 +683,13 @@ function App() {
       setFrameIndex(0)
     }
   }, [selectedCharacter, sourceCharacterOptions, sourcePackFilter])
+
+  useEffect(() => {
+    const expectedPack = sourcePackForRecipeMode(recipeMode)
+    if (sourcePackFilter !== expectedPack) {
+      setSourcePackFilter(expectedPack)
+    }
+  }, [recipeMode, sourcePackFilter])
 
   useEffect(() => {
     if (!playing) return
@@ -1830,6 +1879,42 @@ function App() {
     }
   }
 
+  async function runLpcCatalog() {
+    if (lpcBusy) return
+    if (!localToolsAvailable) {
+      setLpcStatus('LPC catalog rebuild needs the local tool server. Start with npm run dev or npm run preview, or run `npm run lpc:catalog` from the terminal.')
+      return
+    }
+
+    setLpcBusy(true)
+    setLpcStatus('Building compact LPC catalog from upstream sheet definitions...')
+    try {
+      const response = await fetch('/__local/asset-tools', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'lpc-catalog' }),
+      })
+      const payload = await response.json() as LocalAssetToolPayload
+      if (!response.ok) {
+        throw new Error(payload.error || payload.stderr || `LPC catalog failed with status ${response.status}`)
+      }
+
+      if (!payload.lpcCatalog) {
+        setLpcStatus('LPC catalog completed, but the catalog file could not be loaded.')
+        return
+      }
+
+      setLpcCatalog(payload.lpcCatalog)
+      setLpcStatus(
+        `Built LPC catalog with ${payload.lpcCatalog.summary.item_count} item(s), ${payload.lpcCatalog.summary.layer_count} layer(s), and ${payload.lpcCatalog.summary.credit_count} credit record(s).`,
+      )
+    } catch (error) {
+      setLpcStatus(`LPC catalog failed. ${error instanceof Error ? error.message : String(error)}`)
+    } finally {
+      setLpcBusy(false)
+    }
+  }
+
   async function runPreparedDuelystJobs() {
     if (apesBridgeBusy) return
     const prepared = apesJobs.filter((job) => job.character_id.startsWith('duelyst_') && job.status === 'prepared')
@@ -1938,14 +2023,19 @@ function App() {
         </nav>
 
         <section className="sidebar-block">
-          <label htmlFor="source-pack">Source pack</label>
+          <label htmlFor="source-pack">Source family</label>
           <select
             id="source-pack"
             data-testid="source-pack-filter"
             value={sourcePackFilter}
-            onChange={(event) => setSourcePackFilter(event.target.value as SourcePackFilter)}
+            onChange={(event) => {
+              const nextPack = event.target.value as SourcePackFilter
+              setSourcePackFilter(nextPack)
+              if (nextPack === 'lpc') setRecipeMode('lpc_character')
+              if (nextPack === 'duelyst') setRecipeMode('duelyst_review')
+              if (nextPack === 'sprite') setRecipeMode('sprite_kitbash')
+            }}
           >
-            <option value="all">All packs</option>
             <option value="sprite">Sprite pack</option>
             <option value="duelyst">Duelyst</option>
             <option value="lpc">LPC</option>
@@ -2140,6 +2230,8 @@ function App() {
               openSettingsRepair={openSettingsRepair}
               createApesJob={createApesJob}
               localToolsAvailable={localToolsAvailable}
+              recipeMode={recipeMode}
+              setRecipeMode={setRecipeMode}
             />
           ) : null}
           {screen === 'workstation' ? (
@@ -2206,10 +2298,12 @@ function App() {
               duelystBusy={duelystBusy}
               duelystStatus={duelystStatus}
               lpcInventory={lpcInventory}
+              lpcCatalog={lpcCatalog}
               lpcBusy={lpcBusy}
               lpcStatus={lpcStatus}
               runDuelystAudit={runDuelystAudit}
               runLpcInventory={runLpcInventory}
+              runLpcCatalog={runLpcCatalog}
               loadPrivateDuelystManifest={() => loadPrivateDuelystManifest()}
               openDuelystStageCharacter={openDuelystStageCharacter}
               createDuelystApesJobs={createDuelystApesJobs}

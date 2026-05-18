@@ -3,6 +3,8 @@ import { buildLpcSheetUrl, inferLpcPartLabel, type LpcSheetImportOptions } from 
 import { partLabels } from '../presets'
 import { analyzeImageSource } from '../sourceAnalysis'
 import type { AssetManifest, DuelystPackageAudit, DuelystPackageCandidate, LpcAssetInventory, SourceAlphaAnalysis } from '../types'
+import type { LpcCatalog } from '../lpcCatalog'
+import { ContextMenuButton, DetailsDrawer, type DetailsRecord } from '../uiDisclosure'
 import { slugLabel } from '../utils'
 
 type AssetAuditPanelProps = {
@@ -12,10 +14,12 @@ type AssetAuditPanelProps = {
   duelystBusy: boolean
   duelystStatus: string
   lpcInventory: LpcAssetInventory | null
+  lpcCatalog: LpcCatalog | null
   lpcBusy: boolean
   lpcStatus: string
   runDuelystAudit: () => Promise<void>
   runLpcInventory: () => Promise<void>
+  runLpcCatalog: () => Promise<void>
   loadPrivateDuelystManifest: () => Promise<void>
   openDuelystStageCharacter: (characterId: string) => void
   createDuelystApesJobs: (characterIds: string[]) => void
@@ -31,10 +35,12 @@ export function AssetAuditPanel({
   duelystBusy,
   duelystStatus,
   lpcInventory,
+  lpcCatalog,
   lpcBusy,
   lpcStatus,
   runDuelystAudit,
   runLpcInventory,
+  runLpcCatalog,
   loadPrivateDuelystManifest,
   openDuelystStageCharacter,
   createDuelystApesJobs,
@@ -54,6 +60,8 @@ export function AssetAuditPanel({
   const [lpcReviewedOnImport, setLpcReviewedOnImport] = useState(false)
   const [lpcVisibleLimit, setLpcVisibleLimit] = useState(24)
   const [selectedLpcPaths, setSelectedLpcPaths] = useState<string[]>([])
+  const [sourceFamilyTab, setSourceFamilyTab] = useState<'lpc' | 'sprite_pack' | 'duelyst' | 'custom'>('lpc')
+  const [detailsRecord, setDetailsRecord] = useState<DetailsRecord | null>(null)
   const warnings = manifest.characters.flatMap((character) => character.source_quality_warnings.map((warning) => ({ character: character.character_id, warning })))
   const duelystExtensionCounts = duelystAudit
     ? Object.entries(duelystAudit.extension_counts)
@@ -173,12 +181,40 @@ export function AssetAuditPanel({
         ) : null}
       </div>
 
-      <div className="panel-heading audit-subheading">
+      <div className="tab-row" role="tablist" aria-label="Source families">
+        {[
+          ['lpc', 'LPC Catalog'],
+          ['sprite_pack', 'Sprite Pack'],
+          ['duelyst', 'Duelyst'],
+          ['custom', 'Custom/Imported'],
+        ].map(([id, label]) => (
+          <button
+            key={id}
+            type="button"
+            role="tab"
+            aria-selected={sourceFamilyTab === id}
+            className={sourceFamilyTab === id ? 'active' : ''}
+            onClick={() => setSourceFamilyTab(id as typeof sourceFamilyTab)}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+
+      {sourceFamilyTab === 'lpc' ? <><div className="panel-heading audit-subheading">
         <div>
-          <h3>LPC Intake</h3>
-          <p>Inventory the local LPC generator assets, upstream reference metadata, and credit files before promoting any sheets into project content.</p>
+          <h3>LPC Engine</h3>
+          <p>Build catalog metadata from Universal LPC definitions; use local sheet inventory as a degraded fallback for imports.</p>
         </div>
         <div className="audit-actions">
+          <button
+            data-testid="run-lpc-catalog"
+            onClick={() => void runLpcCatalog()}
+            disabled={!localToolsAvailable || lpcBusy}
+            title={localToolsAvailable ? 'Build catalog from upstream sheet definitions' : 'Start the local tool server first'}
+          >
+            Build LPC catalog
+          </button>
           <button
             className="primary"
             data-testid="run-lpc-inventory"
@@ -193,6 +229,14 @@ export function AssetAuditPanel({
       <div data-testid="lpc-status" className={`settings-card ${lpcInventory ? '' : 'settings-card-warning'}`}>
         <strong>LPC status</strong>
         <span>{lpcStatus}</span>
+        {lpcCatalog ? (
+          <div className="part-meta">
+            <span title="Catalog items parsed from sheet definitions">{lpcCatalog.summary.item_count} catalog items</span>
+            <span title="Layer records with upstream z positions">{lpcCatalog.summary.layer_count} layers</span>
+            <span title="Credit records available for selected-item reports">{lpcCatalog.summary.credit_count} credits</span>
+            <span title={lpcCatalog.source.commit ?? 'No upstream commit found'}>{lpcCatalog.source.commit ? 'commit cached' : 'commit unknown'}</span>
+          </div>
+        ) : null}
         {lpcInventory ? (
           <code>
             {`root: ${lpcInventory.source.asset_root}\nupstream: ${lpcInventory.source.upstream_reference.commit ?? 'not cached'}\ncredits: ${lpcInventory.summary.credit_file_count} local file(s)`}
@@ -344,21 +388,55 @@ export function AssetAuditPanel({
                 const selected = selectedLpcPaths.includes(sheet.path)
                 return (
                   <article key={sheet.path} className={selected ? 'selected' : ''}>
-                    <label className="checkbox-field">
-                      <input
-                        data-testid={`select-lpc-sheet-${sheet.path.replace(/[^a-zA-Z0-9_-]+/g, '-')}`}
-                        type="checkbox"
-                        checked={selected}
-                        onChange={(event) => {
-                          setSelectedLpcPaths((current) =>
-                            event.target.checked
-                              ? Array.from(new Set([...current, sheet.path]))
-                              : current.filter((sheetPath) => sheetPath !== sheet.path),
-                          )
-                        }}
+                    <div className="row-with-actions">
+                      <label className="checkbox-field">
+                        <input
+                          data-testid={`select-lpc-sheet-${sheet.path.replace(/[^a-zA-Z0-9_-]+/g, '-')}`}
+                          type="checkbox"
+                          checked={selected}
+                          onChange={(event) => {
+                            setSelectedLpcPaths((current) =>
+                              event.target.checked
+                                ? Array.from(new Set([...current, sheet.path]))
+                                : current.filter((sheetPath) => sheetPath !== sheet.path),
+                            )
+                          }}
+                        />
+                        <span>{sheet.file_name}</span>
+                      </label>
+                      <ContextMenuButton
+                        label={`Actions for ${sheet.file_name}`}
+                        actions={[
+                          {
+                            id: 'view-info',
+                            label: 'View info',
+                            onSelect: () => setDetailsRecord({
+                              title: sheet.file_name,
+                              subtitle: 'LPC inventory sheet',
+                              fields: [
+                                { label: 'Path', value: sheet.path },
+                                { label: 'Category', value: sheet.category },
+                                { label: 'Dimensions', value: `${sheet.width}x${sheet.height}` },
+                                { label: 'Grid', value: `${sheet.frame_columns ?? '?'}x${sheet.frame_rows ?? '?'} cells` },
+                                { label: 'Tags', value: sheet.tags.join(', ') || 'none' },
+                              ],
+                            }),
+                          },
+                          {
+                            id: 'copy-path',
+                            label: 'Copy source path',
+                            onSelect: () => void navigator.clipboard?.writeText(sheet.path),
+                          },
+                          {
+                            id: 'toggle-select',
+                            label: selected ? 'Clear from selection' : 'Select for import',
+                            onSelect: () => setSelectedLpcPaths((current) =>
+                              selected ? current.filter((sheetPath) => sheetPath !== sheet.path) : Array.from(new Set([...current, sheet.path])),
+                            ),
+                          },
+                        ]}
                       />
-                      <span>{sheet.file_name}</span>
-                    </label>
+                    </div>
                     <img src={previewUrl} alt={sheet.file_name} />
                     <div className="part-meta">
                       <span>{sheet.category}</span>
@@ -375,8 +453,17 @@ export function AssetAuditPanel({
           </div>
         </>
       ) : null}
+      </> : null}
 
-      <div className="panel-heading audit-subheading">
+      {sourceFamilyTab === 'sprite_pack' ? (
+        <p className="empty">Sprite-pack sources are available in Sprite Kitbash mode. LPC catalog entries and Duelyst review frames stay out of those composition pickers.</p>
+      ) : null}
+
+      {sourceFamilyTab === 'custom' ? (
+        <p className="empty">Custom and imported parts appear after extraction or import. Mark a part reviewed and compatible before it crosses into another recipe mode.</p>
+      ) : null}
+
+      {sourceFamilyTab === 'duelyst' ? <><div className="panel-heading audit-subheading">
         <div>
           <h3>Duelyst Package Audit</h3>
           <p>Inspect the Unity package, preview cropped candidate frames, and stage the strongest humanoid sheets into the current workstation flow.</p>
@@ -521,6 +608,8 @@ export function AssetAuditPanel({
           </div>
         </>
       ) : null}
+      </> : null}
+      <DetailsDrawer record={detailsRecord} onClose={() => setDetailsRecord(null)} />
     </section>
   )
 }
