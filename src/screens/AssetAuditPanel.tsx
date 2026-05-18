@@ -4,7 +4,7 @@ import { partLabels } from '../presets'
 import { analyzeImageSource } from '../sourceAnalysis'
 import type { AssetManifest, DuelystPackageAudit, DuelystPackageCandidate, LpcAssetInventory, SourceAlphaAnalysis } from '../types'
 import type { LpcCatalog } from '../lpcCatalog'
-import { ContextMenuButton, DetailsDrawer, type DetailsRecord } from '../uiDisclosure'
+import { ContextMenuArea, ContextMenuButton, DetailsDrawer, type DetailsRecord } from '../uiDisclosure'
 import { slugLabel } from '../utils'
 
 type AssetAuditPanelProps = {
@@ -386,8 +386,38 @@ export function AssetAuditPanel({
                 const inferredLabel = inferLpcPartLabel(sheet)
                 const previewUrl = buildLpcSheetUrl(lpcInventory, sheet.path) ?? sheet.path
                 const selected = selectedLpcPaths.includes(sheet.path)
+                const sheetActions = [
+                  {
+                    id: 'view-info',
+                    label: 'View info',
+                    onSelect: () => setDetailsRecord({
+                      title: sheet.file_name,
+                      subtitle: 'LPC inventory sheet',
+                      fields: [
+                        { label: 'Path', value: sheet.path },
+                        { label: 'Category', value: sheet.category },
+                        { label: 'Dimensions', value: `${sheet.width}x${sheet.height}` },
+                        { label: 'Grid', value: `${sheet.frame_columns ?? '?'}x${sheet.frame_rows ?? '?'} cells` },
+                        { label: 'Tags', value: sheet.tags.join(', ') || 'none' },
+                      ],
+                    }),
+                  },
+                  {
+                    id: 'copy-path',
+                    label: 'Copy source path',
+                    onSelect: () => void navigator.clipboard?.writeText(sheet.path),
+                  },
+                  {
+                    id: 'toggle-select',
+                    label: selected ? 'Clear from selection' : 'Select for import',
+                    onSelect: () => setSelectedLpcPaths((current) =>
+                      selected ? current.filter((sheetPath) => sheetPath !== sheet.path) : Array.from(new Set([...current, sheet.path])),
+                    ),
+                  },
+                ]
                 return (
-                  <article key={sheet.path} className={selected ? 'selected' : ''}>
+                  <ContextMenuArea key={sheet.path} label={`Actions for ${sheet.file_name}`} actions={sheetActions}>
+                  <article className={selected ? 'selected' : ''}>
                     <div className="row-with-actions">
                       <label className="checkbox-field">
                         <input
@@ -406,35 +436,7 @@ export function AssetAuditPanel({
                       </label>
                       <ContextMenuButton
                         label={`Actions for ${sheet.file_name}`}
-                        actions={[
-                          {
-                            id: 'view-info',
-                            label: 'View info',
-                            onSelect: () => setDetailsRecord({
-                              title: sheet.file_name,
-                              subtitle: 'LPC inventory sheet',
-                              fields: [
-                                { label: 'Path', value: sheet.path },
-                                { label: 'Category', value: sheet.category },
-                                { label: 'Dimensions', value: `${sheet.width}x${sheet.height}` },
-                                { label: 'Grid', value: `${sheet.frame_columns ?? '?'}x${sheet.frame_rows ?? '?'} cells` },
-                                { label: 'Tags', value: sheet.tags.join(', ') || 'none' },
-                              ],
-                            }),
-                          },
-                          {
-                            id: 'copy-path',
-                            label: 'Copy source path',
-                            onSelect: () => void navigator.clipboard?.writeText(sheet.path),
-                          },
-                          {
-                            id: 'toggle-select',
-                            label: selected ? 'Clear from selection' : 'Select for import',
-                            onSelect: () => setSelectedLpcPaths((current) =>
-                              selected ? current.filter((sheetPath) => sheetPath !== sheet.path) : Array.from(new Set([...current, sheet.path])),
-                            ),
-                          },
-                        ]}
+                        actions={sheetActions}
                       />
                     </div>
                     <img src={previewUrl} alt={sheet.file_name} />
@@ -446,6 +448,7 @@ export function AssetAuditPanel({
                     </div>
                     <code>{sheet.path}</code>
                   </article>
+                  </ContextMenuArea>
                 )
               })}
             </div>
