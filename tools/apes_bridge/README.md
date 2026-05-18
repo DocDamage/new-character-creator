@@ -128,6 +128,13 @@ Current quality note: the latest full local Duelyst batch attempted 60 jobs, pro
 
 The app treats APES as a core extraction path, not a side experiment: reports include semantic labels, review status, warnings, editable mask paths, and local debugging metadata.
 
+For LPC assets, APES is deliberately complementary rather than the first path.
+The app now builds runtime LPC source manifests from the local inventory,
+including body-base mannequins, canonical action labels, and compatible sheet
+part choices. Use APES for unknown or weakly labeled sheets, generated
+compositions, and visual QA masks; use the LPC inventory/source picker when the
+sheet already carries a clear 64x64 LPC grid and source/action structure.
+
 Reports can be imported from the APES Lab with the `Import APES report JSON` control. Imported masks are converted into the same `ExtractedPart` records as preset, connected-pixel, and manual cleanup outputs, preserving APES confidence and warnings for review.
 
 For a no-CUDA browser harness on this machine, run:

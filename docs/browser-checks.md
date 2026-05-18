@@ -19,7 +19,7 @@ If you want the automated smoke pass instead of stepping through the UI manually
 npm run test:browser
 ```
 
-That harness covers export/package downloads, standalone Godot SpriteFrames resources, credits/provenance report export, manual mask save persistence, recipe save/load, Part Library bulk review actions, fake APES-part prevention, APES QA harness generation/import, APES fine-tune prep and Duelyst job-batch queueing, APES local-output image/mask package assets, Duelyst audit behavior, LPC inventory browse/select/label/import, placeholder-mode manifest provenance, paged large Part Library imports, page-scoped visible export/review actions, and the portable local setup bundle download from `Settings`.
+That harness covers export/package downloads, standalone Godot SpriteFrames resources, credits/provenance report export, manual mask save persistence, recipe save/load, creator cockpit filtering/export-target persistence, Part Library bulk review actions, fake APES-part prevention, APES QA harness generation/import, APES fine-tune prep and Duelyst job-batch queueing, APES local-output image/mask package assets, Duelyst audit behavior, LPC inventory browse/select/label/import, LPC source picker canonical animations and compatible sheet parts, placeholder-mode manifest provenance, paged large Part Library imports, page-scoped visible export/review actions, and the portable local setup bundle download from `Settings`.
 
 For optional local cross-browser smoke coverage after installing the full browser set:
 
@@ -48,7 +48,7 @@ Latest verified automated run:
 - `npm run test:browser:all`
 - `npm run test:private-assets`
 - `npm run release:check`
-- lint passed, source-hygiene passed, 12 tool tests passed, build passed, release package validation passed, preview local-tool smoke passed, 13 Chromium browser tests passed, 39 Chromium/Firefox/WebKit browser-matrix tests passed, and private Duelyst audit passed
+- lint passed, source-hygiene passed, 18 tool tests passed, build passed, release package validation passed, preview local-tool smoke passed, 15 Chromium browser tests passed, 45 Chromium/Firefox/WebKit browser-matrix tests passed, and private Duelyst audit passed
 
 Latest verified local app state:
 
@@ -67,6 +67,7 @@ Latest verified local app state:
 - APES Lab exposes `Prepare Duelyst jobs`, backed by `tools/apes_bridge/prepare_duelyst_apes_jobs.py`, and loads the generated job configs into `Run Duelyst queue`.
 - Fine-tune prep writes `data/training/apes_finetune/finetune_manifest.json` and 64 Duelyst review folders.
 - Source metadata is optional private debugging data and is not a browser-check release gate.
+- LPC sheets are available as runtime `lpc_character` sources when the inventory is present. Canonical LPC action labels replace local folder aliases such as `magic` or `swing`, body base sheets are grouped into mannequin sources, and compatible LPC sheet parts only appear while an LPC mannequin/source pack context can use them.
 
 ## Export Panel
 

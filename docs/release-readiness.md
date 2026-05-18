@@ -1,6 +1,6 @@
 # Release Readiness
 
-Date: 2026-05-17
+Date: 2026-05-18
 
 ## Status
 
@@ -17,12 +17,12 @@ Latest verification after the release hardening pass:
 
 - `npm run lint`: passed
 - `npm run check:source-hygiene`: passed
-- `npm run test:tools`: passed, 12 tests
+- `npm run test:tools`: passed, 18 tests
 - `npm run build`: passed
 - `npm run validate:release-package`: passed
 - `npm run test:preview-tools`: passed
-- `npm run test:browser`: passed, 13 tests
-- `npm run test:browser:all`: passed, 39 tests across Chromium, Firefox, and WebKit
+- `npm run test:browser`: passed, 15 tests
+- `npm run test:browser:all`: passed, 45 tests across Chromium, Firefox, and WebKit
 - `npm run test:private-assets`: passed
 - `npm run release:check`: passed
 
@@ -49,8 +49,9 @@ npm run apes:summarize-outputs
 ```
 
 The full browser regression currently covers manual cleanup persistence, export
-downloads, recipe save/load, Part Library bulk review actions, fake APES-part
-prevention in the workstation, APES QA harness generation/import, local
+downloads, creator cockpit filtering/export-target persistence, recipe save/load,
+Part Library bulk review actions, fake APES-part prevention in the workstation,
+APES QA harness generation/import, local
 `data/apes/output` APES image/mask serving into full-package zip exports,
 Duelyst audit behavior, and Settings setup bundle export.
 It also covers the GitHub sprite-parts harvest workflow surfaces: layer-bundle
@@ -60,7 +61,9 @@ The harness now also covers placeholder-mode export provenance, accessible
 release controls, a usable LPC inventory browser/import workflow, and paged
 rendering for large layer-bundle imports in the Part Library, including
 page-scoped visible export and bulk review behavior. It also verifies APES
-fine-tune/Duelyst prep actions and credits/provenance report exports. Private Duelyst package harvesting is available through
+fine-tune/Duelyst prep actions, credits/provenance report exports, LPC source
+picker canonical animations, LPC body-base mannequin coverage, and compatible
+LPC sheet-part selection. Private Duelyst package harvesting is available through
 `npm run test:private-assets` and is intentionally opt-in outside the standard
 release gate.
 Browser regression is served from `npm run build && npx vite preview` so the
@@ -146,6 +149,11 @@ suite exercises the production bundle rather than the Vite dev transform path.
   or visible imports, inferred or explicit labels, reviewed-on-import, and
   exports cropped source bounds instead of squeezing a whole spritesheet into
   one part image.
+- LPC inventory data now also builds runtime `lpc_character` manifests. The
+  builder groups source/action sheet variants, maps LPC aliases such as
+  `magic`, `swing`, `walkcycle`, and `sit` onto canonical app animation names,
+  exposes body base sheets as mannequin sources, preserves classic LPC row
+  slices, and filters compatible sheet parts by active layer/source context.
 - Large imported part images and masks are persisted in IndexedDB by asset key
   so localStorage stores lightweight part metadata and reloads hydrate the real
   assets back into the app.

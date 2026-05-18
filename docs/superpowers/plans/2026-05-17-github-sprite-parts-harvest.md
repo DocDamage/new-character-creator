@@ -8,6 +8,8 @@
 
 **Tech Stack:** Vite, React, TypeScript, browser Canvas APIs, File APIs, JSZip, localStorage, Node test runner, Playwright browser harness.
 
+**Implementation Status:** Completed for the scoped harvest pass. Layer-bundle import/export, source alpha/floor analysis, generation manifests, variation presets, filename templates, large-library paging, and browser coverage are implemented. The later LPC runtime work extends this harvest by turning 64x64 LPC sheets into selectable source/part manifests without vendoring an external generator.
+
 ---
 
 ## GitHub Search Harvest

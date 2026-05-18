@@ -11,6 +11,7 @@ Local Vite + React + TypeScript app for building a kitbash-oriented pixel charac
 - APES real bridge execution reaches the vendored network/deformer on the RTX 3060. The full 60-job Duelyst APES batch completed with 57 successful jobs and 3 sprite-specific APES rejects that are now recorded as failed outputs instead of crashing the whole batch.
 - The only APES preflight warning is that upstream APES originally targeted Python 3.7 while the working local environment uses Python 3.10.
 - Duelyst package unpacking, detector labeling, multi-frame atlas staging, and in-app browsing has been verified against `assets/Duelyst-Unit-Animations.unitypackage`: 7145 assets scanned, 696 sprite sheets labeled/viewable in Asset Audit, and 64 staged candidates with idle/run/attack/etc. frames openable in the workstation.
+- LPC intake is now usable as source content, not just audit metadata: local 64x64 LPC sheets are grouped by source/action into selectable `lpc_character` manifests, canonical LPC animations are exposed in the app, body bases are represented as mannequins, and compatible LPC sheet parts can be picked directly in Fast Creator.
 - Source metadata is kept as optional private debugging data. It is not a release gate for this private tool.
 
 ## Commands
@@ -56,7 +57,7 @@ npm run export:character -- 1-warrior-woman --asset-root 'D:\sprite-packs\Animat
 
 `npm run index:assets` writes `public/data/manifests/characters.local.json` for ignored in-repo asset packs and external asset roots so local scans do not overwrite the checked-in fallback manifest. To intentionally refresh `public/data/manifests/characters.json`, pass `--public-manifest`.
 
-`npm run lpc:inventory` scans the ignored local LPC asset dump at `assets/lpc sprite generator stuff`, records 64x64 sheet-grid metadata, credit/license files, and cached upstream Universal LPC reference data into `data/lpc/lpc_asset_inventory.json`. The Asset Audit screen can run the same inventory through the local dev server, browse sheets with search/category/grid filters, select visible or individual sheets, choose inferred or explicit part labels, and import them into the Part Library as reviewed or unreviewed manual parts. LPC art is mixed-license, so keep that inventory for local reference and do not copy the raw dump into the release bundle.
+`npm run lpc:inventory` scans the ignored local LPC asset dump at `assets/lpc sprite generator stuff`, records 64x64 sheet-grid metadata, credit/license files, and cached upstream Universal LPC reference data into `data/lpc/lpc_asset_inventory.json`. The app uses that inventory in two ways: Asset Audit can browse/import selected sheets into the Part Library, and Fast Creator can use grouped LPC base sheets and compatible LPC sheet parts as live source choices. LPC art is mixed-license, so keep that inventory for local reference and do not copy the raw dump into the release bundle.
 
 If you prefer not to remember the commands, open the `Settings` screen in the app. It has buttons that copy the repair, reindex, and sample export commands with your chosen asset-pack path filled in.
 
@@ -72,6 +73,7 @@ The `Settings` screen now also exposes a `Copy browser regression command` actio
 - APES local-output report import, reusable image/mask serving, and full-package zip part assets
 - Workstation APES mode refusing to create fake rectangular APES parts
 - Duelyst audit behavior, including the no-package warning path and staged-workstation opening path when the local unitypackage is available
+- LPC picker behavior, including canonical animation labels, body-base coverage, and compatible sheet-part choices for mannequin sources
 - portable local setup bundle export from `Settings`
 - placeholder-mode export provenance and core accessible controls
 - large Part Library layer-bundle imports staying paged instead of rendering every part at once
@@ -91,7 +93,7 @@ For an optional local cross-browser smoke pass after installing all Playwright b
   - `attack` / `attack-1` -> `attack`
   - `running-jump` -> `running_jump`
 - Pixel-perfect canvas preview for real source frames.
-- Fast Creator for part-source selection and recipe export.
+- Fast Creator with source-pack filtering, reviewed-part search/method filters, recipe readiness, target export hints, recipe export, and LPC-compatible sheet-part pickers when an LPC mannequin is selected.
 - Art Workstation with preset regions, APES/preset/connected/manual mode comparison, region controls, and cleanup tool surface.
 - Manual mask cleanup with persisted reviewed manual parts.
 - Part Library with filtering, reviewed/unreviewed state, paged rendering for large imports, JSON export, page-scoped visible JSON export/review actions, and APES QA cleanup.
@@ -99,6 +101,7 @@ For an optional local cross-browser smoke pass after installing all Playwright b
 - Batch Generator with deterministic seeded variants.
 - Asset Audit with class counts, source warnings, and Duelyst unitypackage inspection/staging.
 - Asset Audit LPC browser with sheet previews, search/category/grid filters, selected/visible import, inferred or explicit part labels, reviewed-on-import, and credit/license provenance warnings.
+- Runtime LPC character builder that groups action-specific sheets into canonical animation manifests, keeps classic LPC sheet row mappings intact, exposes body bases as mannequins, and limits part choices to compatible LPC layers.
 - Duelyst Asset Audit filters for search, body class, source family, training role, and staged state, plus batch APES job creation for staged candidates.
 - APES Lab with first-class job creation, local preflight/bridge actions, one-click fine-tune prep, one-click Duelyst job-batch prep, a local QA harness generator, logs, job config export, explicit placeholder-mode provenance in exports, failed-output surfacing, file import, pasted JSON import, inventory import, and APES-to-part-library conversion.
 - APES CLI bridge tools for preparing and running private Duelyst job batches from `data/apes/input/`, including partial-failure recording and strict opt-in failure mode.
@@ -246,6 +249,7 @@ The browser harness now covers:
 - manual cleanup save persistence after reload
 - rendered frame and full-package export downloads
 - recipe save/load and bulk review actions
+- creator cockpit part filtering, export target persistence, and LPC source/part compatibility
 - Workstation APES mode fake-part prevention
 - APES QA harness generation, reload, and pasted JSON import
 - APES local-output part image/mask inclusion in full-package zip exports

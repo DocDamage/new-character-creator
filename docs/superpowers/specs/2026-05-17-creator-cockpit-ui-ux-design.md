@@ -1,5 +1,13 @@
 # Creator Cockpit UI/UX Upgrade Design
 
+## Status Update
+
+Implemented. Fast Creator now includes reviewed-part search/method filters,
+recipe readiness, export target profile persistence, next-action navigation, and
+LPC-aware source/part picker behavior. Browser regression coverage verifies the
+creator cockpit workflow, export target persistence, and the current LPC picker
+compatibility path.
+
 ## Context
 
 The Animated Pixel Character Creator already has a deep local workflow: Fast Creator, Art Workstation, Part Library, Batch Generator, Asset Audit, APES Lab, Exports, and Settings. Recent work has made the APES, LPC, Duelyst, export, and browser-regression paths reliable, but the daily creation loop still asks the user to synthesize state from several screens.

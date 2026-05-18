@@ -8,6 +8,8 @@
 
 **Tech Stack:** React 19, TypeScript 6, Vite 8, localStorage persistence helpers, Node test runner, Playwright browser regression tests.
 
+**Implementation Status:** Completed and extended. The cockpit model, reviewed-part filters, recipe readiness strip, export target profile persistence, next-action navigation, export target highlighting, and browser coverage are implemented. The same picker surface now respects the LPC runtime source model, including canonical LPC animations and compatible LPC sheet parts.
+
 ---
 
 ## Scope Check

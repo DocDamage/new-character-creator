@@ -8,6 +8,8 @@
 
 **Tech Stack:** React 19, TypeScript, Vite middleware, IndexedDB, Node test runner, Playwright.
 
+**Implementation Status:** Completed and extended. Local tool middleware is shared by dev/preview, project-local file serving is restricted, layer-bundle validation is hardened, large part payloads use IndexedDB-backed storage, Part Library paging is implemented, placeholder APES provenance is exported, private-asset testing is opt-in, and LPC usability now includes runtime source manifests with canonical animation labels and compatible sheet-part choices.
+
 ---
 
 ### Task 1: Split Local Tool Middleware

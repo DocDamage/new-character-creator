@@ -184,9 +184,21 @@ choose `characters.local.json` for ignored or external assets.
   category, and LPC grid compatibility, select visible or individual sheets,
   choose inferred or explicit part labels, mark imported parts reviewed, and
   import them into the Part Library as selectable manual parts.
+- The same inventory now feeds runtime LPC source manifests. Selectable LPC
+  sheets are grouped by source/action path so walk, spellcast, slash, shoot,
+  thrust, hurt, and related rows become canonical app animations instead of
+  scattered folder aliases.
+- Classic 13-column/21-row LPC sheets keep their row-slice animation mapping.
+  Separate body base sheets such as Human Male and Skeleton are grouped into
+  mannequin sources, while action-specific equipment sheets remain part sources.
+- Fast Creator only exposes LPC sheet parts when the current source context can
+  use them. Part labels include compatibility aliases such as front/back arms,
+  front/back legs, head/face/hair, cloak/back items, and accessory-like effects.
 - The tool and browser test suites cover LPC inventory fixture behavior and the
   browse/select/label/import UI workflow alongside the asset indexer
-  local-manifest regression.
+  local-manifest regression. Browser coverage also checks canonical LPC
+  animation labels, body-base coverage, and compatible sheet-part picker
+  behavior.
 - LPC credits/license data is treated as useful private metadata, not as a
   release gate.
 
@@ -196,5 +208,7 @@ choose `characters.local.json` for ignored or external assets.
   `sheet_definitions` and local loose folders separately.
 - Attach upstream per-layer credit records when `sheet_definitions` metadata is
   available, rather than relying only on inventory-level credit-file warnings.
+- Add richer LPC composition validation so mixed body types, equipment anchors,
+  and per-animation offsets can be reviewed before export.
 - Keep APES focused on unknown packs and review masks, not on replacing LPC's
   existing layer metadata.

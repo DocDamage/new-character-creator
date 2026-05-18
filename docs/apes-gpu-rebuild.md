@@ -142,6 +142,13 @@ npm run build
 npm run test:browser
 ```
 
+The browser harness also exercises the current LPC runtime path: grouped
+body-base mannequins, canonical LPC animation labels, and compatible sheet-part
+selection in Fast Creator. That coverage does not require the GPU APES
+environment, but it is a useful companion check after rebuilding the local asset
+tooling because LPC previews and APES staged assets both depend on the same
+project-local Vite file serving rules.
+
 ## Private Duelyst And Fine-Tune Prep
 
 After the runtime is ready, prepare the private Duelyst manifest and APES fine-tuning inventory:
