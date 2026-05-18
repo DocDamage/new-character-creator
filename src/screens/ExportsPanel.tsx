@@ -8,6 +8,7 @@ import {
   type RecipeReadiness,
 } from '../creatorCockpit'
 import { defaultFilenameTemplate, renderExportFilenameTemplate } from '../filenameTemplates'
+import { buildLpcSelectionCreditReadiness } from '../lpcCatalogPicker'
 import type { AnimationName, CharacterManifest, Direction, ExtractedPart, KitbashRecipe } from '../types'
 import type { LpcCatalog } from '../lpcCatalog'
 import { downloadJson, getFrames, slugLabel } from '../utils'
@@ -100,6 +101,9 @@ export function ExportsPanel({
     label: 'head',
   })}.png`
   const activeExportTarget = getExportTargetProfile(exportTargetProfile)
+  const lpcCreditReadiness = lpcCatalog && recipe?.recipe_mode === 'lpc_character'
+    ? buildLpcSelectionCreditReadiness(lpcCatalog, recipe.lpc_selections ?? {})
+    : null
 
   function targetButtonClass(testId: string, baseClass = '') {
     return [baseClass, activeExportTarget.recommendedActionTestId === testId ? 'recommended-export' : '']
@@ -155,6 +159,23 @@ export function ExportsPanel({
         <button data-testid="export-rpg-maker-metadata" className={targetButtonClass('export-rpg-maker-metadata')} onClick={exportRpgMakerMetadata}>Download RPG Maker MZ metadata</button>
         <button data-testid="export-aseprite-reference" className={targetButtonClass('export-aseprite-reference')} onClick={exportAsepriteReference}>Download Aseprite reference</button>
         <button data-testid="export-credits-report" onClick={() => void exportCreditsReport()}>Download credits report</button>
+      </div>
+      <div className={`settings-card ${lpcCreditReadiness?.release_blocking ? 'settings-card-warning' : ''}`} data-testid="export-lpc-credit-readiness">
+        <strong>LPC credit readiness</strong>
+        {lpcCreditReadiness ? (
+          <>
+            <span>
+              {lpcCreditReadiness.selected_count} selected upstream item(s), {lpcCreditReadiness.ok_count} ready, {lpcCreditReadiness.needs_review_count} need review, {lpcCreditReadiness.missing_count} missing credits.
+            </span>
+            {lpcCreditReadiness.items.length > 0 ? (
+              <code>{lpcCreditReadiness.items.map((item) => `${item.item_name} / ${item.variant}: ${item.status}`).join('\n')}</code>
+            ) : (
+              <span>No catalog-backed LPC selections are enabled for this recipe.</span>
+            )}
+          </>
+        ) : (
+          <span>Catalog-backed LPC selections will report selected upstream credits here.</span>
+        )}
       </div>
       <div className="settings-card">
         <strong>Filename pattern</strong>
