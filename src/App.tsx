@@ -37,6 +37,7 @@ import {
 import { defaultFilenameTemplate } from './filenameTemplates'
 import { buildGenerationManifest } from './generationManifest'
 import { layerBundleToExtractedParts, lpcSheetsToExtractedParts, parseLayerBundleManifest, type LpcSheetImportOptions } from './layerBundle'
+import { getCharacterLabelValue, isLpcPartSourceForLayer } from './lpcPartCompatibility'
 import { buildManualMaskPart } from './manualParts'
 import { buildLpcCharacterManifests } from './lpcCharacters'
 import { hydratePartLibraryAssets, persistPartLibraryAssets } from './partAssetStore'
@@ -181,19 +182,12 @@ function getSourcePackFilter(character: CharacterManifest): SourcePackFilter {
   return 'sprite'
 }
 
-function getCharacterLabelValue(character: CharacterManifest, key: string) {
-  const value = character.labels?.[key]
-  return typeof value === 'string' ? value : ''
-}
-
 function isMainSourceCharacter(character: CharacterManifest) {
   return getSourcePackFilter(character) !== 'lpc' || getCharacterLabelValue(character, 'lpc_role') !== 'part'
 }
 
 function isLpcPartSourceCharacter(character: CharacterManifest, label: PartLabel) {
-  return getSourcePackFilter(character) === 'lpc' &&
-    getCharacterLabelValue(character, 'lpc_role') === 'part' &&
-    getCharacterLabelValue(character, 'lpc_part_label') === label
+  return getSourcePackFilter(character) === 'lpc' && isLpcPartSourceForLayer(character, label)
 }
 
 function sortLpcPartSources(left: CharacterManifest, right: CharacterManifest, currentAnimation: AnimationName) {

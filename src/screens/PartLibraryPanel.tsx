@@ -220,7 +220,7 @@ export function PartLibraryPanel({
         </label>
         <label className="field">
           <span>Review</span>
-          <select value={reviewFilter} onChange={(event) => {
+          <select data-testid="part-library-review-filter" value={reviewFilter} onChange={(event) => {
             setReviewFilter(event.target.value as PartReviewFilter)
             setVisibleLimit(100)
           }}>

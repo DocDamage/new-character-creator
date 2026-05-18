@@ -10,6 +10,7 @@ import {
   type RecipeReadiness,
 } from '../creatorCockpit'
 import { clampOffsetInput, clampSignedInput, clampUnsignedInput } from '../inputUtils'
+import { isLpcPartSourceForLayer } from '../lpcPartCompatibility'
 import { layerOrder, palettePresets } from '../presets'
 import type { AnimationName, CharacterManifest, ComposerLayerSettings, Direction, ExtractedPart, KitbashRecipe, PaletteRules, PartLabel } from '../types'
 import { slugLabel } from '../utils'
@@ -124,13 +125,39 @@ export function FastCreatorPanel({
     .filter(Boolean)
   const reviewedPartsForActiveLabel = reviewedParts.filter((part) => part.label === activePartLabel)
   const selectedActivePart = selectedPartIds[activePartLabel]
+  const lpcPartsForActiveLabel = useMemo(
+    () => characters
+      .filter((character) => isLpcPartSourceForLayer(character, activePartLabel))
+      .sort((left, right) => left.display_name.localeCompare(right.display_name))
+      .slice(0, 180),
+    [activePartLabel, characters],
+  )
+  const selectedActiveSource = selectedParts[activePartLabel]
+  const selectedActiveSourceCharacter = selectedActiveSource
+    ? characters.find((character) => character.character_id === selectedActiveSource)
+    : undefined
+  const activePickerValue = selectedActivePart
+    ? `library:${selectedActivePart}`
+    : selectedActiveSource && selectedActiveSourceCharacter && isLpcPartSourceForLayer(selectedActiveSourceCharacter, activePartLabel)
+      ? `source:${selectedActiveSource}`
+      : ''
 
-  function selectActivePart(partId: string) {
+  function selectActivePart(value: string) {
+    const [kind, id] = value.split(':', 2)
     setSelectedPartIds((current) => {
       const next = { ...current }
-      if (partId) {
-        next[activePartLabel] = partId
+      if (kind === 'library' && id) {
+        next[activePartLabel] = id
       } else {
+        delete next[activePartLabel]
+      }
+      return next
+    })
+    setSelectedParts((current) => {
+      const next = { ...current }
+      if (kind === 'source' && id) {
+        next[activePartLabel] = id
+      } else if (!value) {
         delete next[activePartLabel]
       }
       return next
@@ -189,13 +216,22 @@ export function FastCreatorPanel({
             <span>Reviewed part</span>
             <select
               data-testid="fast-live-part"
-              value={selectedActivePart ?? ''}
+              value={activePickerValue}
               onChange={(event) => selectActivePart(event.target.value)}
-              disabled={reviewedPartsForActiveLabel.length === 0}
+              disabled={reviewedPartsForActiveLabel.length === 0 && lpcPartsForActiveLabel.length === 0}
             >
-              <option value="">{reviewedPartsForActiveLabel.length === 0 ? 'no reviewed parts for this layer' : 'use source character'}</option>
+              <option value="">{reviewedPartsForActiveLabel.length === 0 && lpcPartsForActiveLabel.length === 0 ? 'no parts for this layer' : 'use source character'}</option>
+              {lpcPartsForActiveLabel.length > 0 ? (
+                <optgroup label="LPC sheet parts">
+                  {lpcPartsForActiveLabel.map((character) => (
+                    <option key={character.character_id} value={`source:${character.character_id}`}>
+                      {character.display_name} / {character.animation_names.slice(0, 4).join(', ')}
+                    </option>
+                  ))}
+                </optgroup>
+              ) : null}
               {reviewedPartsForActiveLabel.map((part) => (
-                <option key={part.part_id} value={part.part_id}>
+                <option key={part.part_id} value={`library:${part.part_id}`}>
                   {part.part_id} / {slugLabel(part.extraction_method)}
                 </option>
               ))}

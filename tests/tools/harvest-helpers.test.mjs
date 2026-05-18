@@ -287,6 +287,19 @@ test('LPC inventory sheets can be exposed as cropped source characters', () => {
         tags: ['weapon', 'bow'],
       },
       {
+        path: 'Long ears/LongEars_female_d.png',
+        category: 'Long ears',
+        file_name: 'LongEars_female_d.png',
+        width: 832,
+        height: 1344,
+        frame_width: 64,
+        frame_height: 64,
+        frame_columns: 13,
+        frame_rows: 21,
+        lpc_grid: true,
+        tags: ['d', 'female', 'long_ears', 'longears'],
+      },
+      {
         path: 'Androgynous Bases/Copper/magic.png',
         category: 'Androgynous Bases',
         file_name: 'magic.png',
@@ -326,6 +339,58 @@ test('LPC inventory sheets can be exposed as cropped source characters', () => {
         tags: ['base'],
       },
       {
+        path: 'Androgynous Bases/Copper/swing.png',
+        category: 'Androgynous Bases',
+        file_name: 'swing.png',
+        width: 448,
+        height: 256,
+        frame_width: 64,
+        frame_height: 64,
+        frame_columns: 7,
+        frame_rows: 4,
+        lpc_grid: true,
+        tags: ['base'],
+      },
+      {
+        path: 'Androgynous Bases/Copper/thrust.png',
+        category: 'Androgynous Bases',
+        file_name: 'thrust.png',
+        width: 576,
+        height: 256,
+        frame_width: 64,
+        frame_height: 64,
+        frame_columns: 9,
+        frame_rows: 4,
+        lpc_grid: true,
+        tags: ['base'],
+      },
+      {
+        path: 'Androgynous Bases/Copper/walk.png',
+        category: 'Androgynous Bases',
+        file_name: 'walk.png',
+        width: 576,
+        height: 256,
+        frame_width: 64,
+        frame_height: 64,
+        frame_columns: 9,
+        frame_rows: 4,
+        lpc_grid: true,
+        tags: ['base'],
+      },
+      {
+        path: 'Androgynous Bases/Copper/hurt.png',
+        category: 'Androgynous Bases',
+        file_name: 'hurt.png',
+        width: 448,
+        height: 64,
+        frame_width: 64,
+        frame_height: 64,
+        frame_columns: 7,
+        frame_rows: 1,
+        lpc_grid: true,
+        tags: ['base'],
+      },
+      {
         path: 'Clothes/Blue/Pants/Idle.png',
         category: 'Clothes',
         file_name: 'Idle.png',
@@ -354,11 +419,12 @@ test('LPC inventory sheets can be exposed as cropped source characters', () => {
     ],
   })
 
-  assert.equal(characters.length, 6)
+  assert.equal(characters.length, 7)
   const shirtPart = characters.find((character) => character.labels.lpc_path === 'Clothes/Blue/Shirt, Long-Sleeved')
   const runPart = characters.find((character) => character.labels.lpc_path === 'Clothes/Blue/Shirt')
   const pantsPart = characters.find((character) => character.labels.lpc_path === 'Clothes/Blue/Pants')
   const bowPart = characters.find((character) => character.labels.lpc_path === 'lpc_entry/png/WEAPON_bow')
+  const longEarsPart = characters.find((character) => character.labels.lpc_path === 'Long ears/LongEars_female_d')
   const magicBase = characters.find((character) => character.labels.lpc_path === 'Androgynous Bases/Copper')
   assert.equal(characters[0].class_type, 'lpc_character')
   assert.equal(characters[0].labels.lpc_role, 'base')
@@ -366,11 +432,19 @@ test('LPC inventory sheets can be exposed as cropped source characters', () => {
   assert.equal(shirtPart?.labels.lpc_part_label, 'torso')
   assert.deepEqual(runPart?.animation_names, ['run'])
   assert.deepEqual(pantsPart?.animation_names, ['idle', 'run'])
-  assert.deepEqual(bowPart?.animation_names, ['bow'])
-  assert.deepEqual(magicBase?.animation_names, ['idle', 'magic', 'shoot'])
+  assert.deepEqual(bowPart?.animation_names, ['shoot'])
+  assert.equal(longEarsPart?.labels.lpc_part_label, 'face')
+  assert.deepEqual(longEarsPart?.animation_names, ['spellcast', 'thrust', 'walk', 'slash', 'shoot', 'hurt'])
+  assert.equal(longEarsPart?.directions.south.walk.frame_count, 9)
+  assert.deepEqual(longEarsPart?.directions.south.walk.frames[0].source_rect, { x: 0, y: 640, w: 64, h: 64 })
+  assert.deepEqual(longEarsPart?.directions.north.hurt.frames[0].source_rect, { x: 0, y: 1280, w: 64, h: 64 })
+  assert.deepEqual(magicBase?.animation_names, ['idle', 'walk', 'spellcast', 'shoot', 'slash', 'thrust', 'hurt'])
   assert.equal(characters[0].directions.south.idle.frame_count, 5)
   assert.deepEqual(characters[0].directions.east.idle.frames[0].source_rect, { x: 0, y: 64, w: 64, h: 64 })
   assert.deepEqual(characters[0].directions.south.idle.frames[0].source_rect, { x: 0, y: 128, w: 64, h: 64 })
+  assert.equal(magicBase?.directions.north.hurt.frame_count, 7)
+  assert.deepEqual(magicBase?.directions.north.hurt.frames[0].source_rect, { x: 0, y: 0, w: 64, h: 64 })
+  assert.deepEqual(magicBase?.directions.south.hurt.frames[0].source_rect, { x: 0, y: 0, w: 64, h: 64 })
   assert.equal(characters[0].representative_frame, '/assets/lpc sprite generator stuff/Adult Female/Base, Adult Female.png')
 })
 

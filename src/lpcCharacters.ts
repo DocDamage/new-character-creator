@@ -9,15 +9,39 @@ const lpcDirectionRows: Array<[Direction, number]> = [
 
 const maxLpcBaseSheets = 360
 const maxLpcPartSheetsPerLabel = 180
-const animationOrder = ['idle', 'walk', 'walkcycle', 'run', 'jump', 'sitting', 'emotes', 'magic', 'shoot', 'swing', 'thrust', 'slash', 'bow', 'spellcast', 'attack', 'hurt']
-const lpcActionSegments = new Set([...animationOrder, 'sit', 'emote', 'spell'])
+const animationOrder = ['idle', 'walk', 'run', 'jump', 'sitting', 'emotes', 'spellcast', 'shoot', 'slash', 'thrust', 'hurt', 'attack']
+const lpcActionSegments = new Set([
+  ...animationOrder,
+  'walkcycle',
+  'sit',
+  'emote',
+  'magic',
+  'spell',
+  'swing',
+  'bow',
+])
 type LpcSheet = LpcAssetInventory['sheets'][number]
+type LpcAnimationSlice = {
+  name: AnimationName
+  rowStart: number
+  rowCount: number
+  frameCount: number
+}
 type LpcSheetGroup = {
   key: string
   role: 'base' | 'part'
   label: PartLabel
   sheets: LpcSheet[]
 }
+
+const classicLpcAnimationSlices: LpcAnimationSlice[] = [
+  { name: 'spellcast', rowStart: 0, rowCount: 4, frameCount: 7 },
+  { name: 'thrust', rowStart: 4, rowCount: 4, frameCount: 8 },
+  { name: 'walk', rowStart: 8, rowCount: 4, frameCount: 9 },
+  { name: 'slash', rowStart: 12, rowCount: 4, frameCount: 6 },
+  { name: 'shoot', rowStart: 16, rowCount: 4, frameCount: 13 },
+  { name: 'hurt', rowStart: 20, rowCount: 1, frameCount: 6 },
+]
 
 export function buildLpcCharacterManifests(inventory: LpcAssetInventory | null): CharacterManifest[] {
   if (!inventory) return []
@@ -101,10 +125,14 @@ export function buildLpcCharacterManifests(inventory: LpcAssetInventory | null):
 }
 
 function isSelectableLpcSheet(sheet: LpcAssetInventory['sheets'][number]) {
-  if (!sheet.lpc_grid || sheet.frame_rows !== 4 || !sheet.frame_columns || sheet.frame_columns < 1) return false
+  const animation = inferLpcAnimation(sheet)
+  const isDirectionalSheet = sheet.frame_rows === 4
+  const isSingleRowHurtSheet = animation === 'hurt' && sheet.frame_rows === 1
+  const isClassicSheet = isClassicLpcSheet(sheet)
+  if (!sheet.lpc_grid || (!isDirectionalSheet && !isSingleRowHurtSheet && !isClassicSheet) || !sheet.frame_columns || sheet.frame_columns < 1) return false
   const normalized = [sheet.file_name, sheet.path, ...sheet.tags].join(' ').toLowerCase()
   if (normalized.includes('headless')) return false
-  return isLpcBaseSheet(sheet) || /\b(hair|hairs|hat|hats|hood|hoods|helmet|helmets|shirt|shirts|pants|skirt|skirts|dress|dresses|shoe|shoes|boot|boots|armor|armour|weapon|weapons|sword|swords|bow|bows|shield|shields|cape|capes|cloak|cloaks|beard|beards|eyes|ears|glove|gloves)\b/.test(normalized)
+  return isLpcBaseSheet(sheet) || /\b(hair|hairs|hat|hats|hood|hoods|helmet|helmets|shirt|shirts|pants|skirt|skirts|dress|dresses|shoe|shoes|boot|boots|armor|armour|weapon|weapons|sword|swords|bow|bows|shield|shields|cape|capes|cloak|cloaks|quiver|quivers|backpack|backpacks|wings|beard|beards|eyes|ears|face|head|heads|glove|gloves|hand|hands|feet|backa|backb|accessory|accessories)\b/.test(normalized)
 }
 
 export function isLpcBaseSheet(sheet: LpcAssetInventory['sheets'][number]) {
@@ -136,28 +164,52 @@ function groupLpcSheets(sheets: LpcSheet[]) {
 }
 
 function buildLpcAnimations(inventory: LpcAssetInventory, sheets: LpcSheet[]): AnimationManifest[] {
-  const animationSheets = [...sheets].sort((left, right) => animationSortScore(inferLpcAnimation(left)) - animationSortScore(inferLpcAnimation(right)) || left.path.localeCompare(right.path))
+  const animationSheets = [...sheets].sort((left, right) => animationSortScore(getLpcAnimationSlices(left)[0]?.name ?? inferLpcAnimation(left)) - animationSortScore(getLpcAnimationSlices(right)[0]?.name ?? inferLpcAnimation(right)) || left.path.localeCompare(right.path))
   const usedAnimations = new Set<string>()
   const animations: AnimationManifest[] = []
   for (const sheet of animationSheets) {
-    const animation = inferLpcAnimation(sheet)
-    if (usedAnimations.has(animation)) continue
-    usedAnimations.add(animation)
     const path = buildLpcSheetUrl(inventory, sheet.path) ?? sheet.path
-    const framesByDirection = Object.fromEntries(
-      lpcDirectionRows.map(([direction, row]) => [
-        direction,
-        buildLpcFrames(path, sheet.file_name, sheet.frame_columns ?? 1, row, sheet.frame_width || 64, sheet.frame_height || 64),
-      ]),
-    ) as Partial<Record<Direction, FrameRef[]>>
-    animations.push({
-      name: animation,
-      source_names: [sheet.file_name],
-      directions: framesByDirection,
-      preview_gifs: [],
-    })
+    for (const slice of getLpcAnimationSlices(sheet)) {
+      if (usedAnimations.has(slice.name)) continue
+      usedAnimations.add(slice.name)
+      const framesByDirection = Object.fromEntries(
+        lpcDirectionRows.map(([direction, row]) => [
+          direction,
+          buildLpcFrames(
+            path,
+            sheet.file_name,
+            Math.min(slice.frameCount, sheet.frame_columns ?? slice.frameCount),
+            slice.rowStart + Math.min(row, slice.rowCount - 1),
+            sheet.frame_width || 64,
+            sheet.frame_height || 64,
+          ),
+        ]),
+      ) as Partial<Record<Direction, FrameRef[]>>
+      animations.push({
+        name: slice.name,
+        source_names: [sheet.file_name],
+        directions: framesByDirection,
+        preview_gifs: [],
+      })
+    }
   }
   return animations
+}
+
+function getLpcAnimationSlices(sheet: LpcSheet): LpcAnimationSlice[] {
+  if (isClassicLpcSheet(sheet)) {
+    return classicLpcAnimationSlices
+  }
+  return [{
+    name: inferLpcAnimation(sheet),
+    rowStart: 0,
+    rowCount: sheet.frame_rows ?? 1,
+    frameCount: sheet.frame_columns ?? 1,
+  }]
+}
+
+function isClassicLpcSheet(sheet: LpcSheet) {
+  return (sheet.frame_columns ?? 0) >= 13 && (sheet.frame_rows ?? 0) >= 21
 }
 
 function getRepresentativeFrame(animations: AnimationManifest[], animationName: AnimationName) {
@@ -195,6 +247,10 @@ function animationSortScore(animation: AnimationName) {
 function inferLpcPartLabelForCharacter(sheet: LpcAssetInventory['sheets'][number]): PartLabel {
   const path = sheet.path.replaceAll('\\', '/').toLowerCase()
   const fileName = sheet.file_name.toLowerCase()
+  const normalized = [sheet.category, sheet.file_name, sheet.path, ...sheet.tags].join(' ').toLowerCase()
+  if (/\b(face|eyes|eye|ears|ear|nose|mouth|beard)\b/.test(normalized)) return 'face'
+  if (/\b(adult_heads?|child_heads?)\b/.test(normalized) || path.includes('/body/adult heads/') || path.includes('/body/child heads/')) return 'head'
+  if (/\b(backa|backb|quiver|backpack|wings)\b/.test(normalized) || fileName.startsWith('behind_')) return 'back_item'
   if (fileName.startsWith('weapon_')) return fileName.includes('shield') ? 'shield' : 'weapon'
   if (fileName.startsWith('belt_') || fileName.startsWith('body_')) return 'accessory'
   if (path.includes('/feet_') || fileName.startsWith('feet_')) return 'front_leg'
@@ -203,8 +259,8 @@ function inferLpcPartLabelForCharacter(sheet: LpcAssetInventory['sheets'][number
   if (path.includes('/head_') || fileName.startsWith('head_')) return 'hair_hat_hood'
   if (path.includes('/torso_') || fileName.startsWith('torso_')) return 'torso'
 
-  const normalized = [sheet.category, sheet.file_name, sheet.path, ...sheet.tags].join(' ').toLowerCase()
-  return lpcPartLabelHints.find(([, hints]) => hints.some((hint) => normalized.includes(hint)))?.[0] ?? 'accessory'
+  const tokens = getNormalizedTokens(normalized)
+  return lpcPartLabelHints.find(([, hints]) => hints.some((hint) => matchesLpcHint(normalized, tokens, hint)))?.[0] ?? 'accessory'
 }
 
 const lpcPartLabelHints: Array<[PartLabel, string[]]> = [
@@ -230,23 +286,30 @@ function inferLpcAnimation(sheet: LpcAssetInventory['sheets'][number]): Animatio
     .flatMap((segment) => segment.toLowerCase().split(/[^a-z0-9]+/))
     .filter(Boolean)
   const segmentSet = new Set(normalizedSegments)
-  if (segmentSet.has('walkcycle')) return 'walkcycle'
-  if (segmentSet.has('walk')) return 'walk'
+  if (segmentSet.has('walkcycle') || segmentSet.has('walk')) return 'walk'
   if (segmentSet.has('run')) return 'run'
   if (segmentSet.has('jump')) return 'jump'
   if (segmentSet.has('sitting') || segmentSet.has('sit')) return 'sitting'
   if (segmentSet.has('emotes') || segmentSet.has('emote')) return 'emotes'
-  if (segmentSet.has('magic')) return 'magic'
-  if (segmentSet.has('shoot')) return 'shoot'
-  if (segmentSet.has('swing')) return 'swing'
-  if (segmentSet.has('spellcast') || segmentSet.has('spell')) return 'spellcast'
+  if (segmentSet.has('magic') || segmentSet.has('spellcast') || segmentSet.has('spell')) return 'spellcast'
+  if (segmentSet.has('shoot') || segmentSet.has('bow')) return 'shoot'
+  if (segmentSet.has('swing') || segmentSet.has('slash')) return 'slash'
   if (segmentSet.has('thrust')) return 'thrust'
-  if (segmentSet.has('slash')) return 'slash'
-  if (segmentSet.has('bow')) return 'bow'
   if (segmentSet.has('attack')) return 'attack'
   if (segmentSet.has('hurt')) return 'hurt'
   if (segmentSet.has('idle')) return 'idle'
   return 'idle'
+}
+
+function getNormalizedTokens(value: string) {
+  return new Set(value.split(/[^a-z0-9]+/).filter(Boolean))
+}
+
+function matchesLpcHint(normalized: string, tokens: Set<string>, hint: string) {
+  if (hint.includes('_')) {
+    return normalized.includes(hint) || normalized.includes(hint.replaceAll('_', ' '))
+  }
+  return tokens.has(hint)
 }
 
 function buildLpcSheetUrl(inventory: LpcAssetInventory, sheetPath: string) {

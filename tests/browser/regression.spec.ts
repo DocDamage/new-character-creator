@@ -59,14 +59,14 @@ test('manual cleanup save persists after reload', async ({ page }) => {
 
   await page.getByTestId('nav-library').click()
   await page.getByTestId('part-library-method-filter').selectOption('manual')
-  await expect(page.getByText(manualPartId)).toBeVisible()
+  await expect(page.locator('.part-library-list').getByText(manualPartId)).toBeVisible()
   await expect(page.getByRole('button', { name: 'Mark unreviewed' }).first()).toBeVisible()
 
   await page.reload()
   await page.locator('#character').waitFor()
   await page.getByTestId('nav-library').click()
   await page.getByTestId('part-library-method-filter').selectOption('manual')
-  await expect(page.getByText(manualPartId)).toBeVisible()
+  await expect(page.locator('.part-library-list').getByText(manualPartId)).toBeVisible()
 })
 
 test('rendered export and package downloads stay structurally valid', async ({ page }) => {
@@ -184,6 +184,27 @@ test('creator cockpit filters parts and persists export target profile', async (
   await page.locator('#character').waitFor()
   await page.getByTestId('nav-exports').click()
   await expect(page.getByTestId('exports-target-profile')).toHaveValue('rpg_maker_mz')
+})
+
+test('LPC picker exposes canonical animations and compatible sheet parts', async ({ page }) => {
+  await page.getByTestId('source-pack-filter').selectOption('lpc')
+  const copperOption = page.locator('#character option', { hasText: 'LPC Androgynous Bases / Copper' })
+  await expect(copperOption).toHaveCount(1)
+  await page.locator('#character').selectOption(await copperOption.getAttribute('value') ?? undefined)
+
+  const animationValues = await page.getByLabel('Animation').locator('option').evaluateAll((options) =>
+    options.map((option) => (option as HTMLOptionElement).value),
+  )
+  expect(animationValues).toEqual(['idle', 'walk', 'spellcast', 'shoot', 'slash', 'thrust', 'hurt'])
+  expect(animationValues).not.toContain('magic')
+  expect(animationValues).not.toContain('swing')
+
+  for (const layer of ['torso', 'front_leg', 'back_leg', 'front_arm', 'back_arm', 'head', 'face', 'hair_hat_hood', 'weapon', 'shield', 'cloak_back', 'back_item', 'accessory', 'aura_effect', 'neck']) {
+    await page.getByTestId('preview-live-layer').selectOption(layer)
+    await expect(page.getByTestId('preview-live-part')).toBeEnabled()
+    const optionCount = await page.getByTestId('preview-live-part').locator('option').count()
+    expect(optionCount, `${layer} should expose at least one source option plus the fallback option`).toBeGreaterThan(1)
+  }
 })
 
 test('workstation APES mode does not create fake rectangular APES parts', async ({ page }) => {
@@ -441,7 +462,7 @@ test('harvest workflows are exposed and produce usable app artifacts', async ({ 
   }, null, 2), 'utf8')
   await page.getByTestId('import-layer-bundle-input').setInputFiles(bundlePath)
   await expect(page.getByText(/Imported 1 part.*sample-layer-bundle/i)).toBeVisible()
-  await expect(page.getByText('playwright_bundle_head')).toBeVisible()
+  await expect(page.locator('.part-library-list').getByText('playwright_bundle_head')).toBeVisible()
 
   await page.getByTestId('nav-batch').click()
   await page.getByTestId('save-variation-preset').click()
@@ -584,10 +605,10 @@ test('large Part Library imports are paged instead of fully rendered', async ({ 
   expect(visibleExport.parts).toHaveLength(100)
 
   await page.getByTestId('mark-visible-reviewed').click()
-  await page.getByLabel('Review').selectOption('needs_review')
+  await page.getByTestId('part-library-review-filter').selectOption('needs_review')
   await expect(page.getByText(/Showing 25 of 25 filtered part/i)).toBeVisible()
 
-  await page.getByLabel('Review').selectOption('all')
+  await page.getByTestId('part-library-review-filter').selectOption('all')
   await page.getByTestId('show-more-parts').click()
   await expect(page.getByText(/Showing 125 of 125 filtered part/i)).toBeVisible()
 })
