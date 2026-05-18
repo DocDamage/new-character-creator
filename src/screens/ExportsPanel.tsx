@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { CompositeCanvas } from '../CompositeCanvas'
 import { DirectionPreviewGrid } from '../DirectionPreviewGrid'
 import type { BatchVariant } from '../appViewTypes'
@@ -11,6 +12,7 @@ import { defaultFilenameTemplate, renderExportFilenameTemplate } from '../filena
 import { buildLpcSelectionCreditReadiness } from '../lpcCatalogPicker'
 import type { AnimationName, CharacterManifest, Direction, ExtractedPart, KitbashRecipe } from '../types'
 import type { LpcCatalog } from '../lpcCatalog'
+import { ContextMenuArea, ContextMenuButton, DetailsDrawer, type DetailsRecord } from '../uiDisclosure'
 import { downloadJson, getFrames, slugLabel } from '../utils'
 
 type ExportsPanelProps = {
@@ -78,6 +80,7 @@ export function ExportsPanel({
   setExportTargetProfile,
   recipeReadiness,
 }: ExportsPanelProps) {
+  const [detailsRecord, setDetailsRecord] = useState<DetailsRecord | null>(null)
   const directionCoverage = animationSourceCharacter.animation_names.flatMap((name) =>
     mainDirections.map((item) => getFrames(animationSourceCharacter, name, item).length > 0),
   )
@@ -119,6 +122,31 @@ export function ExportsPanel({
     return [targetButtonClass(testId, baseClass), releaseExportBlocked ? 'blocked-export' : '']
       .filter(Boolean)
       .join(' ')
+  }
+
+  function showCreditDetails(item: NonNullable<typeof lpcCreditReadiness>['items'][number]) {
+    setDetailsRecord({
+      title: item.item_name,
+      subtitle: `${item.item_id} / ${item.variant}`,
+      fields: [
+        { label: 'Status', value: item.status },
+        { label: 'Type', value: item.type_name },
+        { label: 'Authors', value: item.authors.join(', ') || 'missing' },
+        { label: 'Licenses', value: item.licenses.join(', ') || 'missing' },
+        { label: 'URLs', value: item.urls.join('\n') || 'missing' },
+      ],
+    })
+  }
+
+  function copyAttribution(item: NonNullable<typeof lpcCreditReadiness>['items'][number]) {
+    const attribution = [
+      item.item_name,
+      item.variant,
+      item.authors.length > 0 ? `by ${item.authors.join(', ')}` : 'author missing',
+      item.licenses.length > 0 ? `license ${item.licenses.join(', ')}` : 'license missing',
+      item.urls.join(' '),
+    ].filter(Boolean).join(' - ')
+    void navigator.clipboard?.writeText(attribution)
   }
 
   return (
@@ -179,7 +207,35 @@ export function ExportsPanel({
             </span>
             {releaseExportBlocked ? <span id="release-export-blocker">{releaseBlockSummary} Download the credits report for the unresolved item list.</span> : null}
             {lpcCreditReadiness.items.length > 0 ? (
-              <code>{lpcCreditReadiness.items.map((item) => `${item.item_name} / ${item.variant}: ${item.status}`).join('\n')}</code>
+              <div className="credit-readiness-list">
+                {lpcCreditReadiness.items.map((item) => {
+                  const actions = [
+                    {
+                      id: 'view-credits',
+                      label: 'View credits',
+                      onSelect: () => showCreditDetails(item),
+                    },
+                    {
+                      id: 'copy-attribution',
+                      label: 'Copy attribution',
+                      disabled: item.authors.length === 0 || item.licenses.length === 0,
+                      disabledReason: 'Attribution needs authors and licenses first.',
+                      onSelect: () => copyAttribution(item),
+                    },
+                  ]
+                  return (
+                    <ContextMenuArea key={`${item.item_id}-${item.variant}`} label={`Actions for ${item.item_name} credits`} actions={actions}>
+                      <article className={`credit-readiness-item ${item.status}`}>
+                        <div>
+                          <strong>{item.item_name}</strong>
+                          <span>{item.variant}: {item.status}</span>
+                        </div>
+                        <ContextMenuButton label={`More actions for ${item.item_name} credits`} actions={actions} />
+                      </article>
+                    </ContextMenuArea>
+                  )
+                })}
+              </div>
             ) : (
               <span>No catalog-backed LPC selections are enabled for this recipe.</span>
             )}
@@ -234,6 +290,7 @@ export function ExportsPanel({
         ))}
       </div>
       <pre className="recipe-preview">{JSON.stringify(recipe, null, 2)}</pre>
+      <DetailsDrawer record={detailsRecord} onClose={() => setDetailsRecord(null)} />
     </section>
   )
 }

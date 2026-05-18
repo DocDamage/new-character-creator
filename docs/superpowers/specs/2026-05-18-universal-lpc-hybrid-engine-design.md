@@ -635,7 +635,8 @@ Status as of the local `main` branch after the 2026-05-18 follow-up slices:
   expose selected-item credit readiness, and visibly mark oversize/custom
   animation items as degraded in the standard 64x64 export profile. Asset Audit
   has source-family tabs, a Details drawer, and shared context-menu behavior for
-  LPC source cards.
+  LPC source cards. Exports now also uses the shared context menu and Details
+  drawer for selected LPC credit records.
 - Phase 5 recipe and credits migration is partially implemented. Saved recipes
   store `recipe_mode`, `source_family`, and `lpc_selections`; exported credit
   reports include `selected_lpc_catalog_items`; Exports shows selected upstream
@@ -657,7 +658,7 @@ Most recent focused verification:
 Remaining high-value slices:
 
 - Apply shared context menus and Details drawer to preview frames, part rows,
-  recipe layers, export records, and credits.
+  recipe layers, and broader export records.
 - Replace `title` attributes with a real tooltip primitive for badges, disabled
   actions, and icon-only controls.
 - Add PixelLab/future AI provider configuration and persistent generation job

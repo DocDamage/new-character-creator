@@ -370,6 +370,10 @@ privateLpcBrowserTest('LPC catalog picker persists metadata-backed selections in
   await page.getByTestId('nav-exports').click()
   await expect(page.getByTestId('export-lpc-credit-readiness')).toContainText(/1 selected upstream item/i)
   await expect(page.getByTestId('export-lpc-credit-readiness')).toContainText(/0 missing credits/i)
+  await page.getByLabel('More actions for Solid credits').click()
+  await page.getByRole('menuitem', { name: 'View credits' }).click()
+  await expect(page.getByRole('dialog', { name: 'Details' })).toContainText('cape:cape_solid')
+  await page.getByRole('button', { name: 'Close details' }).click()
   const renderedFrameSet = await readJsonDownload<RenderedFrameSetDownload>(page, async () => {
     await page.getByTestId('export-rendered-frame-set').click()
   })

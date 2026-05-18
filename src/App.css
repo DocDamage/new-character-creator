@@ -1527,6 +1527,43 @@ input {
   font-size: 12px;
 }
 
+.credit-readiness-list {
+  display: grid;
+  gap: 8px;
+}
+
+.credit-readiness-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  min-width: 0;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: rgba(12, 17, 24, 0.45);
+}
+
+.credit-readiness-item > div {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.credit-readiness-item strong,
+.credit-readiness-item span {
+  overflow-wrap: anywhere;
+}
+
+.credit-readiness-item.ok {
+  border-color: rgba(108, 214, 143, 0.38);
+}
+
+.credit-readiness-item.needs_review,
+.credit-readiness-item.missing {
+  border-color: rgba(255, 181, 71, 0.48);
+}
+
 button.recommended-export {
   border-color: rgba(108, 214, 143, 0.72);
   box-shadow: inset 0 0 0 1px rgba(108, 214, 143, 0.18);
