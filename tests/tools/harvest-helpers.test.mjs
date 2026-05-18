@@ -1,5 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
+import { existsSync } from 'node:fs'
 import { readFile } from 'node:fs/promises'
 import path from 'node:path'
 import { PNG } from 'pngjs'
@@ -17,6 +18,11 @@ import {
   filterReviewedPartsForLayer,
   getExportTargetProfile,
 } from '../../src/creatorCockpit.ts'
+
+const realLpcInventoryUrl = new URL('../../data/lpc/lpc_asset_inventory.json', import.meta.url)
+const realLpcInventorySkip = existsSync(realLpcInventoryUrl)
+  ? false
+  : 'real LPC inventory is an ignored local asset; run npm run lpc:inventory to enable this test locally'
 
 test('source alpha analysis reports opaque bounds, floor, and pivot', () => {
   const pixels = new Uint8ClampedArray(4 * 4 * 4)
@@ -595,8 +601,8 @@ test('LPC inventory sheets can be exposed as cropped source characters', () => {
   assert.equal(characters[0].representative_frame, '/assets/lpc sprite generator stuff/Adult Female/Base, Adult Female.png')
 })
 
-test('real LPC inventory exposes all available base animation families', async () => {
-  const inventory = JSON.parse(await readFile(new URL('../../data/lpc/lpc_asset_inventory.json', import.meta.url), 'utf8'))
+test('real LPC inventory exposes all available base animation families', { skip: realLpcInventorySkip }, async () => {
+  const inventory = JSON.parse(await readFile(realLpcInventoryUrl, 'utf8'))
   const characters = buildLpcCharacterManifests(inventory)
 
   const humanBody = characters.find((character) => character.labels.lpc_path === 'LPC Entry Bodies/Human Male')
@@ -652,8 +658,8 @@ test('real LPC inventory exposes all available base animation families', async (
   assert.equal(chairFragments.length, 0)
 })
 
-test('every revised LPC body base file maps to its matching animation label', async () => {
-  const inventory = JSON.parse(await readFile(new URL('../../data/lpc/lpc_asset_inventory.json', import.meta.url), 'utf8'))
+test('every revised LPC body base file maps to its matching animation label', { skip: realLpcInventorySkip }, async () => {
+  const inventory = JSON.parse(await readFile(realLpcInventoryUrl, 'utf8'))
   const characters = buildLpcCharacterManifests(inventory).filter((character) => character.labels.lpc_role === 'base')
   const baseCharactersByPath = new Map(characters.map((character) => [character.labels.lpc_path, character]))
   const revisedBodySheets = inventory.sheets.filter(isRevisedBodyBaseSheet)
@@ -703,8 +709,8 @@ test('every revised LPC body base file maps to its matching animation label', as
   assert.deepEqual(issues, [])
 })
 
-test('all generated LPC base frames are valid cropped animation cells', async () => {
-  const inventory = JSON.parse(await readFile(new URL('../../data/lpc/lpc_asset_inventory.json', import.meta.url), 'utf8'))
+test('all generated LPC base frames are valid cropped animation cells', { skip: realLpcInventorySkip }, async () => {
+  const inventory = JSON.parse(await readFile(realLpcInventoryUrl, 'utf8'))
   const baseCharacters = buildLpcCharacterManifests(inventory).filter((character) => character.labels.lpc_role === 'base')
   const pngCache = new Map()
   const allowedAnimations = new Set(['idle', 'walk', 'run', 'jump', 'sitting', 'emotes', 'spellcast', 'shoot', 'slash', 'thrust', 'hurt', 'attack'])
