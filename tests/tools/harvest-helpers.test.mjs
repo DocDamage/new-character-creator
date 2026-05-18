@@ -10,6 +10,7 @@ import { layerBundleToExtractedParts, lpcSheetsToExtractedParts, parseLayerBundl
 import { buildLpcCharacterManifests } from '../../src/lpcCharacters.ts'
 import { resolveCompatiblePartSelection } from '../../src/lpcPartCompatibility.ts'
 import { analyzeAlphaData } from '../../src/sourceAnalysis.ts'
+import { getRecipeAnimationCoverage } from '../../src/animationSource.ts'
 import {
   buildRecipeReadiness,
   exportTargetProfiles,
@@ -569,6 +570,7 @@ test('LPC inventory sheets can be exposed as cropped source characters', () => {
   assert.equal(shirtPart?.labels.lpc_role, 'part')
   assert.equal(shirtPart?.labels.lpc_part_label, 'torso')
   assert.deepEqual(runPart?.animation_names, ['run'])
+  assert.equal(pantsPart?.labels.lpc_part_label, 'legs')
   assert.deepEqual(pantsPart?.animation_names, ['idle', 'run'])
   assert.deepEqual(bowPart?.animation_names, ['shoot'])
   assert.equal(longEarsPart?.labels.lpc_part_label, 'face')
@@ -603,6 +605,8 @@ test('real LPC inventory exposes all available base animation families', async (
   const cometAndrogynous = characters.find((character) => character.labels.lpc_path === 'Androgynous Bases/Comet')
   const copperStandWalk = characters.find((character) => character.labels.lpc_path === 'Stand & Walk Bases/Copper')
   const cometStandWalk = characters.find((character) => character.labels.lpc_path === 'Stand & Walk Bases/Comet')
+  const feminineAmber = characters.find((character) => character.labels.lpc_path === '[LPC Revised] Character Basics/Body/Feminine, Thin/Amber')
+  const masculineAmber = characters.find((character) => character.labels.lpc_path === '[LPC Revised] Character Basics/Body/Masculine, Thin/Amber')
   const chairFragments = characters.filter((character) => String(character.labels.lpc_path).includes('Sitting - Chair'))
   const lpcPartGroups = characters.filter((character) => character.labels.lpc_role === 'part')
   const slashPartLabels = new Set(
@@ -633,11 +637,70 @@ test('real LPC inventory exposes all available base animation families', async (
   assert.deepEqual(copperStandWalk?.animation_names, ['idle', 'walk'])
   assert.equal(cometStandWalk?.directions.south.idle.frame_count, 1)
   assert.equal(cometStandWalk?.directions.south.walk.frame_count, 8)
+  assert.deepEqual(feminineAmber?.animation_names, ['idle', 'walk', 'run', 'jump', 'sitting', 'emotes'])
+  assert.deepEqual(masculineAmber?.animation_names, ['idle', 'walk', 'run', 'jump', 'sitting', 'emotes'])
+  assert.equal(feminineAmber?.directions.south.idle.frame_count, 3)
+  assert.equal(feminineAmber?.directions.south.walk.frame_count, 8)
+  assert.equal(feminineAmber?.directions.south.run.frame_count, 8)
+  assert.equal(feminineAmber?.directions.south.jump.frame_count, 6)
+  assert.equal(feminineAmber?.directions.south.sitting.frame_count, 3)
+  assert.equal(feminineAmber?.directions.south.emotes.frame_count, 3)
   assert.equal(slashPartLabels.has('torso'), true)
-  assert.equal(slashPartLabels.has('front_leg'), true)
+  assert.equal(slashPartLabels.has('legs'), true)
   assert.equal(slashPartLabels.has('accessory'), true)
   assert.equal(slashPartLabels.has('weapon'), true)
   assert.equal(chairFragments.length, 0)
+})
+
+test('every revised LPC body base file maps to its matching animation label', async () => {
+  const inventory = JSON.parse(await readFile(new URL('../../data/lpc/lpc_asset_inventory.json', import.meta.url), 'utf8'))
+  const characters = buildLpcCharacterManifests(inventory).filter((character) => character.labels.lpc_role === 'base')
+  const baseCharactersByPath = new Map(characters.map((character) => [character.labels.lpc_path, character]))
+  const revisedBodySheets = inventory.sheets.filter(isRevisedBodyBaseSheet)
+  const revisedBodyGroups = new Map()
+  const issues = []
+
+  for (const sheet of revisedBodySheets) {
+    const groupPath = sheet.path.replaceAll('\\', '/').replace(/\/[^/]+\.png$/i, '')
+    const expectedAnimation = expectedAnimationFromLpcPath(sheet.path)
+    const character = baseCharactersByPath.get(groupPath)
+    const animation = character?.animations.find((item) => item.name === expectedAnimation)
+    const expectedFrameCount = sheet.frame_columns
+    revisedBodyGroups.set(groupPath, (revisedBodyGroups.get(groupPath) ?? 0) + 1)
+
+    if (!character) {
+      issues.push(`${sheet.path} did not produce an LPC base character`)
+      continue
+    }
+    if (!animation) {
+      issues.push(`${sheet.path} did not produce ${expectedAnimation}`)
+      continue
+    }
+    if (!animation.source_names.includes(sheet.path)) {
+      issues.push(`${sheet.path} was not recorded as the source for ${expectedAnimation}`)
+    }
+
+    for (const [direction, expectedRow] of [['north', 0], ['east', 1], ['south', 2], ['west', 3]]) {
+      const frames = animation.directions[direction] ?? []
+      if (frames.length !== expectedFrameCount) {
+        issues.push(`${sheet.path} ${expectedAnimation}/${direction} has ${frames.length} frame(s), expected ${expectedFrameCount}`)
+      }
+      for (const frame of frames) {
+        const rect = frame.source_rect
+        if (!rect) {
+          issues.push(`${sheet.path} ${expectedAnimation}/${direction}/${frame.index} is missing a source rect`)
+          continue
+        }
+        if (rect.x !== frame.index * sheet.frame_width || rect.y !== expectedRow * sheet.frame_height || rect.w !== sheet.frame_width || rect.h !== sheet.frame_height) {
+          issues.push(`${sheet.path} ${expectedAnimation}/${direction}/${frame.index} uses ${JSON.stringify(rect)}, expected row ${expectedRow}`)
+        }
+      }
+    }
+  }
+
+  assert.equal(revisedBodySheets.length, 552)
+  assert.equal(revisedBodyGroups.size, 92)
+  assert.deepEqual(issues, [])
 })
 
 test('all generated LPC base frames are valid cropped animation cells', async () => {
@@ -651,6 +714,12 @@ test('all generated LPC base frames are valid cropped animation cells', async ()
     for (const animation of character.animation_names) {
       if (!allowedAnimations.has(animation)) {
         issues.push(`${character.labels.lpc_path} has non-canonical animation label ${animation}`)
+      }
+      for (const sourcePath of character.animations.find((item) => item.name === animation)?.source_names ?? []) {
+        const expectedAnimation = expectedAnimationFromLpcPath(sourcePath)
+        if (expectedAnimation && expectedAnimation !== animation) {
+          issues.push(`${character.labels.lpc_path} maps ${sourcePath} to ${animation}, expected ${expectedAnimation}`)
+        }
       }
 
       for (const direction of ['north', 'east', 'south', 'west']) {
@@ -748,8 +817,55 @@ test('creator cockpit export target lookup falls back to generic profile', () =>
   assert.equal(getExportTargetProfile('not-real').id, 'generic')
 })
 
+test('recipes can borrow animation coverage from a motion source character', () => {
+  const baseCharacter = makeCharacterManifest()
+  const motionSource = {
+    ...makeCharacterManifest(),
+    character_id: 'attack_driver',
+    display_name: 'Attack Driver',
+    animation_names: ['idle', 'slash'],
+  }
+
+  assert.deepEqual(getRecipeAnimationCoverage(baseCharacter, motionSource), ['idle', 'slash'])
+  assert.deepEqual(getRecipeAnimationCoverage(baseCharacter, undefined), ['idle'])
+})
+
 function setAlpha(pixels, width, x, y, alpha) {
   pixels[(y * width + x) * 4 + 3] = alpha
+}
+
+function isRevisedBodyBaseSheet(sheet) {
+  const normalizedPath = sheet.path.replaceAll('\\', '/').toLowerCase()
+  return sheet.lpc_grid &&
+    normalizedPath.startsWith('[lpc revised] character basics/body/') &&
+    !normalizedPath.includes('/adult heads/') &&
+    !normalizedPath.includes('/child heads/') &&
+    sheet.tags.includes('body') &&
+    Boolean(expectedAnimationFromLpcPath(sheet.path))
+}
+
+function expectedAnimationFromLpcPath(sourcePath) {
+  const segments = String(sourcePath)
+    .replace(/\.png$/i, '')
+    .replaceAll('\\', '/')
+    .split('/')
+    .filter(Boolean)
+  for (const segment of segments.slice().reverse()) {
+    const normalized = segment.toLowerCase().replace(/[^a-z0-9]+/g, '')
+    if (normalized === 'walkcycle' || normalized === 'walk') return 'walk'
+    if (normalized === 'run') return 'run'
+    if (normalized === 'jump') return 'jump'
+    if (normalized === 'sitting' || normalized === 'sit') return 'sitting'
+    if (normalized === 'emotes' || normalized === 'emote') return 'emotes'
+    if (normalized === 'magic' || normalized === 'spellcast' || normalized === 'spell') return 'spellcast'
+    if (normalized === 'shoot' || normalized === 'bow') return 'shoot'
+    if (normalized === 'swing' || normalized === 'slash') return 'slash'
+    if (normalized === 'thrust') return 'thrust'
+    if (normalized === 'attack') return 'attack'
+    if (normalized === 'hurt') return 'hurt'
+    if (normalized === 'idle') return 'idle'
+  }
+  return undefined
 }
 
 async function readCachedPng(cache, browserPath) {

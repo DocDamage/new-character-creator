@@ -220,23 +220,53 @@ test('LPC picker exposes canonical animations and compatible sheet parts', async
   await expect(page.locator('#character option', { hasText: 'Sitting - Chair' })).toHaveCount(0)
 
   await page.locator('#character').selectOption(await humanBodyOption.getAttribute('value') ?? undefined)
+  await page.getByRole('button', { name: 'Pause' }).click()
   await page.getByLabel('Animation').selectOption('slash')
-  for (const layer of ['torso', 'front_leg', 'back_leg', 'front_arm', 'back_arm', 'head', 'face', 'hair_hat_hood', 'weapon', 'shield', 'cloak_back', 'back_item', 'accessory', 'aura_effect', 'neck']) {
+  for (const layer of ['torso', 'front_leg', 'front_arm', 'back_arm', 'head', 'face', 'hair_hat_hood', 'weapon', 'shield', 'cloak_back', 'back_item', 'accessory', 'aura_effect', 'neck']) {
     await page.getByTestId('preview-live-layer').selectOption(layer)
     await expect(page.getByTestId('preview-live-part')).toBeEnabled()
     const optionCount = await page.getByTestId('preview-live-part').locator('option').count()
     expect(optionCount, `${layer} should expose at least one slash-compatible source option plus the fallback option`).toBeGreaterThan(1)
   }
+  await page.getByTestId('preview-live-layer').selectOption('cloak_back')
+  const maroonCapeOption = page.getByTestId('preview-live-part').locator('option', { hasText: 'LPC Legion armor / cape / Male_cape_maroon' })
+  await expect(maroonCapeOption).toHaveCount(1)
+  await page.getByTestId('preview-live-part').selectOption(await maroonCapeOption.getAttribute('value') ?? undefined)
+  await expect.poll(() => readCompositePixel(page, 32, 32)).toEqual([253, 213, 183, 255])
+  await expect.poll(() => readCompositePixel(page, 21, 53)).toEqual([222, 82, 64, 255])
+
+  await page.getByTestId('preview-live-layer').selectOption('back_leg')
+  await expect(page.getByTestId('preview-live-part').locator('option', { hasText: 'LPC Androgynous Pants / Black' })).toHaveCount(0)
+
+  await page.getByTestId('preview-live-layer').selectOption('front_leg')
+  const blackPantsOption = page.getByTestId('preview-live-part').locator('option', { hasText: 'LPC Androgynous Pants / Black' })
+  await expect(blackPantsOption).toHaveCount(1)
   await page.getByTestId('preview-live-layer').selectOption('weapon')
   await expect(page.getByTestId('preview-live-part')).toContainText(/slash/i)
 
   await page.getByTestId('preview-live-layer').selectOption('torso')
-  await page.getByTestId('preview-live-part').selectOption('source:lpc-androgynous-long-sleeve-shirt-black-251')
+  const blackLongSleeveOption = page.getByTestId('preview-live-part').locator('option', { hasText: 'LPC Androgynous Long-Sleeve Shirt / Black' })
+  await expect(blackLongSleeveOption).toHaveCount(1)
+  await page.getByTestId('preview-live-part').selectOption(await blackLongSleeveOption.getAttribute('value') ?? undefined)
   await expect.poll(() => readCompositePixel(page, 32, 42)).toEqual([59, 60, 64, 255])
   await expect.poll(() => readCompositePixel(page, 32, 32)).toEqual([24, 32, 42, 255])
+  await page.getByLabel('Animation').selectOption('walk')
+  await page.getByLabel('Direction', { exact: true }).selectOption('north')
+  await setFrameSlider(page, 7)
+  await expect(page.getByText('walk north frame 8', { exact: true })).toBeVisible()
+  await expect.poll(() => readCompositePixel(page, 32, 42)).toEqual([181, 66, 51, 255])
+  await expect.poll(() => readCompositePixel(page, 24, 36)).toEqual([122, 45, 33, 255])
+  await page.getByLabel('Animation').selectOption('slash')
+  await page.getByLabel('Direction', { exact: true }).selectOption('south')
+  await setFrameSlider(page, 0)
 
   await page.locator('#character').selectOption(await copperOption.getAttribute('value') ?? undefined)
   await page.getByLabel('Animation').selectOption('idle')
+  await page.getByTestId('preview-live-layer').selectOption('cloak_back')
+  const idleMaroonCapeOption = page.getByTestId('preview-live-part').locator('option', { hasText: 'LPC Legion armor / cape / Male_cape_maroon' })
+  await expect(idleMaroonCapeOption).toHaveCount(1)
+  await page.getByTestId('preview-live-part').selectOption(await idleMaroonCapeOption.getAttribute('value') ?? undefined)
+  await expect(page.getByTestId('preview-live-part')).not.toHaveValue('')
   await page.getByTestId('preview-live-layer').selectOption('weapon')
   await expect(page.getByTestId('preview-live-part').locator('optgroup[label="LPC sheet parts"]')).toHaveCount(0)
 
@@ -249,6 +279,31 @@ test('LPC picker exposes canonical animations and compatible sheet parts', async
   await page.getByTestId('nav-fast').click()
   await page.getByTestId('fast-live-layer').selectOption('torso')
   await expect(page.getByTestId('fast-live-part').locator('optgroup[label="LPC sheet parts"]')).toHaveCount(0)
+})
+
+test('LPC motion source can borrow attack actions for bases that do not include them', async ({ page }) => {
+  await page.getByTestId('source-pack-filter').selectOption('lpc')
+  const revisedBodyOption = page.locator('#character option', { hasText: 'LPC [LPC Revised] Character Basics / Body / Feminine, Thin' })
+  const humanBodyOption = page.locator('#character option', { hasText: 'LPC Entry Bodies / Human Male' })
+  await expect(revisedBodyOption).toHaveCount(1)
+  await expect(humanBodyOption).toHaveCount(1)
+
+  await page.locator('#character').selectOption(await revisedBodyOption.getAttribute('value') ?? undefined)
+  const baseAnimationValues = await page.getByLabel('Animation').locator('option').evaluateAll((options) =>
+    options.map((option) => (option as HTMLOptionElement).value),
+  )
+  expect(baseAnimationValues).not.toContain('slash')
+
+  await page.getByTestId('animation-source').selectOption(await humanBodyOption.getAttribute('value') ?? undefined)
+  const borrowedAnimationValues = await page.getByLabel('Animation').locator('option').evaluateAll((options) =>
+    options.map((option) => (option as HTMLOptionElement).value),
+  )
+  expect(borrowedAnimationValues).toContain('slash')
+
+  await page.getByLabel('Animation').selectOption('slash')
+  await page.getByTestId('preview-live-layer').selectOption('torso')
+  await expect(page.getByTestId('preview-live-part').locator('optgroup[label="LPC sheet parts"]')).toHaveCount(1)
+  await expect(page.getByText(/Motion source drives pose and frame count/i)).toBeVisible()
 })
 
 test('workstation APES mode does not create fake rectangular APES parts', async ({ page }) => {
@@ -707,6 +762,16 @@ async function readCompositePixel(page: Parameters<typeof test>[0]['page'], x: n
     },
     { x, y },
   )
+}
+
+async function setFrameSlider(page: Parameters<typeof test>[0]['page'], frameIndex: number) {
+  const slider = page.getByLabel('Frame index')
+  await slider.focus()
+  await slider.press('Home')
+  for (let index = 0; index < frameIndex; index += 1) {
+    await slider.press('ArrowRight')
+  }
+  await expect(slider).toHaveValue(String(frameIndex))
 }
 
 async function writeLocalApesAssetReport() {

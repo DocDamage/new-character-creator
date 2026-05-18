@@ -313,11 +313,23 @@ input {
 
 .transport {
   display: grid;
-  grid-template-columns: 74px 1fr 1fr;
+  grid-template-columns: 74px minmax(0, 1fr) minmax(0, 1fr) minmax(150px, 1.4fr);
+  gap: 8px;
+  align-items: end;
 }
 
 .transport input {
   grid-column: 1 / -1;
+}
+
+.motion-source-field {
+  margin: 0;
+}
+
+.motion-source-note {
+  grid-column: 1 / -1;
+  color: var(--text-muted);
+  font-size: 12px;
 }
 
 .wide-panel {

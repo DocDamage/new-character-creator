@@ -1,6 +1,7 @@
 import type { AnimationName, ApesJob, CharacterManifest, ComposerLayerSettings, Direction, ExtractedPart, KitbashRecipe, PaletteRules, PartLabel, Rect } from './types'
 import { layerOrder, palettePresets } from './presets'
 import { resolveCompatiblePartSelection } from './lpcPartCompatibility'
+import { getRecipeAnimationCoverage } from './animationSource'
 
 export function getFrameRef(
   character: CharacterManifest | undefined,
@@ -274,11 +275,16 @@ export function makeRecipe(
   recipeId = `generated_${character.character_id}`,
   paletteName = palettePresets[0],
   paletteRules: Omit<PaletteRules, 'team_color'> = { hue_shift: 0, saturation: 100, brightness: 100 },
+  animationSourceCharacter?: CharacterManifest,
 ): KitbashRecipe {
+  const animationCoverage = getRecipeAnimationCoverage(character, animationSourceCharacter)
   return {
     character_id: recipeId,
     base_canvas: [64, 64],
     base_character: character.character_id,
+    animation_source_character: animationSourceCharacter && animationSourceCharacter.character_id !== character.character_id
+      ? animationSourceCharacter.character_id
+      : undefined,
     layers: layerOrder.map((label) => {
       const selectedPart = partLibrary.find((part) => part.part_id === selectedPartIds[label])
       const { compatibleSelectedPart, compatibleSelectedSource } = resolveCompatiblePartSelection(character, selectedPart, selectedParts[label])
@@ -301,7 +307,7 @@ export function makeRecipe(
       brightness: paletteRules.brightness,
       team_color: paletteName,
     },
-    animation_coverage: character.animation_names,
+    animation_coverage: animationCoverage,
     export_targets: ['generic_json', 'godot_4', 'sprite_sheets', 'gif_previews'],
   }
 }

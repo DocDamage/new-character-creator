@@ -1,5 +1,7 @@
 import JSZip from 'jszip'
+import { getRecipeAnimationSourceCharacter } from './animationSource'
 import { getCharacterLabelValue, isLpcMannequin } from './lpcPartCompatibility'
+import { getLpcPartFrameRef } from './lpcPartFrames'
 import { buildLpcReplacementRegions } from './lpcReplacement'
 import { humanoid64Preset } from './presets'
 import type { AnimationName, ApesJob, CharacterManifest, Direction, ExtractedPart, KitbashRecipe, Rect } from './types'
@@ -83,10 +85,11 @@ export async function renderRecipeFrameToDataUrl({
   context.clearRect(0, 0, canvas.width, canvas.height)
 
   const baseCharacter = characters.find((character) => character.character_id === recipe.base_character)
+  const animationSourceCharacter = getRecipeAnimationSourceCharacter(recipe, characters) ?? baseCharacter
   if (baseCharacter && isLpcMannequin(baseCharacter)) {
     await drawCharacterFrame(
       context,
-      baseCharacter,
+      animationSourceCharacter ?? baseCharacter,
       animation,
       direction,
       frameIndex,
@@ -95,24 +98,47 @@ export async function renderRecipeFrameToDataUrl({
     )
   }
 
+  const deferredCloakDraws: Array<() => void> = []
+  const flushDeferredCloaks = () => {
+    while (deferredCloakDraws.length > 0) {
+      deferredCloakDraws.shift()?.()
+    }
+  }
+
   for (const layer of recipe.layers) {
-    if (!layer.visible) continue
+    if (!layer.visible) {
+      if (shouldFlushDeferredCloaksAfter(layer.label)) flushDeferredCloaks()
+      continue
+    }
     const sourceCharacter = characters.find((character) => character.character_id === layer.source_character) ?? characters[0]
     if (!sourceCharacter) continue
 
     const sourcePart = partLibrary.find((part) => part.part_id === layer.source_part_id)
-    if (!sourcePart && isLpcBaseFallbackLayer(sourceCharacter, baseCharacter, recipe.base_character)) continue
+    if (!sourcePart && isLpcBaseFallbackLayer(sourceCharacter, baseCharacter, recipe.base_character)) {
+      if (shouldFlushDeferredCloaksAfter(layer.label)) flushDeferredCloaks()
+      continue
+    }
     const isLpcPartSource = !sourcePart && sourceCharacter.labels?.lpc_role === 'part'
     const bounds = isLpcPartSource ? fullFrameBounds : sourcePart?.bounds ?? humanoid64Preset[layer.label]
     const matchingFrame = getFrameRef(sourceCharacter, animation, direction, frameIndex)
+    const sourceFrame = isLpcPartSource
+      ? getLpcPartFrameRef(sourceCharacter, animation, direction, frameIndex, layer.label)
+      : matchingFrame
     const fallbackFramePath = isLpcPartSource ? undefined : getFramePath(sourceCharacter, animation, direction, frameIndex)
-    const source = sourcePart?.image_data_url ?? sourcePart?.source_frame_path ?? matchingFrame?.path ?? fallbackFramePath
+    const source = sourcePart?.image_data_url ?? sourcePart?.source_frame_path ?? sourceFrame?.path ?? fallbackFramePath
     if (!source) continue
 
     const image = await loadImage(source)
     const maskImage = sourcePart?.mask_data_url ? await loadImage(sourcePart.mask_data_url) : undefined
-    drawLayer(context, image, maskImage, bounds, layer.offset, recipe, Boolean(sourcePart?.image_data_url), sourcePart ? undefined : matchingFrame?.source_rect)
+    const drawCurrentLayer = () => drawLayer(context, image, maskImage, bounds, layer.offset, recipe, Boolean(sourcePart?.image_data_url), sourcePart ? undefined : sourceFrame?.source_rect)
+    if (shouldDeferLpcCloakLayer(layer.label, sourceCharacter, Boolean(sourcePart))) {
+      deferredCloakDraws.push(drawCurrentLayer)
+    } else {
+      drawCurrentLayer()
+    }
+    if (shouldFlushDeferredCloaksAfter(layer.label)) flushDeferredCloaks()
   }
+  flushDeferredCloaks()
 
   return canvas.toDataURL('image/png')
 }
@@ -154,6 +180,16 @@ function isLpcBaseFallbackLayer(sourceCharacter: CharacterManifest, baseCharacte
   )
 }
 
+function shouldDeferLpcCloakLayer(layerLabel: string, sourceCharacter: CharacterManifest, hasSourcePart: boolean) {
+  return !hasSourcePart &&
+    getCharacterLabelValue(sourceCharacter, 'lpc_role') === 'part' &&
+    (layerLabel === 'cloak_back' || getCharacterLabelValue(sourceCharacter, 'lpc_part_label') === 'cloak_back')
+}
+
+function shouldFlushDeferredCloaksAfter(layerLabel: string) {
+  return layerLabel === 'front_arm'
+}
+
 export async function buildRenderedFrameSet(
   character: CharacterManifest,
   recipe: KitbashRecipe,
@@ -162,10 +198,11 @@ export async function buildRenderedFrameSet(
 ): Promise<RenderedFrameSet> {
   const frames: RenderedFrameRecord[] = []
   const spritesheets: RenderedSpriteSheetRecord[] = []
+  const animationSourceCharacter = getRecipeAnimationSourceCharacter(recipe, characters) ?? character
 
-  for (const animation of character.animation_names) {
+  for (const animation of animationSourceCharacter.animation_names) {
     for (const direction of exportDirections) {
-      const sourceFrames = getFrames(character, animation, direction)
+      const sourceFrames = getFrames(animationSourceCharacter, animation, direction)
       if (sourceFrames.length === 0) continue
 
       const renderedFrames = await Promise.all(

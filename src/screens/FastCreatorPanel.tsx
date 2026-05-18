@@ -10,13 +10,14 @@ import {
   type RecipeReadiness,
 } from '../creatorCockpit'
 import { clampOffsetInput, clampSignedInput, clampUnsignedInput } from '../inputUtils'
-import { isLpcMannequin, isLpcPartSourceForLayer, isPartCompatibleWithMannequin } from '../lpcPartCompatibility'
+import { canUseLpcPartForAnimation, isLpcMannequin, isLpcPartSourceForLayer, isPartCompatibleWithMannequin } from '../lpcPartCompatibility'
 import { layerOrder, palettePresets } from '../presets'
 import type { AnimationName, CharacterManifest, ComposerLayerSettings, Direction, ExtractedPart, KitbashRecipe, PaletteRules, PartLabel } from '../types'
 import { slugLabel } from '../utils'
 
 type FastCreatorPanelProps = {
   selectedCharacter: CharacterManifest
+  animationSourceCharacter: CharacterManifest
   characters: CharacterManifest[]
   selectedParts: Record<PartLabel, string>
   setSelectedParts: Dispatch<SetStateAction<Record<PartLabel, string>>>
@@ -76,6 +77,7 @@ function partMatchesActiveFilter(
 
 export function FastCreatorPanel({
   selectedCharacter,
+  animationSourceCharacter,
   characters,
   selectedParts,
   setSelectedParts,
@@ -128,7 +130,7 @@ export function FastCreatorPanel({
   const lpcPartsForActiveLabel = useMemo(
     () => isLpcMannequin(selectedCharacter) ? characters
       .filter((character) => isLpcPartSourceForLayer(character, activePartLabel))
-      .filter((character) => character.animation_names.includes(currentAnimation))
+      .filter((character) => canUseLpcPartForAnimation(character, activePartLabel, currentAnimation))
       .sort((left, right) => left.display_name.localeCompare(right.display_name))
       .slice(0, 180) : [],
     [activePartLabel, characters, currentAnimation, selectedCharacter],
@@ -142,7 +144,7 @@ export function FastCreatorPanel({
     : selectedActiveSource &&
         selectedActiveSourceCharacter &&
         isLpcPartSourceForLayer(selectedActiveSourceCharacter, activePartLabel) &&
-        selectedActiveSourceCharacter.animation_names.includes(currentAnimation)
+        canUseLpcPartForAnimation(selectedActiveSourceCharacter, activePartLabel, currentAnimation)
       ? `source:${selectedActiveSource}`
       : ''
 
@@ -306,7 +308,7 @@ export function FastCreatorPanel({
           <button onClick={openSettingsRepair} disabled={localToolsAvailable}>Check setup</button>
         </div>
       </section>
-      <DirectionPreviewGrid character={selectedCharacter} animation={currentAnimation} frameIndex={currentFrameIndex} directions={mainDirections} />
+      <DirectionPreviewGrid character={animationSourceCharacter} animation={currentAnimation} frameIndex={currentFrameIndex} directions={mainDirections} />
       {recipe ? (
         <section className="composite-preview-panel">
           <div>

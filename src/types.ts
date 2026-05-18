@@ -377,6 +377,7 @@ export type KitbashRecipe = {
   character_id: string
   base_canvas: [number, number]
   base_character: string
+  animation_source_character?: string
   layers: KitbashLayer[]
   palette: PaletteRules
   animation_coverage: AnimationName[]

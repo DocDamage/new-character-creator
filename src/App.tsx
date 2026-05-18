@@ -27,6 +27,7 @@ import {
   type SavedComposerRecipe,
 } from './appPersistence'
 import type { ManualMaskSaveRequest } from './appViewTypes'
+import { getActiveAnimationCharacter, getCompatibleAnimationSources } from './animationSource'
 import {
   buildRecipeReadiness,
   defaultExportTargetProfileId,
@@ -37,7 +38,7 @@ import {
 import { defaultFilenameTemplate } from './filenameTemplates'
 import { buildGenerationManifest } from './generationManifest'
 import { layerBundleToExtractedParts, lpcSheetsToExtractedParts, parseLayerBundleManifest, type LpcSheetImportOptions } from './layerBundle'
-import { getCharacterLabelValue, isLpcExtractedPart, isLpcMannequin, isLpcPartSourceForLayer, isLpcSourceCharacterId, isPartCompatibleWithMannequin } from './lpcPartCompatibility'
+import { canUseLpcPartForAnimation, getCharacterLabelValue, isLpcExtractedPart, isLpcMannequin, isLpcPartSourceForLayer, isLpcSourceCharacterId, isPartCompatibleWithMannequin } from './lpcPartCompatibility'
 import { buildManualMaskPart } from './manualParts'
 import { buildLpcCharacterManifests } from './lpcCharacters'
 import { hydratePartLibraryAssets, persistPartLibraryAssets } from './partAssetStore'
@@ -245,6 +246,7 @@ function App() {
   const [manifestError, setManifestError] = useState('')
   const [screen, setScreen] = useState<Screen>('fast')
   const [selectedId, setSelectedId] = useState('')
+  const [animationSourceId, setAnimationSourceId] = useState('')
   const [animation, setAnimation] = useState<AnimationName>('idle')
   const [direction, setDirection] = useState<Direction>('south')
   const [frameIndex, setFrameIndex] = useState(0)
@@ -519,16 +521,20 @@ function App() {
   const lpcCharacters = useMemo(() => buildLpcCharacterManifests(lpcInventory), [lpcInventory])
   const characters = useMemo(() => [...(manifest?.characters ?? []), ...(duelystAudit?.staged_manifest.characters ?? []), ...lpcCharacters], [manifest, duelystAudit, lpcCharacters])
   const selectedCharacter = characters.find((character) => character.character_id === selectedId) ?? characters[0]
+  const animationSourceOptions = useMemo(() => getCompatibleAnimationSources(selectedCharacter, characters), [characters, selectedCharacter])
+  const animationSourceCharacter = getActiveAnimationCharacter(selectedCharacter, animationSourceOptions, animationSourceId) ?? selectedCharacter
+  const hasBorrowedAnimationSource = Boolean(animationSourceCharacter && selectedCharacter && animationSourceCharacter.character_id !== selectedCharacter.character_id)
   const sourceCharacterOptions = useMemo(
     () => characters.filter((character) => isMainSourceCharacter(character) && (sourcePackFilter === 'all' || getSourcePackFilter(character) === sourcePackFilter)),
     [characters, sourcePackFilter],
   )
-  const frame = getFrameRef(selectedCharacter, animation, direction, frameIndex)
-  const onionFrame = getFrameRef(selectedCharacter, animation, direction, Math.max(frameIndex - 1, 0))
-  const framePath = frame?.path ?? getFramePath(selectedCharacter, animation, direction, frameIndex)
-  const onionPath = onionFrame?.path ?? getFramePath(selectedCharacter, animation, direction, Math.max(frameIndex - 1, 0))
-  const frames = getFrames(selectedCharacter, animation, direction)
-  const recipe = selectedCharacter ? makeRecipe(selectedCharacter, selectedParts, partLibrary, selectedPartIds, layerSettings, recipeId, palette, paletteRules) : null
+  const frameCharacter = screen === 'workstation' ? selectedCharacter : animationSourceCharacter
+  const frame = getFrameRef(frameCharacter, animation, direction, frameIndex)
+  const onionFrame = getFrameRef(frameCharacter, animation, direction, Math.max(frameIndex - 1, 0))
+  const framePath = frame?.path ?? getFramePath(frameCharacter, animation, direction, frameIndex)
+  const onionPath = onionFrame?.path ?? getFramePath(frameCharacter, animation, direction, Math.max(frameIndex - 1, 0))
+  const frames = getFrames(animationSourceCharacter, animation, direction)
+  const recipe = selectedCharacter ? makeRecipe(selectedCharacter, selectedParts, partLibrary, selectedPartIds, layerSettings, recipeId, palette, paletteRules, animationSourceCharacter) : null
   const recipeReadiness = useMemo(
     () => buildRecipeReadiness({ selectedPartIds, partLibrary, layerLabels: layerOrder }),
     [selectedPartIds, partLibrary],
@@ -543,7 +549,7 @@ function App() {
   const previewLpcPartOptions = useMemo(
     () => isLpcMannequin(selectedCharacter) ? characters
       .filter((character) => isLpcPartSourceCharacter(character, selectedRegion))
-      .filter((character) => character.animation_names.includes(animation))
+      .filter((character) => canUseLpcPartForAnimation(character, selectedRegion, animation))
       .sort((left, right) => sortLpcPartSources(left, right, animation))
       .slice(0, 180) : [],
     [animation, characters, selectedCharacter, selectedRegion],
@@ -556,7 +562,7 @@ function App() {
     : selectedParts[selectedRegion] &&
         previewSelectedSourceCharacter &&
         isLpcPartSourceCharacter(previewSelectedSourceCharacter, selectedRegion) &&
-        previewSelectedSourceCharacter.animation_names.includes(animation)
+        canUseLpcPartForAnimation(previewSelectedSourceCharacter, selectedRegion, animation)
       ? `source:${selectedParts[selectedRegion]}`
       : ''
 
@@ -584,11 +590,15 @@ function App() {
 
   useEffect(() => {
     if (!selectedCharacter) return
-    if (!selectedCharacter.animation_names.includes(animation)) {
-      setAnimation(selectedCharacter.animation_names[0] ?? 'idle')
+    if (animationSourceId && !animationSourceOptions.some((character) => character.character_id === animationSourceId)) {
+      setAnimationSourceId('')
+      return
+    }
+    if (!animationSourceCharacter?.animation_names.includes(animation)) {
+      setAnimation(animationSourceCharacter?.animation_names[0] ?? 'idle')
     }
     setFrameIndex(0)
-  }, [selectedCharacter, animation])
+  }, [animation, animationSourceCharacter, animationSourceId, animationSourceOptions, selectedCharacter])
 
   useEffect(() => {
     if (!selectedCharacter || isLpcMannequin(selectedCharacter)) return
@@ -608,6 +618,20 @@ function App() {
       return Object.keys(next).length === Object.keys(current).length ? current : next
     })
   }, [partLibrary, selectedCharacter])
+
+  useEffect(() => {
+    if (!selectedCharacter || !isLpcMannequin(selectedCharacter)) return
+    setSelectedParts((current) => {
+      const next = Object.fromEntries(
+        Object.entries(current).filter(([label, characterId]) => {
+          if (!isLpcSourceCharacterId(characterId)) return true
+          const sourceCharacter = characters.find((character) => character.character_id === characterId)
+          return sourceCharacter ? isLpcPartSourceCharacter(sourceCharacter, label as PartLabel) : false
+        }),
+      ) as Record<PartLabel, string>
+      return Object.keys(next).length === Object.keys(current).length ? current : next
+    })
+  }, [characters, selectedCharacter])
 
   useEffect(() => {
     if (sourcePackFilter === 'all' || sourceCharacterOptions.length === 0) return
@@ -717,6 +741,7 @@ function App() {
       recipe_id: recipeId,
       name: recipeName.trim() || recipeId,
       base_character: selectedCharacter.character_id,
+      animation_source_character: hasBorrowedAnimationSource ? animationSourceCharacter?.character_id : undefined,
       selected_parts: { ...selectedParts },
       selected_part_ids: { ...selectedPartIds },
       layer_settings: { ...layerSettings },
@@ -758,6 +783,7 @@ function App() {
     setLayerSettings(savedRecipe.layer_settings ?? {})
     setPalette(savedRecipe.palette)
     setPaletteRules(savedRecipe.palette_rules ?? defaultPaletteRules)
+    setAnimationSourceId(savedRecipe.animation_source_character ?? '')
   }
 
   function startNewRecipe() {
@@ -767,6 +793,7 @@ function App() {
     setSelectedParts({} as Record<PartLabel, string>)
     setSelectedPartIds({})
     setLayerSettings({})
+    setAnimationSourceId('')
     setPaletteRules(defaultPaletteRules)
   }
 
@@ -1595,18 +1622,18 @@ function App() {
   }
 
   async function exportCurrentSpriteSheet() {
-    if (!selectedCharacter) return
-    const currentFrames = getFrames(selectedCharacter, animation, direction)
+    if (!animationSourceCharacter) return
+    const currentFrames = getFrames(animationSourceCharacter, animation, direction)
     await downloadSpriteSheet(
-      `${selectedCharacter.character_id}_${animation}_${direction}_sheet.png`,
+      `${recipe?.character_id ?? selectedCharacter.character_id}_${animation}_${direction}_sheet.png`,
       currentFrames.map((frame) => frame.path),
       currentFrames.length,
     )
   }
 
   async function exportAnimationSheets() {
-    if (!selectedCharacter) return
-    await downloadAllDirectionSpriteSheets(selectedCharacter, animation)
+    if (!animationSourceCharacter) return
+    await downloadAllDirectionSpriteSheets(animationSourceCharacter, animation)
   }
 
   async function exportRenderedFrameSet() {
@@ -1944,7 +1971,7 @@ function App() {
 
         <section className="sidebar-block stats">
           <span>{sourceCharacterOptions.length} sources</span>
-          <span>{selectedCharacter.animation_names.length} actions</span>
+          <span>{animationSourceCharacter?.animation_names.length ?? selectedCharacter.animation_names.length} actions</span>
           <span>{selectedCharacter.source_quality_warnings.length} warnings</span>
         </section>
       </aside>
@@ -2038,7 +2065,7 @@ function App() {
             <div className="transport">
               <button onClick={() => setPlaying((value) => !value)}>{playing ? 'Pause' : 'Play'}</button>
               <select aria-label="Animation" value={animation} onChange={(event) => setAnimation(event.target.value)}>
-                {selectedCharacter.animation_names.map((name) => (
+                {animationSourceCharacter?.animation_names.map((name) => (
                   <option key={name} value={name}>
                     {slugLabel(name)}
                   </option>
@@ -2051,13 +2078,33 @@ function App() {
                   </option>
                 ))}
               </select>
+              <label className="field compact motion-source-field">
+                <span>Motion source</span>
+                <select
+                  data-testid="animation-source"
+                  aria-label="Motion source"
+                  value={animationSourceCharacter?.character_id ?? selectedCharacter.character_id}
+                  onChange={(event) => setAnimationSourceId(event.target.value === selectedCharacter.character_id ? '' : event.target.value)}
+                  disabled={animationSourceOptions.length <= 1}
+                >
+                  {animationSourceOptions.map((character) => (
+                    <option key={character.character_id} value={character.character_id}>
+                      {character.character_id === selectedCharacter.character_id ? 'current body' : character.display_name} / {character.animation_names.length} actions
+                    </option>
+                  ))}
+                </select>
+              </label>
               <input aria-label="Frame index" type="range" min={0} max={Math.max(frames.length - 1, 0)} value={frameIndex} onChange={(event) => setFrameIndex(Number(event.target.value))} />
+              {hasBorrowedAnimationSource ? (
+                <span className="motion-source-note">Motion source drives pose and frame count; selected parts still define the character look.</span>
+              ) : null}
             </div>
           </section>
 
           {screen === 'fast' ? (
             <FastCreatorPanel
               selectedCharacter={selectedCharacter}
+              animationSourceCharacter={animationSourceCharacter}
               characters={characters}
               selectedParts={selectedParts}
               setSelectedParts={setSelectedParts}
@@ -2217,6 +2264,7 @@ function App() {
             <ExportsPanel
               recipe={recipe}
               selectedCharacter={selectedCharacter}
+              animationSourceCharacter={animationSourceCharacter}
               characters={characters}
               partLibrary={partLibrary}
               mainDirections={mainDirections}

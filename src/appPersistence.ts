@@ -4,6 +4,7 @@ export type SavedComposerRecipe = {
   recipe_id: string
   name: string
   base_character: string
+  animation_source_character?: string
   selected_parts: Record<PartLabel, string>
   selected_part_ids: Partial<Record<PartLabel, string>>
   layer_settings: Partial<Record<PartLabel, ComposerLayerSettings>>

@@ -144,6 +144,7 @@ function isSelectableLpcSheet(sheet: LpcAssetInventory['sheets'][number]) {
 
 export function isLpcBaseSheet(sheet: LpcAssetInventory['sheets'][number]) {
   if (isLpcBodyBaseSheet(sheet)) return true
+  if (isLpcRevisedBodyBaseSheet(sheet)) return true
   const normalized = [sheet.category, sheet.file_name, sheet.path, ...sheet.tags].join(' ').toLowerCase()
   const path = sheet.path.replaceAll('\\', '/').toLowerCase()
   const fileAndTags = [sheet.file_name, ...sheet.tags].join(' ').toLowerCase()
@@ -153,6 +154,9 @@ export function isLpcBaseSheet(sheet: LpcAssetInventory['sheets'][number]) {
 
 function lpcSheetSortScore(sheet: LpcAssetInventory['sheets'][number]) {
   const normalized = [sheet.category, sheet.file_name, sheet.path, ...sheet.tags].join(' ').toLowerCase()
+  if (isLpcRevisedBodyBaseSheet(sheet)) return -3
+  if (sheet.tags.includes('androgynous_bases')) return -2
+  if (sheet.tags.includes('stand_walk_bases')) return -1
   if (isLpcBaseSheet(sheet)) return 0
   if (/\b(hair|hat|hood|helmet|shirt|pants|shoe|armor|weapon|shield|cape|cloak)\b/.test(normalized)) return 1
   return 2
@@ -228,7 +232,7 @@ function buildLpcAnimations(inventory: LpcAssetInventory, sheets: LpcSheet[]): A
       ) as Partial<Record<Direction, FrameRef[]>>
       animations.push({
         name: slice.name,
-        source_names: [sheet.file_name],
+        source_names: [sheet.path],
         directions: framesByDirection,
         preview_gifs: [],
       })
@@ -276,6 +280,14 @@ function isClassicLpcSheet(sheet: LpcSheet) {
 
 function isLpcBodyBaseSheet(sheet: LpcSheet) {
   return Boolean(getLpcBodyBaseGroupKey(sheet))
+}
+
+function isLpcRevisedBodyBaseSheet(sheet: LpcSheet) {
+  const path = sheet.path.replaceAll('\\', '/').toLowerCase()
+  if (!path.startsWith('[lpc revised] character basics/body/')) return false
+  if (path.includes('/adult heads/') || path.includes('/child heads/')) return false
+  if (path.includes('/_ guides & palettes/')) return false
+  return sheet.tags.includes('body') && Boolean(inferActionFromPathSegment(sheet.file_name.replace(/\.png$/i, ''), true))
 }
 
 function getLpcBodyBaseGroupKey(sheet: LpcSheet) {
@@ -329,9 +341,9 @@ function inferLpcPartLabelForCharacter(sheet: LpcAssetInventory['sheets'][number
   if (/\b(backa|backb|quiver|backpack|wings)\b/.test(normalized) || fileName.startsWith('behind_')) return 'back_item'
   if (fileName.startsWith('weapon_')) return fileName.includes('shield') ? 'shield' : 'weapon'
   if (fileName.startsWith('belt_') || fileName.startsWith('body_')) return 'accessory'
-  if (path.includes('/feet_') || fileName.startsWith('feet_')) return 'front_leg'
+  if (path.includes('/feet_') || fileName.startsWith('feet_')) return 'feet'
   if (path.includes('/hands_') || fileName.startsWith('hands_')) return 'front_arm'
-  if (path.includes('/legs_') || fileName.startsWith('legs_')) return 'front_leg'
+  if (path.includes('/legs_') || fileName.startsWith('legs_')) return 'legs'
   if (path.includes('/head_') || fileName.startsWith('head_')) return 'hair_hat_hood'
   if (path.includes('/torso_') || fileName.startsWith('torso_')) return 'torso'
 
@@ -342,7 +354,8 @@ function inferLpcPartLabelForCharacter(sheet: LpcAssetInventory['sheets'][number
 const lpcPartLabelHints: Array<[PartLabel, string[]]> = [
   ['hair_hat_hood', ['hair', 'hat', 'hood', 'helmet']],
   ['face', ['face', 'eyes', 'ears', 'nose', 'mouth', 'beard']],
-  ['front_leg', ['leg', 'pants', 'trousers', 'feet', 'boot', 'shoe']],
+  ['legs', ['leg', 'legs', 'pants', 'trousers', 'skirt']],
+  ['feet', ['feet', 'boot', 'shoe']],
   ['front_arm', ['glove', 'hands']],
   ['shield', ['shield']],
   ['weapon', ['weapon', 'sword', 'bow', 'axe', 'staff', 'wand']],

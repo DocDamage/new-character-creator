@@ -4,7 +4,7 @@ const lpcLayerAliases: Partial<Record<PartLabel, PartLabel[]>> = {
   back_arm: ['front_arm'],
   front_hand: ['front_arm'],
   back_hand: ['front_arm'],
-  back_leg: ['front_leg'],
+  front_leg: ['legs'],
   legs: ['front_leg'],
   feet: ['front_leg'],
   head: ['face', 'hair_hat_hood'],
@@ -28,6 +28,14 @@ export function isLpcPartSourceForLayer(character: CharacterManifest, label: Par
   return character.class_type === 'lpc_character' &&
     getCharacterLabelValue(character, 'lpc_role') === 'part' &&
     getCompatibleLpcPartLabels(label).includes(getCharacterLabelValue(character, 'lpc_part_label') as PartLabel)
+}
+
+export function canUseLpcPartForAnimation(character: CharacterManifest, label: PartLabel, animation: string) {
+  return character.animation_names.includes(animation) || isLpcCloakSourceForLayer(character, label)
+}
+
+export function isLpcCloakSourceForLayer(character: CharacterManifest, label: PartLabel) {
+  return isLpcPartSourceForLayer(character, label) && getCharacterLabelValue(character, 'lpc_part_label') === 'cloak_back'
 }
 
 export function isLpcMannequin(character: CharacterManifest | undefined) {

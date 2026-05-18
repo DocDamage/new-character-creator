@@ -35,7 +35,7 @@ const labelHints: Array<[PartLabel, string[]]> = [
   ['face', ['face', 'eyes', 'nose', 'mouth', 'beard']],
   ['torso', ['torso', 'body', 'shirt', 'armor', 'dress', 'chest']],
   ['front_arm', ['arm', 'sleeve', 'glove']],
-  ['front_leg', ['leg', 'pants', 'trousers']],
+  ['legs', ['leg', 'pants', 'trousers']],
   ['feet', ['feet', 'boot', 'shoe']],
   ['weapon', ['weapon', 'sword', 'bow', 'axe', 'staff', 'wand']],
   ['shield', ['shield']],

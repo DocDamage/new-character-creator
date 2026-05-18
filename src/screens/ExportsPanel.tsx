@@ -14,6 +14,7 @@ import { downloadJson, getFrames, slugLabel } from '../utils'
 type ExportsPanelProps = {
   recipe: KitbashRecipe | null
   selectedCharacter: CharacterManifest
+  animationSourceCharacter: CharacterManifest
   characters: CharacterManifest[]
   partLibrary: ExtractedPart[]
   mainDirections: Direction[]
@@ -45,6 +46,7 @@ type ExportsPanelProps = {
 export function ExportsPanel({
   recipe,
   selectedCharacter,
+  animationSourceCharacter,
   characters,
   partLibrary,
   mainDirections,
@@ -72,19 +74,19 @@ export function ExportsPanel({
   setExportTargetProfile,
   recipeReadiness,
 }: ExportsPanelProps) {
-  const directionCoverage = selectedCharacter.animation_names.flatMap((name) =>
-    mainDirections.map((item) => getFrames(selectedCharacter, name, item).length > 0),
+  const directionCoverage = animationSourceCharacter.animation_names.flatMap((name) =>
+    mainDirections.map((item) => getFrames(animationSourceCharacter, name, item).length > 0),
   )
   const validation = [
-    { label: 'Manifest', value: selectedCharacter.animation_names.length > 0 ? 'pass' : 'reject' },
+    { label: 'Manifest', value: animationSourceCharacter.animation_names.length > 0 ? 'pass' : 'reject' },
     { label: '4-direction frames', value: directionCoverage.every(Boolean) ? 'pass' : 'needs cleanup' },
     { label: 'APES parts', value: recipe?.layers.some((layer) => layer.extraction_method === 'apes') ? 'available' : 'optional' },
     { label: 'Godot target', value: recipe?.export_targets.includes('godot_4') ? 'pass' : 'defer' },
   ]
-  const frameSummary = selectedCharacter.animation_names.flatMap((name) =>
+  const frameSummary = animationSourceCharacter.animation_names.flatMap((name) =>
     mainDirections.map((item) => ({
       label: `${slugLabel(name)} ${item}`,
-      count: getFrames(selectedCharacter, name, item).length,
+      count: getFrames(animationSourceCharacter, name, item).length,
     })),
   )
   const filenamePreview = `${renderExportFilenameTemplate(filenameTemplate, {
@@ -169,7 +171,7 @@ export function ExportsPanel({
         <span>{exportStatus}</span>
         <span>Use the zip exports when you want actual PNG files plus engine metadata, and the JSON exports when you want one inspectable artifact.</span>
       </div>
-      <DirectionPreviewGrid character={selectedCharacter} animation={currentAnimation} frameIndex={currentFrameIndex} directions={mainDirections} />
+      <DirectionPreviewGrid character={animationSourceCharacter} animation={currentAnimation} frameIndex={currentFrameIndex} directions={mainDirections} />
       {recipe ? (
         <section className="composite-preview-panel">
           <div>
@@ -190,7 +192,7 @@ export function ExportsPanel({
       ) : null}
       <div className="frame-summary">
         <strong>Current sheet</strong>
-        <span>{slugLabel(currentAnimation)} / {currentDirection} / {getFrames(selectedCharacter, currentAnimation, currentDirection).length} frames</span>
+        <span>{slugLabel(currentAnimation)} / {currentDirection} / {getFrames(animationSourceCharacter, currentAnimation, currentDirection).length} frames</span>
         {frameSummary.map((item) => (
           <span key={item.label}>{item.label}: {item.count}</span>
         ))}
