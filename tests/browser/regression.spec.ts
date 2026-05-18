@@ -33,6 +33,21 @@ type FullPackageManifestDownload = {
   }
 }
 
+type CreditsReportDownload = {
+  format: string
+  summary: {
+    selected_lpc_catalog_item_count: number
+    missing_lpc_catalog_credit_count: number
+  }
+  selected_lpc_catalog_items: Array<{
+    item_id: string
+    variant: string
+    authors: string[]
+    licenses: string[]
+    urls: string[]
+  }>
+}
+
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..')
 
 test.beforeEach(async ({ page }) => {
@@ -342,6 +357,19 @@ test('LPC catalog picker persists metadata-backed selections in saved recipes', 
     await page.getByTestId('export-rendered-frame-set').click()
   })
   expect(renderedFrameSet.frames.length).toBeGreaterThan(0)
+
+  const creditsReport = await readJsonDownload<CreditsReportDownload>(page, async () => {
+    await page.getByTestId('export-credits-report').click()
+  })
+  expect(creditsReport.summary.selected_lpc_catalog_item_count).toBe(1)
+  expect(creditsReport.summary.missing_lpc_catalog_credit_count).toBe(0)
+  expect(creditsReport.selected_lpc_catalog_items[0]).toMatchObject({
+    item_id: 'cape:cape_solid',
+    variant: 'black',
+    authors: ['Artist'],
+    licenses: ['OGA-BY 3.0'],
+    urls: ['https://example.test'],
+  })
 })
 
 test('workstation APES mode does not create fake rectangular APES parts', async ({ page }) => {

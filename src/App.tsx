@@ -1764,7 +1764,7 @@ function App() {
   async function exportCreditsReport() {
     if (!selectedCharacter) return
     const { downloadCreditsReport } = await loadExportPackage()
-    downloadCreditsReport(selectedCharacter, recipe, partLibrary)
+    downloadCreditsReport(selectedCharacter, recipe, partLibrary, lpcCatalog)
   }
 
   async function copyCommand(command: string, successMessage: string) {
