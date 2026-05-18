@@ -114,6 +114,10 @@ Invalid APES report JSON is rejected before it changes jobs or the Part Library.
 
 Placeholder APES fallback is only for development. If it is enabled, release exports are blocked until you turn it off.
 
+## AI And RAG
+
+Run `npm run rag:index` to build the local AI knowledge index. APES Lab uses that index to attach project, APES, LPC, provider, and release-review context to generation jobs. Generated output remains blocked from release until reviewed.
+
 ### 7. Handle Missing Animations
 
 For LPC catalog-backed recipes:

@@ -1,4 +1,5 @@
 import type { MissingAnimationQueue, MissingAnimationQueueItem } from './missingAnimationQueue.ts'
+import type { RagContextBundle } from './ragTypes.ts'
 import type { AiProviderConfig, AnimationName, GenerationJob, GenerationJobStatus } from './types.ts'
 
 export const defaultAiProviderConfig: AiProviderConfig = {
@@ -6,6 +7,13 @@ export const defaultAiProviderConfig: AiProviderConfig = {
   name: 'PixelLab manual handoff',
   type: 'manual_handoff',
   configured: false,
+  capabilities: {
+    text_to_sprite: false,
+    image_to_animation: false,
+    animation_cleanup: false,
+    direct_api: false,
+    mcp_available: false,
+  },
   manual_handoff: {
     enabled: true,
     status: 'required',
@@ -21,6 +29,7 @@ type CreateGenerationJobsOptions = {
   provider?: AiProviderConfig
   promptPrefix?: string
   settings?: Record<string, string | number | boolean | null>
+  contextForItem?: (item: MissingAnimationQueueItem) => RagContextBundle | undefined
   now?: string
 }
 
@@ -48,6 +57,7 @@ export function createGenerationJobsFromMissingAnimationQueue(
       prompt: buildPrompt(item, options.promptPrefix),
       settings: options.settings ?? {},
       provider,
+      rag_context: options.contextForItem?.(item),
       status: provider.configured ? 'draft' : 'handoff_ready',
       logs: [
         `Created from missing-animation queue item ${item.id}.`,

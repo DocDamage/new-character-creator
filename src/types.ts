@@ -1,3 +1,5 @@
+import type { RagContextBundle } from './ragTypes'
+
 export type Direction = 'north' | 'south' | 'east' | 'west' | 'northeast' | 'northwest' | 'southeast' | 'southwest'
 
 export type AnimationName = 'idle' | 'walk' | 'running_jump' | 'attack' | string
@@ -562,6 +564,13 @@ export type AiProviderConfig = {
   name: string
   type: AiProviderType
   configured: boolean
+  capabilities?: {
+    text_to_sprite: boolean
+    image_to_animation: boolean
+    animation_cleanup: boolean
+    direct_api: boolean
+    mcp_available: boolean
+  }
   manual_handoff: {
     enabled: boolean
     status: 'available' | 'required' | 'exported' | 'imported'
@@ -587,6 +596,7 @@ export type GenerationJob = {
   prompt: string
   settings: Record<string, string | number | boolean | null>
   provider: AiProviderConfig
+  rag_context?: RagContextBundle
   status: GenerationJobStatus
   logs: string[]
   outputs: Array<{

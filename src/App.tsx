@@ -46,6 +46,8 @@ import {
 import { defaultFilenameTemplate } from './filenameTemplates'
 import { buildGenerationManifest } from './generationManifest'
 import { buildGenerationJobsHandoffPayload, createGenerationJobsFromMissingAnimationQueue, generationJobBlocksRelease } from './generationJobs'
+import { buildAiGenerationContextQuery } from './aiContext'
+import { buildRagContextBundle } from './ragIndex'
 import { layerBundleToExtractedParts, lpcSheetsToExtractedParts, parseLayerBundleManifest, type LpcSheetImportOptions } from './layerBundle'
 import { localToolFetch, localToolPath } from './localToolsClient'
 import { canUseLpcPartForAnimation, getCharacterLabelValue, isLpcExtractedPart, isLpcMannequin, isLpcPartSourceForLayer, isLpcSourceCharacterId, isPartCompatibleWithMannequin } from './lpcPartCompatibility'
@@ -69,6 +71,7 @@ import { WorkstationPanel } from './screens/WorkstationPanel'
 import { canShowCharacterInRecipeMode, sourceFamilyForRecipeMode } from './sourceFamilyRegistry'
 import { validateApesReport } from './apesReportValidation'
 import { approveTrainingDraft, classifyTrainingInboxDraft, type ClassifyTrainingInboxInput } from './trainingLibrary'
+import type { RagIndex } from './ragTypes'
 import type { AiProviderConfig, AnimationName, ApesBridgeStatus, ApesFinetuneManifest, ApesJob, ApesOutputInventory, ApesPreflightReport, ApesReport, AssetManifest, CharacterManifest, ComposerLayerSettings, Direction, DuelystApesJobBatch, DuelystPackageAudit, ExtractedPart, ExtractionMethod, GenerationJob, LpcAssetInventory, PaletteRules, PartLabel, Rect, TrainingInboxDraft, TrainingLibraryRecord, VariationPreset } from './types'
 import {
   buildExportManifest,
@@ -305,6 +308,8 @@ function App() {
   const [apesJobs, setApesJobs] = useState<ApesJob[]>(loadStoredApesJobs)
   const [aiProviderConfig, setAiProviderConfig] = useState<AiProviderConfig>(loadStoredAiProviderConfig)
   const [generationJobs, setGenerationJobs] = useState<GenerationJob[]>(loadStoredGenerationJobs)
+  const [ragIndex, setRagIndex] = useState<RagIndex | null>(null)
+  const [ragStatus, setRagStatus] = useState('RAG index not loaded. Run npm run rag:index to build local AI knowledge.')
   const [trainingInboxDrafts, setTrainingInboxDrafts] = useState<TrainingInboxDraft[]>(loadStoredTrainingInboxDrafts)
   const [trainingLibraryRecords, setTrainingLibraryRecords] = useState<TrainingLibraryRecord[]>(loadStoredTrainingLibraryRecords)
   const [batchSeed, setBatchSeed] = useState('ash-ronin-001')
@@ -481,6 +486,23 @@ function App() {
           setLpcStatus(
             `Loaded ${payload.summary.png_count} LPC PNG sheet(s), including ${payload.summary.lpc_grid_count} 64x64 grid sheet(s).`,
           )
+        }
+      })
+      .catch(() => {})
+    return () => {
+      controller.abort()
+    }
+  }, [])
+
+  useEffect(() => {
+    const controller = new AbortController()
+    fetch('/data/rag/knowledge_index.json', { signal: controller.signal, cache: 'no-store' })
+      .then(async (response) => {
+        if (!response.ok) return
+        const payload = await response.json() as RagIndex
+        if (payload?.format === 'pixel_creator_rag_index') {
+          setRagIndex(payload)
+          setRagStatus(`RAG index loaded with ${payload.chunk_count} knowledge chunk(s).`)
         }
       })
       .catch(() => {})
@@ -980,6 +1002,16 @@ function App() {
         filename_template: filenameTemplate,
         style_notes: generationStyleNotes,
       },
+      contextForItem: ragIndex
+        ? (item) => buildRagContextBundle(ragIndex, {
+            purpose: 'generation_prompt',
+            query: buildAiGenerationContextQuery(item, {
+              characterId: selectedCharacter.character_id,
+              targetProfile: exportTargetProfile,
+            }),
+            limit: 5,
+          })
+        : undefined,
     })
     if (jobs.length === 0) {
       setApesBridgeStatus('No new generation jobs were queued; every current missing-animation item already has a job.')
@@ -2530,6 +2562,8 @@ function App() {
               jobs={apesJobs}
               aiProviderConfig={aiProviderConfig}
               generationJobs={generationJobs}
+              ragStatus={ragStatus}
+              ragIndex={ragIndex}
               exportTargetProfile={exportTargetProfile}
               trainingInboxDrafts={trainingInboxDrafts}
               trainingLibraryRecords={trainingLibraryRecords}

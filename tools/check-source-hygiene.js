@@ -1,4 +1,5 @@
 import { spawnSync } from 'node:child_process'
+import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -19,12 +20,20 @@ const forbiddenTrackedPatterns = [
   /^dist\//i,
 ]
 
+const forbiddenSecretPatterns = [
+  /PIXELLAB_API_KEY\s*=/i,
+  /Authorization:\s*Bearer\s+[A-Za-z0-9._-]{20,}/i,
+]
+
+const textFilePattern = /\.(css|cjs|html|js|json|jsx|md|mjs|ps1|py|sh|ts|tsx|txt|yml|yaml)$/i
+
 function main() {
   const trackedFiles = runGit(['ls-files'])
-  const failures = trackedFiles
+  const trackedFileList = trackedFiles
     .split(/\r?\n/)
     .filter(Boolean)
-    .filter((filePath) => forbiddenTrackedPatterns.some((pattern) => pattern.test(normalizePath(filePath))))
+  const failures = trackedFileList.filter((filePath) => forbiddenTrackedPatterns.some((pattern) => pattern.test(normalizePath(filePath))))
+  const secretFailures = findSecretFailures(trackedFileList)
 
   if (failures.length > 0) {
     for (const failure of failures) {
@@ -34,7 +43,15 @@ function main() {
     return
   }
 
-  console.log('Source hygiene check passed: no forbidden private/generated files are tracked.')
+  if (secretFailures.length > 0) {
+    for (const failure of secretFailures) {
+      console.error(`Forbidden provider secret pattern found in tracked source: ${failure}`)
+    }
+    process.exitCode = 1
+    return
+  }
+
+  console.log('Source hygiene check passed: no forbidden private/generated files or provider secrets are tracked.')
 }
 
 function runGit(args) {
@@ -50,6 +67,25 @@ function runGit(args) {
 
 function normalizePath(filePath) {
   return filePath.replaceAll(path.sep, '/')
+}
+
+function findSecretFailures(trackedFiles) {
+  const failures = []
+  for (const filePath of trackedFiles) {
+    const normalizedPath = normalizePath(filePath)
+    if (normalizedPath === 'package-lock.json' || !textFilePattern.test(normalizedPath)) continue
+    const absolutePath = path.resolve(appRoot, filePath)
+    let text = ''
+    try {
+      text = fs.readFileSync(absolutePath, 'utf8')
+    } catch {
+      continue
+    }
+    if (forbiddenSecretPatterns.some((pattern) => pattern.test(text))) {
+      failures.push(filePath)
+    }
+  }
+  return failures
 }
 
 main()

@@ -22,6 +22,7 @@ output/
 data/apes/
 data/cache/
 data/lpc/
+data/rag/
 data/training/
 data/exports/*/exports/
 data/exports/*/rendered/

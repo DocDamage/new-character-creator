@@ -5,6 +5,7 @@ import { clampFrameInput } from '../inputUtils'
 import type { LpcCatalog } from '../lpcCatalog'
 import { buildMissingAnimationQueue, filterMissingAnimationQueue, type MissingAnimationQueue } from '../missingAnimationQueue'
 import { humanoid64Preset } from '../presets'
+import type { RagIndex } from '../ragTypes'
 import type { ClassifyTrainingInboxInput } from '../trainingLibrary'
 import type { AiProviderConfig, AnimationName, ApesFinetuneManifest, ApesJob, ApesOutputInventory, ApesPreflightReport, CharacterManifest, Direction, DuelystApesJobBatch, ExtractedPart, GenerationJob, KitbashRecipe, PartLabel, SourceFamilyId, TrainingInboxDraft, TrainingLibraryRecord } from '../types'
 import { downloadJson, getFrames, slugLabel } from '../utils'
@@ -13,6 +14,8 @@ type ApesLabPanelProps = {
   jobs: ApesJob[]
   aiProviderConfig: AiProviderConfig
   generationJobs: GenerationJob[]
+  ragStatus: string
+  ragIndex: RagIndex | null
   exportTargetProfile: ExportTargetProfileId
   trainingInboxDrafts: TrainingInboxDraft[]
   trainingLibraryRecords: TrainingLibraryRecord[]
@@ -65,6 +68,8 @@ export function ApesLabPanel({
   jobs,
   aiProviderConfig,
   generationJobs,
+  ragStatus,
+  ragIndex,
   exportTargetProfile,
   trainingInboxDrafts,
   trainingLibraryRecords,
@@ -376,6 +381,12 @@ export function ApesLabPanel({
           Download generation handoff JSON
         </button>
       </div>
+      <div className="settings-card" data-testid="ai-knowledge-status">
+        <strong>AI Knowledge</strong>
+        <span>{ragStatus}</span>
+        {ragIndex ? <span>{ragIndex.document_count} source document(s), {ragIndex.chunk_count} retrievable chunk(s).</span> : null}
+        <code>RAG context enriches generation jobs with project docs, LPC/APES rules, provider handoff notes, and release review requirements.</code>
+      </div>
       <div className="settings-card" data-testid="training-inbox-wizard">
         <strong>Training Inbox wizard</strong>
         <label className="field">
@@ -643,6 +654,9 @@ export function ApesLabPanel({
             <p>{job.source_queue_item_labels.join(', ')} for {slugLabel(job.target_animation)} / {job.target_profile}</p>
             <p>{job.provider.name}: {job.provider.configured ? 'configured' : 'manual handoff'}.</p>
             <p>{job.review_gate.release_blocked ? 'Blocked from release until review. Outputs are not selected automatically.' : 'Review approved.'}</p>
+            {job.rag_context ? (
+              <code>{job.rag_context.citations.map((citation) => `${citation.title}: ${citation.uri}`).join('\n')}</code>
+            ) : null}
             <div className="job-actions">
               <button onClick={() => downloadJson(`${job.job_id}.json`, job)}>Download job JSON</button>
             </div>

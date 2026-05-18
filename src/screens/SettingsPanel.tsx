@@ -116,6 +116,11 @@ export function SettingsPanel({
       </div>
 
       <div className="settings-card">
+        <strong>AI provider</strong>
+        <span>Default mode is manual handoff. Configure PixelLab or another provider outside the repo; never commit provider tokens.</span>
+      </div>
+
+      <div className="settings-card">
         <strong>APES bridge mode</strong>
         <label className="field checkbox-field">
           <input type="checkbox" checked={apesAllowPlaceholder} onChange={(event) => setApesAllowPlaceholder(event.target.checked)} />
