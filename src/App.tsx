@@ -2338,6 +2338,8 @@ function App() {
               loadApesQaHarnessReport={loadApesQaHarnessReport}
               clearApesQaHarnessParts={clearApesQaHarnessParts}
               selectedCharacter={selectedCharacter}
+              recipe={recipe}
+              lpcCatalog={lpcCatalog}
               partLibrary={partLibrary}
               apesAnimations={apesAnimations}
               apesDirections={apesDirections}
