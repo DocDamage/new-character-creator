@@ -9,6 +9,7 @@ import {
 } from '../creatorCockpit'
 import { defaultFilenameTemplate, renderExportFilenameTemplate } from '../filenameTemplates'
 import type { AnimationName, CharacterManifest, Direction, ExtractedPart, KitbashRecipe } from '../types'
+import type { LpcCatalog } from '../lpcCatalog'
 import { downloadJson, getFrames, slugLabel } from '../utils'
 
 type ExportsPanelProps = {
@@ -17,6 +18,7 @@ type ExportsPanelProps = {
   animationSourceCharacter: CharacterManifest
   characters: CharacterManifest[]
   partLibrary: ExtractedPart[]
+  lpcCatalog: LpcCatalog | null
   mainDirections: Direction[]
   currentAnimation: AnimationName
   currentDirection: Direction
@@ -49,6 +51,7 @@ export function ExportsPanel({
   animationSourceCharacter,
   characters,
   partLibrary,
+  lpcCatalog,
   mainDirections,
   currentAnimation,
   currentDirection,
@@ -185,6 +188,7 @@ export function ExportsPanel({
             animation={currentAnimation}
             direction={currentDirection}
             frameIndex={currentFrameIndex}
+            lpcCatalog={lpcCatalog}
             scale={3}
             label={`composite ${currentAnimation} ${currentDirection} frame ${currentFrameIndex + 1}`}
           />

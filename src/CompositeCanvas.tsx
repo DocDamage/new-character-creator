@@ -3,8 +3,10 @@ import { getRecipeAnimationSourceCharacter } from './animationSource'
 import { getCharacterLabelValue, isLpcMannequin } from './lpcPartCompatibility'
 import { getLpcPartFrameRef } from './lpcPartFrames'
 import { buildLpcReplacementRegions } from './lpcReplacement'
+import { buildLpcRenderPlan, hasCatalogRenderSelections, type LpcRenderRecord } from './lpcRenderPlan'
 import { humanoid64Preset } from './presets'
 import type { AnimationName, CharacterManifest, Direction, ExtractedPart, KitbashRecipe, Rect } from './types'
+import type { LpcCatalog } from './lpcCatalog'
 import { getFrameRef } from './utils'
 
 type CompositeCanvasProps = {
@@ -14,6 +16,7 @@ type CompositeCanvasProps = {
   animation: AnimationName
   direction: Direction
   frameIndex: number
+  lpcCatalog?: LpcCatalog | null
   scale?: number
   label?: string
 }
@@ -27,6 +30,7 @@ export function CompositeCanvas({
   animation,
   direction,
   frameIndex,
+  lpcCatalog,
   scale = 5,
   label,
 }: CompositeCanvasProps) {
@@ -51,6 +55,26 @@ export function CompositeCanvas({
     async function drawComposite() {
       const baseCharacter = characters.find((character) => character.character_id === recipe.base_character)
       const animationSourceCharacter = getRecipeAnimationSourceCharacter(recipe, characters) ?? baseCharacter
+      const baseFrame = animationSourceCharacter
+        ? getFrameRef(animationSourceCharacter, animation, direction, frameIndex) ??
+          getFrameRef(animationSourceCharacter, animationSourceCharacter.animation_names[0] ?? animation, direction, frameIndex)
+        : undefined
+      if (hasCatalogRenderSelections(recipe, lpcCatalog) && lpcCatalog) {
+        const plan = buildLpcRenderPlan({
+          catalog: lpcCatalog,
+          recipe,
+          bodyType: inferLpcBodyType(baseCharacter),
+          baseFrame,
+          animation,
+          direction,
+          frameIndex,
+        })
+        for (const record of plan.records) {
+          if (cancelled) return
+          await drawRenderRecord(drawContext, record, scale, recipe)
+        }
+        return
+      }
       const deferredCloakDraws: Array<() => void> = []
       const flushDeferredCloaks = () => {
         while (!cancelled && deferredCloakDraws.length > 0) {
@@ -117,7 +141,7 @@ export function CompositeCanvas({
     return () => {
       cancelled = true
     }
-  }, [recipe, characters, partLibrary, animation, direction, frameIndex, scale])
+  }, [recipe, characters, partLibrary, animation, direction, frameIndex, lpcCatalog, scale])
 
   return (
     <figure className="pixel-stage composite-stage" aria-label={label}>
@@ -166,6 +190,27 @@ function isLpcBaseFallbackLayer(sourceCharacter: CharacterManifest, baseCharacte
     isLpcMannequin(baseCharacter) &&
     getCharacterLabelValue(sourceCharacter, 'lpc_role') !== 'part',
   )
+}
+
+async function drawRenderRecord(
+  context: CanvasRenderingContext2D,
+  record: LpcRenderRecord,
+  scale: number,
+  recipe: KitbashRecipe,
+) {
+  if (!record.source_path) return
+  const image = await loadImage(record.source_path)
+  drawLayer(context, image, undefined, record.dest_rect, [0, 0], scale, recipe, false, record.source_rect ?? undefined)
+}
+
+function inferLpcBodyType(character: CharacterManifest | undefined) {
+  const bodyLabel = [character?.display_name ?? '', String(character?.labels?.lpc_path ?? '')].join(' ').toLowerCase()
+  if (bodyLabel.includes('female') || bodyLabel.includes('feminine') || bodyLabel.includes('woman')) return 'female'
+  if (bodyLabel.includes('muscular')) return 'muscular'
+  if (bodyLabel.includes('pregnant')) return 'pregnant'
+  if (bodyLabel.includes('teen')) return 'teen'
+  if (bodyLabel.includes('child')) return 'child'
+  return 'male'
 }
 
 function shouldDeferLpcCloakLayer(layerLabel: string, sourceCharacter: CharacterManifest, hasSourcePart: boolean) {

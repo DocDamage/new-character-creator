@@ -1655,7 +1655,7 @@ function App() {
     setExportStatus('Building Godot SpriteFrames resource...')
     try {
       const { buildGodotSpriteFramesResource, buildRenderedFrameSet } = await loadExportPackage()
-      const renderedFrameSet = await buildRenderedFrameSet(selectedCharacter, recipe, characters, partLibrary)
+      const renderedFrameSet = await buildRenderedFrameSet(selectedCharacter, recipe, characters, partLibrary, lpcCatalog)
       downloadText(`${recipe.character_id}_sprite_frames.tres`, buildGodotSpriteFramesResource(recipe, renderedFrameSet, 'rendered/frames'))
       setExportStatus(`Godot SpriteFrames resource ready with ${renderedFrameSet.frame_count} rendered frame(s).`)
     } catch (error) {
@@ -1698,7 +1698,7 @@ function App() {
     setExportStatus('Rendering full frame set...')
     try {
       const { buildRenderedFrameSet } = await loadExportPackage()
-      const renderedFrameSet = await buildRenderedFrameSet(selectedCharacter, recipe, characters, partLibrary)
+      const renderedFrameSet = await buildRenderedFrameSet(selectedCharacter, recipe, characters, partLibrary, lpcCatalog)
       downloadJson(`${recipe.character_id}_rendered_frame_set.json`, renderedFrameSet)
       setExportStatus(`Rendered ${renderedFrameSet.frame_count} frame(s) and ${renderedFrameSet.spritesheet_count} spritesheet record(s).`)
     } catch (error) {
@@ -1728,7 +1728,7 @@ function App() {
     try {
       const { buildFullPackageManifest } = await loadExportPackage()
       const packageManifest = {
-        ...(await buildFullPackageManifest(selectedCharacter, recipe, characters, partLibrary, apesJobs, undefined, { placeholderModeEnabled: apesAllowPlaceholder })),
+        ...(await buildFullPackageManifest(selectedCharacter, recipe, characters, partLibrary, apesJobs, undefined, lpcCatalog, { placeholderModeEnabled: apesAllowPlaceholder })),
         filename_template: filenameTemplate,
       }
       downloadJson(`${recipe.character_id}_full_package_manifest.json`, packageManifest)
@@ -1743,7 +1743,7 @@ function App() {
     setExportStatus('Building rendered frame zip...')
     try {
       const { downloadRenderedFrameSetZip } = await loadExportPackage()
-      const summary = await downloadRenderedFrameSetZip(selectedCharacter, recipe, characters, partLibrary)
+      const summary = await downloadRenderedFrameSetZip(selectedCharacter, recipe, characters, partLibrary, lpcCatalog)
       setExportStatus(`Rendered frame zip ready with ${summary.frame_count} frame(s) and ${summary.spritesheet_count} spritesheet(s).`)
     } catch (error) {
       setExportStatus(`Rendered frame zip failed: ${error instanceof Error ? error.message : String(error)}`)
@@ -1755,7 +1755,7 @@ function App() {
     setExportStatus('Building full package zip...')
     try {
       const { downloadFullPackageZip } = await loadExportPackage()
-      const summary = await downloadFullPackageZip(selectedCharacter, recipe, characters, partLibrary, apesJobs, { placeholderModeEnabled: apesAllowPlaceholder })
+      const summary = await downloadFullPackageZip(selectedCharacter, recipe, characters, partLibrary, apesJobs, lpcCatalog, { placeholderModeEnabled: apesAllowPlaceholder })
       setExportStatus(`Full package zip ready with ${summary.frame_count} frame(s), ${summary.spritesheet_count} spritesheet(s), and ${summary.part_count} selected part folder(s).`)
     } catch (error) {
       setExportStatus(`Full package zip failed: ${error instanceof Error ? error.message : String(error)}`)
@@ -2099,6 +2099,7 @@ function App() {
                     animation={animation}
                     direction={direction}
                     frameIndex={frameIndex}
+                    lpcCatalog={lpcCatalog}
                     label={`${animation} ${direction} frame ${frameIndex + 1}`}
                   />
                 ) : (
@@ -2372,6 +2373,7 @@ function App() {
               animationSourceCharacter={animationSourceCharacter}
               characters={characters}
               partLibrary={partLibrary}
+              lpcCatalog={lpcCatalog}
               mainDirections={mainDirections}
               currentAnimation={animation}
               currentDirection={direction}

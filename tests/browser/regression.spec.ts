@@ -314,6 +314,9 @@ test('LPC catalog picker persists metadata-backed selections in saved recipes', 
       body: JSON.stringify(makeBrowserLpcCatalogFixture()),
     })
   })
+  await page.route('**/spritesheets/**', async (route) => {
+    await route.fulfill({ path: path.join(repoRoot, 'public', 'data', 'qa', 'apes_harness_job', 'parts', 'head.png') })
+  })
   await page.reload()
   await page.locator('#character').waitFor()
 
@@ -325,6 +328,7 @@ test('LPC catalog picker persists metadata-backed selections in saved recipes', 
   await page.getByTestId('lpc-catalog-item-select').selectOption('cape:cape_solid')
   await page.getByTestId('lpc-catalog-variant-select').selectOption('black')
   await expect(page.getByText(/Solid stores 1 upstream layer record/)).toBeVisible()
+  await expect(page.locator('.canvas-error')).toHaveCount(0)
 
   await page.getByTestId('save-recipe-button').click()
   const savedRecipes = await page.evaluate(() => JSON.parse(window.localStorage.getItem('pixel_creator_saved_recipes') || '[]'))
@@ -332,6 +336,12 @@ test('LPC catalog picker persists metadata-backed selections in saved recipes', 
   expect(savedRecipes[0].source_family).toBe('lpc')
   expect(savedRecipes[0].lpc_selections.cloak_back.item_id).toBe('cape:cape_solid')
   expect(savedRecipes[0].lpc_selections.cloak_back.variant).toBe('black')
+
+  await page.getByTestId('nav-exports').click()
+  const renderedFrameSet = await readJsonDownload<RenderedFrameSetDownload>(page, async () => {
+    await page.getByTestId('export-rendered-frame-set').click()
+  })
+  expect(renderedFrameSet.frames.length).toBeGreaterThan(0)
 })
 
 test('workstation APES mode does not create fake rectangular APES parts', async ({ page }) => {
