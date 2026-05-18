@@ -241,12 +241,33 @@ function getLpcAnimationSlices(sheet: LpcSheet): LpcAnimationSlice[] {
   if (isClassicLpcSheet(sheet)) {
     return classicLpcAnimationSlices
   }
+  const animation = inferLpcAnimation(sheet)
   return [{
-    name: inferLpcAnimation(sheet),
+    name: animation,
     rowStart: 0,
     rowCount: sheet.frame_rows ?? 1,
-    frameCount: sheet.frame_columns ?? 1,
+    frameCount: getLpcFrameCount(sheet, animation),
   }]
+}
+
+function getLpcFrameCount(sheet: LpcSheet, animation: AnimationName) {
+  const columns = sheet.frame_columns ?? 1
+  if (!hasTrailingPaletteColumn(sheet)) return columns
+
+  const canonicalSplitCounts: Partial<Record<string, number>> = {
+    idle: 1,
+    walk: 8,
+    spellcast: 7,
+    shoot: 13,
+    slash: 6,
+    thrust: 8,
+    hurt: 6,
+  }
+  return Math.min(columns, canonicalSplitCounts[animation] ?? Math.max(1, columns - 1))
+}
+
+function hasTrailingPaletteColumn(sheet: LpcSheet) {
+  return sheet.tags.includes('androgynous_bases') || sheet.tags.includes('stand_walk_bases')
 }
 
 function isClassicLpcSheet(sheet: LpcSheet) {

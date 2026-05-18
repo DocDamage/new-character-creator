@@ -1,6 +1,8 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { readFile } from 'node:fs/promises'
+import path from 'node:path'
+import { PNG } from 'pngjs'
 
 import { renderExportFilenameTemplate } from '../../src/filenameTemplates.ts'
 import { buildGenerationManifest } from '../../src/generationManifest.ts'
@@ -598,7 +600,9 @@ test('real LPC inventory exposes all available base animation families', async (
   const humanBody = characters.find((character) => character.labels.lpc_path === 'LPC Entry Bodies/Human Male')
   const skeletonBody = characters.find((character) => character.labels.lpc_path === 'LPC Entry Bodies/Skeleton')
   const copperAndrogynous = characters.find((character) => character.labels.lpc_path === 'Androgynous Bases/Copper')
+  const cometAndrogynous = characters.find((character) => character.labels.lpc_path === 'Androgynous Bases/Comet')
   const copperStandWalk = characters.find((character) => character.labels.lpc_path === 'Stand & Walk Bases/Copper')
+  const cometStandWalk = characters.find((character) => character.labels.lpc_path === 'Stand & Walk Bases/Comet')
   const chairFragments = characters.filter((character) => String(character.labels.lpc_path).includes('Sitting - Chair'))
   const lpcPartGroups = characters.filter((character) => character.labels.lpc_role === 'part')
   const slashPartLabels = new Set(
@@ -616,12 +620,65 @@ test('real LPC inventory exposes all available base animation families', async (
   assert.equal(humanBody?.directions.south.hurt.frame_count, 6)
   assert.deepEqual(skeletonBody?.animation_names, ['walk', 'spellcast', 'shoot', 'slash', 'hurt'])
   assert.deepEqual(copperAndrogynous?.animation_names, ['idle', 'walk', 'spellcast', 'shoot', 'slash', 'thrust', 'hurt'])
+  assert.deepEqual(cometAndrogynous?.animation_names, ['idle', 'walk', 'spellcast', 'shoot', 'slash', 'thrust', 'hurt'])
+  assert.equal(cometAndrogynous?.directions.south.idle.frame_count, 1)
+  assert.equal(cometAndrogynous?.directions.south.walk.frame_count, 8)
+  assert.equal(cometAndrogynous?.directions.south.spellcast.frame_count, 7)
+  assert.equal(cometAndrogynous?.directions.south.shoot.frame_count, 13)
+  assert.equal(cometAndrogynous?.directions.south.slash.frame_count, 6)
+  assert.equal(cometAndrogynous?.directions.south.thrust.frame_count, 8)
+  assert.equal(cometAndrogynous?.directions.south.hurt.frame_count, 6)
+  assert.equal(cometAndrogynous?.directions.south.walk.frames.at(-1).source_rect.x, 448)
+  assert.equal(cometAndrogynous?.directions.south.shoot.frames.at(-1).source_rect.x, 768)
   assert.deepEqual(copperStandWalk?.animation_names, ['idle', 'walk'])
+  assert.equal(cometStandWalk?.directions.south.idle.frame_count, 1)
+  assert.equal(cometStandWalk?.directions.south.walk.frame_count, 8)
   assert.equal(slashPartLabels.has('torso'), true)
   assert.equal(slashPartLabels.has('front_leg'), true)
   assert.equal(slashPartLabels.has('accessory'), true)
   assert.equal(slashPartLabels.has('weapon'), true)
   assert.equal(chairFragments.length, 0)
+})
+
+test('all generated LPC base frames are valid cropped animation cells', async () => {
+  const inventory = JSON.parse(await readFile(new URL('../../data/lpc/lpc_asset_inventory.json', import.meta.url), 'utf8'))
+  const baseCharacters = buildLpcCharacterManifests(inventory).filter((character) => character.labels.lpc_role === 'base')
+  const pngCache = new Map()
+  const allowedAnimations = new Set(['idle', 'walk', 'run', 'jump', 'sitting', 'emotes', 'spellcast', 'shoot', 'slash', 'thrust', 'hurt', 'attack'])
+  const issues = []
+
+  for (const character of baseCharacters) {
+    for (const animation of character.animation_names) {
+      if (!allowedAnimations.has(animation)) {
+        issues.push(`${character.labels.lpc_path} has non-canonical animation label ${animation}`)
+      }
+
+      for (const direction of ['north', 'east', 'south', 'west']) {
+        const frames = character.directions[direction]?.[animation]?.frames ?? []
+        if (frames.length === 0) {
+          issues.push(`${character.labels.lpc_path} ${animation}/${direction} has no frames`)
+        }
+
+        for (const frame of frames) {
+          const rect = frame.source_rect ?? { x: 0, y: 0, w: 64, h: 64 }
+          const png = await readCachedPng(pngCache, frame.path)
+          if (rect.x < 0 || rect.y < 0 || rect.x + rect.w > png.width || rect.y + rect.h > png.height) {
+            issues.push(`${character.labels.lpc_path} ${animation}/${direction}/${frame.index} crops outside ${png.width}x${png.height}`)
+            continue
+          }
+          const alphaPixels = countOpaquePixels(png, rect)
+          if (alphaPixels === 0) {
+            issues.push(`${character.labels.lpc_path} ${animation}/${direction}/${frame.index} is empty`)
+          }
+          if (alphaPixels === rect.w * rect.h) {
+            issues.push(`${character.labels.lpc_path} ${animation}/${direction}/${frame.index} is a fully opaque cell`)
+          }
+        }
+      }
+    }
+  }
+
+  assert.deepEqual(issues, [])
 })
 
 test('creator cockpit readiness summarizes selected reviewed parts and warnings', () => {
@@ -693,6 +750,25 @@ test('creator cockpit export target lookup falls back to generic profile', () =>
 
 function setAlpha(pixels, width, x, y, alpha) {
   pixels[(y * width + x) * 4 + 3] = alpha
+}
+
+async function readCachedPng(cache, browserPath) {
+  const filePath = path.join(process.cwd(), browserPath.replace(/^\/assets\//, 'assets/'))
+  const cached = cache.get(filePath)
+  if (cached) return cached
+  const png = PNG.sync.read(await readFile(filePath))
+  cache.set(filePath, png)
+  return png
+}
+
+function countOpaquePixels(png, rect) {
+  let count = 0
+  for (let y = rect.y; y < rect.y + rect.h; y += 1) {
+    for (let x = rect.x; x < rect.x + rect.w; x += 1) {
+      if (png.data[(y * png.width + x) * 4 + 3] > 0) count += 1
+    }
+  }
+  return count
 }
 
 function makeLayerBundle(...parts) {
