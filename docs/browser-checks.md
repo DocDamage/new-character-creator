@@ -19,7 +19,7 @@ If you want the automated smoke pass instead of stepping through the UI manually
 npm run test:browser
 ```
 
-That harness covers export/package downloads, standalone Godot SpriteFrames resources, credits/provenance report export, manual mask save persistence, recipe save/load, creator cockpit filtering/export-target persistence, Part Library bulk review actions, fake APES-part prevention, APES QA harness generation/import, APES fine-tune prep and Duelyst job-batch queueing, APES local-output image/mask package assets, Duelyst audit behavior, LPC inventory browse/select/label/import, LPC source picker canonical animations and compatible sheet parts, placeholder-mode manifest provenance, paged large Part Library imports, page-scoped visible export/review actions, and the portable local setup bundle download from `Settings`.
+That harness covers export/package downloads, standalone Godot SpriteFrames resources, credits/provenance report export, manual mask save persistence, recipe save/load, creator cockpit filtering/export-target persistence, Part Library bulk review actions, fake APES-part prevention, APES QA harness generation/import, APES fine-tune prep and Duelyst job-batch queueing, APES local-output image/mask package assets, Duelyst audit behavior, LPC inventory browse/select/label/import, LPC source picker canonical animations and compatible sheet parts, catalog-backed LPC selections, rendered-frame export, upstream credit readiness, right-click LPC source details, missing-animation queue visibility, oversize/custom-animation warnings, placeholder-mode manifest provenance, paged large Part Library imports, page-scoped visible export/review actions, and the portable local setup bundle download from `Settings`.
 
 For optional local cross-browser smoke coverage after installing the full browser set:
 
@@ -48,7 +48,8 @@ Latest verified automated run:
 - `npm run test:browser:all`
 - `npm run test:private-assets`
 - `npm run release:check`
-- lint passed, source-hygiene passed, 18 tool tests passed, build passed, release package validation passed, preview local-tool smoke passed, 15 Chromium browser tests passed, 45 Chromium/Firefox/WebKit browser-matrix tests passed, and private Duelyst audit passed
+- latest full release gate passed with lint, source-hygiene, 18 tool tests, build, release package validation, preview local-tool smoke, 15 Chromium browser tests, 45 Chromium/Firefox/WebKit browser-matrix tests, and private Duelyst audit
+- latest LPC hybrid follow-up smoke passed with `npm run build`, 37 tool tests, and 17 Chromium browser regression tests
 
 Latest verified local app state:
 
@@ -67,7 +68,7 @@ Latest verified local app state:
 - APES Lab exposes `Prepare Duelyst jobs`, backed by `tools/apes_bridge/prepare_duelyst_apes_jobs.py`, and loads the generated job configs into `Run Duelyst queue`.
 - Fine-tune prep writes `data/training/apes_finetune/finetune_manifest.json` and 64 Duelyst review folders.
 - Source metadata is optional private debugging data and is not a browser-check release gate.
-- LPC sheets are available as runtime `lpc_character` sources when the inventory is present. Canonical LPC action labels replace local folder aliases such as `magic` or `swing`, body base sheets are grouped into mannequin sources, and compatible LPC sheet parts only appear while an LPC mannequin/source pack context can use them.
+- LPC sheets are available as runtime `lpc_character` sources when the inventory is present. Canonical LPC action labels replace local folder aliases such as `magic` or `swing`, body base sheets are grouped into mannequin sources, and compatible LPC sheet parts only appear while an LPC mannequin/source pack context can use them. Catalog-backed LPC selections also persist in saved recipes, render through the shared preview/export path, list selected upstream credits in Exports, and feed the APES Lab missing-animation queue.
 
 ## Export Panel
 
@@ -110,7 +111,20 @@ Latest verified local app state:
 15. Click `Download SpriteFrames resource`.
 16. Confirm the `.tres` file contains real `Texture2D` frame resources pointing at `rendered/frames`.
 17. Click `Download credits report`.
-18. Confirm the JSON has `format: pixel_creator_credits_report`, selected part review status, LPC credit/license warnings when LPC parts are present, and APES visual QA notes when APES parts are present.
+18. Confirm the JSON has `format: pixel_creator_credits_report`, selected part review status, selected LPC catalog item credits when catalog selections are enabled, LPC credit/license warnings when LPC parts are present, and APES visual QA notes when APES parts are present.
+
+## LPC Catalog Selection Checks
+
+1. Open `Fast Creator`.
+2. Set the source pack to `LPC` and choose an LPC mannequin body.
+3. Select a catalog-backed cape from the LPC catalog picker.
+4. Save the recipe and open `Exports`.
+5. Confirm `LPC credit readiness` shows the selected upstream item count and missing-credit count.
+6. Click `Download rendered frame set` and confirm rendered frames download without canvas errors.
+7. Click `Download credits report` and confirm `selected_lpc_catalog_items` includes the selected item, variant, authors, licenses, URLs, upstream repo, and upstream commit when available.
+8. Return to `Fast Creator`, select a weapon catalog item with an oversize/custom-animation layer, and confirm the picker shows an oversize export-profile warning.
+9. Open `APES Lab` and confirm `Missing animation queue` is visible for LPC catalog-backed recipes.
+10. In `Asset Audit`, right-click an LPC sheet card, choose `View info`, and confirm the Details drawer opens.
 
 ## Manual Mask Save
 

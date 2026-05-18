@@ -26,6 +26,13 @@ Latest verification after the release hardening pass:
 - `npm run test:private-assets`: passed
 - `npm run release:check`: passed
 
+Latest LPC hybrid follow-up verification after the catalog renderer, credits,
+context-menu, missing-animation queue, and oversize-warning slices:
+
+- `npm run build`: passed
+- `npm run test:tools`: passed, 37 tests
+- `npx playwright test tests/browser/regression.spec.ts`: passed, 17 Chromium tests
+
 ```powershell
 npm run lint
 npm run check:source-hygiene
@@ -62,8 +69,11 @@ release controls, a usable LPC inventory browser/import workflow, and paged
 rendering for large layer-bundle imports in the Part Library, including
 page-scoped visible export and bulk review behavior. It also verifies APES
 fine-tune/Duelyst prep actions, credits/provenance report exports, LPC source
-picker canonical animations, LPC body-base mannequin coverage, and compatible
-LPC sheet-part selection. Private Duelyst package harvesting is available through
+picker canonical animations, LPC body-base mannequin coverage, compatible
+LPC sheet-part selection, catalog-backed LPC recipe persistence, rendered-frame
+export, selected upstream credit readiness in Exports, right-click `View info`
+details on LPC source cards, missing-animation queue visibility in APES Lab, and
+oversize/custom-animation warnings in the LPC catalog picker. Private Duelyst package harvesting is available through
 `npm run test:private-assets` and is intentionally opt-in outside the standard
 release gate.
 Browser regression is served from `npm run build && npx vite preview` so the
@@ -162,6 +172,14 @@ suite exercises the production bundle rather than the Vite dev transform path.
   and visible JSON export are scoped to the currently rendered page.
 - Placeholder APES mode is visibly warned in Settings and recorded in generic
   and full-package manifests as `apes.placeholder_mode_enabled`.
+- Catalog-backed LPC selections are persisted in recipes and now feed shared
+  preview/export rendering, selected upstream credit reports, Exports readiness
+  counts, and APES Lab missing-animation queue downloads.
+- LPC source cards expose shared context-menu actions by right-click, keyboard,
+  and the visible action button; `View info` opens the Details drawer.
+- LPC catalog picker options now surface oversize/custom-animation items as
+  degraded in the standard 64x64 export profile instead of pretending they are
+  normal weapon layers.
 
 ## APES Batch Result
 

@@ -199,16 +199,40 @@ choose `characters.local.json` for ignored or external assets.
   local-manifest regression. Browser coverage also checks canonical LPC
   animation labels, body-base coverage, and compatible sheet-part picker
   behavior.
-- LPC credits/license data is treated as useful private metadata, not as a
-  release gate.
+- A compact Universal LPC catalog path now exists beside the inventory path.
+  Catalog-backed selections preserve upstream item IDs, variants, credits,
+  multi-layer z positions, required/excluded tags, body paths, and custom
+  animation metadata in saved recipes.
+- Catalog-backed LPC selections render through the shared preview/export path.
+  The renderer sorts catalog layers by upstream z position around the base body,
+  while the older pseudo-character LPC sheet path remains as a degraded fallback.
+- Exported credits reports include `selected_lpc_catalog_items`, and the Exports
+  screen surfaces selected upstream item counts, missing credits, and
+  review-needed credit states before download.
+- APES Lab now exposes a missing-animation queue for LPC catalog-backed recipes.
+  It groups missing or unsupported catalog draw records for later AI/APES handoff
+  without selecting generated output automatically.
+- LPC source cards in Asset Audit support shared context-menu actions by
+  right-click, keyboard, and the visible action button. `View info` opens the
+  Details drawer.
+- Oversize/custom-animation catalog items are visibly marked as degraded in the
+  standard 64x64 export profile instead of being treated as normal weapon layers.
+- LPC credits/license data is treated as useful private metadata and selected
+  catalog credits are now exported, but raw LPC dumps remain ignored local inputs.
 
 ## Remaining Next Steps
 
-- Build a metadata-first LPC importer that consumes upstream-like
-  `sheet_definitions` and local loose folders separately.
-- Attach upstream per-layer credit records when `sheet_definitions` metadata is
-  available, rather than relying only on inventory-level credit-file warnings.
+- Expand metadata-first catalog usage across more UI surfaces so fewer workflows
+  depend on legacy pseudo-character LPC sheet parts.
 - Add richer LPC composition validation so mixed body types, equipment anchors,
-  and per-animation offsets can be reviewed before export.
+  palette/recolor metadata, and per-animation offsets can be reviewed before
+  export.
+- Add provider configuration, generation job records, and explicit output intake
+  for PixelLab/future AI backends that consume the missing-animation queue.
+- Add guided Training Inbox / Training Library records for dropped or generated
+  animation sets, with validation and review gates before frames become
+  selectable.
+- Add oversize/custom-animation export profiles when the app is ready to emit
+  larger canvases instead of only warning in the standard 64x64 profile.
 - Keep APES focused on unknown packs and review masks, not on replacing LPC's
   existing layer metadata.

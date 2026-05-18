@@ -11,7 +11,7 @@ Local Vite + React + TypeScript app for building a kitbash-oriented pixel charac
 - APES real bridge execution reaches the vendored network/deformer on the RTX 3060. The full 60-job Duelyst APES batch completed with 57 successful jobs and 3 sprite-specific APES rejects that are now recorded as failed outputs instead of crashing the whole batch.
 - The only APES preflight warning is that upstream APES originally targeted Python 3.7 while the working local environment uses Python 3.10.
 - Duelyst package unpacking, detector labeling, multi-frame atlas staging, and in-app browsing has been verified against `assets/Duelyst-Unit-Animations.unitypackage`: 7145 assets scanned, 696 sprite sheets labeled/viewable in Asset Audit, and 64 staged candidates with idle/run/attack/etc. frames openable in the workstation.
-- LPC intake is now usable as source content, not just audit metadata: local 64x64 LPC sheets are grouped by source/action into selectable `lpc_character` manifests, canonical LPC animations are exposed in the app, body bases are represented as mannequins, and compatible LPC sheet parts can be picked directly in Fast Creator.
+- LPC intake is now usable as source content, not just audit metadata: local 64x64 LPC sheets are grouped by source/action into selectable `lpc_character` manifests, canonical LPC animations are exposed in the app, body bases are represented as mannequins, compatible LPC sheet parts can be picked directly in Fast Creator, and catalog-backed LPC selections can drive preview, rendered exports, credits, and missing-animation handoff.
 - Source metadata is kept as optional private debugging data. It is not a release gate for this private tool.
 
 ## Commands
@@ -73,7 +73,7 @@ The `Settings` screen now also exposes a `Copy browser regression command` actio
 - APES local-output report import, reusable image/mask serving, and full-package zip part assets
 - Workstation APES mode refusing to create fake rectangular APES parts
 - Duelyst audit behavior, including the no-package warning path and staged-workstation opening path when the local unitypackage is available
-- LPC picker behavior, including canonical animation labels, body-base coverage, and compatible sheet-part choices for mannequin sources
+- LPC picker behavior, including canonical animation labels, body-base coverage, compatible sheet-part choices for mannequin sources, catalog-backed recipe persistence, rendered-frame export, upstream credit readiness, and oversize/custom-animation warnings
 - portable local setup bundle export from `Settings`
 - placeholder-mode export provenance and core accessible controls
 - large Part Library layer-bundle imports staying paged instead of rendering every part at once
@@ -102,10 +102,13 @@ For an optional local cross-browser smoke pass after installing all Playwright b
 - Asset Audit with class counts, source warnings, and Duelyst unitypackage inspection/staging.
 - Asset Audit LPC browser with sheet previews, search/category/grid filters, selected/visible import, inferred or explicit part labels, reviewed-on-import, and credit/license provenance warnings.
 - Runtime LPC character builder that groups action-specific sheets into canonical animation manifests, keeps classic LPC sheet row mappings intact, exposes body bases as mannequins, and limits part choices to compatible LPC layers.
+- Universal LPC catalog bridge that parses upstream-style item metadata, preserves multi-layer z positions, required/excluded tags, variants, body paths, custom animations, and selected-item credits, then uses catalog-backed selections in saved recipes.
+- Shared LPC render planning for preview and rendered exports, with catalog layers sorted by upstream z position around the base body and legacy pseudo-character drawing retained as a degraded fallback.
+- LPC catalog picker with required-tag/body/animation warnings, visible oversize/custom-animation export-profile warnings, selected-item credit readiness, and persisted `lpc_selections`.
 - Duelyst Asset Audit filters for search, body class, source family, training role, and staged state, plus batch APES job creation for staged candidates.
-- APES Lab with first-class job creation, local preflight/bridge actions, one-click fine-tune prep, one-click Duelyst job-batch prep, a local QA harness generator, logs, job config export, explicit placeholder-mode provenance in exports, failed-output surfacing, file import, pasted JSON import, inventory import, and APES-to-part-library conversion.
+- APES Lab with first-class job creation, local preflight/bridge actions, one-click fine-tune prep, one-click Duelyst job-batch prep, a local QA harness generator, logs, job config export, LPC missing-animation queue handoff, explicit placeholder-mode provenance in exports, failed-output surfacing, file import, pasted JSON import, inventory import, and APES-to-part-library conversion.
 - APES CLI bridge tools for preparing and running private Duelyst job batches from `data/apes/input/`, including partial-failure recording and strict opt-in failure mode.
-- Export panel for generic manifests, rendered frame/package downloads, Godot scenes, SpriteFrames resources, batch queues, and a credits/provenance report for selected parts.
+- Export panel for generic manifests, rendered frame/package downloads, Godot scenes, SpriteFrames resources, batch queues, selected upstream LPC credit readiness, and a credits/provenance report for selected parts and catalog items.
 - Production-oriented full package zip with rendered PNGs, Godot 4 `SpriteFrames` resources, Unity import settings and Editor importer script, RPG Maker MZ single-character sheet, Aseprite import script/spec, credits report, and useful local metadata.
 - Release package validator that rejects private manifests, local `/@fs/` and `/__local/` paths, and missing bundled manifest assets.
 - Browser-side spritesheet downloads for the current animation/direction and all directions of the current action.

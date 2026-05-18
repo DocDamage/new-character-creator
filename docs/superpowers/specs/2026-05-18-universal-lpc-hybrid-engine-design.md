@@ -615,6 +615,59 @@ The implementation should protect these invariants:
 - Any imported custom part must carry provenance: source family, source id/path if available, extraction method, reviewed state, and compatible recipe modes.
 - Degraded mode must be explicit: if catalog metadata is unavailable, the app may use legacy sheet inventory, but should label the result as degraded and avoid pretending it has upstream layer/credit fidelity.
 
+## Implementation Progress
+
+Status as of the local `main` branch after the 2026-05-18 follow-up slices:
+
+- Phase 1 catalog bridge is partially implemented. The app has a compact
+  `lpcCatalog` model and local builder path that preserves upstream-style item
+  IDs, layers, variants, tags, body paths, custom animations, and credits.
+- Phase 2 composition engine is partially implemented. `lpcAssetResolver`,
+  `lpcComposition`, and `lpcRenderPlan` convert selected catalog items into
+  z-sorted draw records for preview and rendered exports. Legacy LPC
+  pseudo-character drawing remains as a degraded fallback.
+- Phase 3 source-family boundaries have a central `sourceFamilyRegistry`.
+  Source character pickers use recipe mode/family rules to avoid default
+  cross-family mixing, though the broader mode-specific workspace split still
+  needs more UX hardening.
+- Phase 4 catalog picker/disclosure work is partially implemented. Fast Creator
+  can persist `lpc_selections`, show required-tag/body/animation warnings,
+  expose selected-item credit readiness, and visibly mark oversize/custom
+  animation items as degraded in the standard 64x64 export profile. Asset Audit
+  has source-family tabs, a Details drawer, and shared context-menu behavior for
+  LPC source cards.
+- Phase 5 recipe and credits migration is partially implemented. Saved recipes
+  store `recipe_mode`, `source_family`, and `lpc_selections`; exported credit
+  reports include `selected_lpc_catalog_items`; Exports shows selected upstream
+  credit readiness before download.
+- Phase 6 has the first missing-animation foundation only. APES Lab now exposes
+  a downloadable missing-animation queue built from catalog draw records with
+  `missing` or `unsupported` status. Provider configuration, generation jobs,
+  output intake, and Training Inbox workflows are still pending.
+- Phase 7 rigging and animation authoring has not started.
+
+Most recent focused verification:
+
+- `npm run build`: passed
+- `npm run test:tools`: passed, 37 tests
+- `npx playwright test tests/browser/regression.spec.ts`: passed, 17 Chromium
+  browser regression tests
+
+Remaining high-value slices:
+
+- Add release-blocking export affordances for missing/review-needed selected
+  catalog credits instead of only showing readiness text.
+- Apply shared context menus and Details drawer to preview frames, part rows,
+  recipe layers, export records, and credits.
+- Replace `title` attributes with a real tooltip primitive for badges, disabled
+  actions, and icon-only controls.
+- Add PixelLab/future AI provider configuration and persistent generation job
+  records that consume missing-animation queue items.
+- Add wizard-driven Training Inbox and Training Library records for dropped,
+  generated, or baked animation sets.
+- Add oversize/custom-animation export profiles when larger-canvas outputs are
+  supported.
+
 ## Migration Phases
 
 Phase 0: Fixture and parity groundwork
