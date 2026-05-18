@@ -34,7 +34,7 @@ export function buildLpcCharacterManifests(inventory: LpcAssetInventory | null):
   return [...baseSheets, ...partSheets]
     .map((sheet, index) => {
       const path = buildLpcSheetUrl(inventory, sheet.path) ?? sheet.path
-      const animation = inferLpcAnimation(sheet.file_name)
+      const animation = inferLpcAnimation(sheet)
       const role = isLpcBaseSheet(sheet) ? 'base' : 'part'
       const partLabel = inferLpcPartLabelForCharacter(sheet)
       const framesByDirection = Object.fromEntries(
@@ -149,12 +149,30 @@ const lpcPartLabelHints: Array<[PartLabel, string[]]> = [
   ['accessory', ['accessory', 'jewelry', 'earring', 'belt']],
 ]
 
-function inferLpcAnimation(fileName: string): AnimationName {
-  const normalized = fileName.toLowerCase()
-  if (normalized.includes('walk')) return 'walk'
-  if (normalized.includes('run')) return 'walk'
-  if (normalized.includes('jump')) return 'running_jump'
-  if (normalized.includes('slash') || normalized.includes('attack') || normalized.includes('hurt')) return 'attack'
+function inferLpcAnimation(sheet: LpcAssetInventory['sheets'][number]): AnimationName {
+  const normalizedSegments = sheet.path
+    .replace(/\.png$/i, '')
+    .replaceAll('\\', '/')
+    .split('/')
+    .flatMap((segment) => segment.toLowerCase().split(/[^a-z0-9]+/))
+    .filter(Boolean)
+  const segmentSet = new Set(normalizedSegments)
+  if (segmentSet.has('walkcycle')) return 'walkcycle'
+  if (segmentSet.has('walk')) return 'walk'
+  if (segmentSet.has('run')) return 'run'
+  if (segmentSet.has('jump')) return 'jump'
+  if (segmentSet.has('sitting') || segmentSet.has('sit')) return 'sitting'
+  if (segmentSet.has('emotes') || segmentSet.has('emote')) return 'emotes'
+  if (segmentSet.has('magic')) return 'magic'
+  if (segmentSet.has('shoot')) return 'shoot'
+  if (segmentSet.has('swing')) return 'swing'
+  if (segmentSet.has('spellcast') || segmentSet.has('spell')) return 'spellcast'
+  if (segmentSet.has('thrust')) return 'thrust'
+  if (segmentSet.has('slash')) return 'slash'
+  if (segmentSet.has('bow')) return 'bow'
+  if (segmentSet.has('attack')) return 'attack'
+  if (segmentSet.has('hurt')) return 'hurt'
+  if (segmentSet.has('idle')) return 'idle'
   return 'idle'
 }
 

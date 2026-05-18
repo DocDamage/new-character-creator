@@ -52,7 +52,9 @@ export function CompositeCanvas({
 
         const sourcePart = partLibrary.find((part) => part.part_id === layer.source_part_id)
         const bounds = sourcePart?.bounds ?? humanoid64Preset[layer.label]
-        const sourceFrame = getFrameRef(sourceCharacter, animation, direction, frameIndex)
+        const sourceFrame =
+          getFrameRef(sourceCharacter, animation, direction, frameIndex) ??
+          getFrameRef(sourceCharacter, sourceCharacter.animation_names[0] ?? animation, direction, frameIndex)
         const source = sourcePart?.image_data_url ?? sourceFrame?.path
         if (!source) continue
 

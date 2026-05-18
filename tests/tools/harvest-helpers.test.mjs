@@ -260,14 +260,60 @@ test('LPC inventory sheets can be exposed as cropped source characters', () => {
         lpc_grid: true,
         tags: ['shirt', 'blue'],
       },
+      {
+        path: 'Clothes/Blue/Shirt/Run.png',
+        category: 'Clothes',
+        file_name: 'Run.png',
+        width: 320,
+        height: 256,
+        frame_width: 64,
+        frame_height: 64,
+        frame_columns: 5,
+        frame_rows: 4,
+        lpc_grid: true,
+        tags: ['shirt', 'blue'],
+      },
+      {
+        path: 'lpc_entry/png/bow/WEAPON_bow.png',
+        category: 'lpc_entry',
+        file_name: 'WEAPON_bow.png',
+        width: 832,
+        height: 256,
+        frame_width: 64,
+        frame_height: 64,
+        frame_columns: 13,
+        frame_rows: 4,
+        lpc_grid: true,
+        tags: ['weapon', 'bow'],
+      },
+      {
+        path: 'Androgynous Bases/Copper/magic.png',
+        category: 'Androgynous Bases',
+        file_name: 'magic.png',
+        width: 832,
+        height: 256,
+        frame_width: 64,
+        frame_height: 64,
+        frame_columns: 13,
+        frame_rows: 4,
+        lpc_grid: true,
+        tags: ['base'],
+      },
     ],
   })
 
-  assert.equal(characters.length, 2)
+  assert.equal(characters.length, 5)
+  const shirtPart = characters.find((character) => character.labels.lpc_path === 'Clothes/Blue/Shirt, Long-Sleeved.png')
+  const runPart = characters.find((character) => character.labels.lpc_path === 'Clothes/Blue/Shirt/Run.png')
+  const bowPart = characters.find((character) => character.labels.lpc_path === 'lpc_entry/png/bow/WEAPON_bow.png')
+  const magicBase = characters.find((character) => character.labels.lpc_path === 'Androgynous Bases/Copper/magic.png')
   assert.equal(characters[0].class_type, 'lpc_character')
   assert.equal(characters[0].labels.lpc_role, 'base')
-  assert.equal(characters[1].labels.lpc_role, 'part')
-  assert.equal(characters[1].labels.lpc_part_label, 'torso')
+  assert.equal(shirtPart?.labels.lpc_role, 'part')
+  assert.equal(shirtPart?.labels.lpc_part_label, 'torso')
+  assert.deepEqual(runPart?.animation_names, ['run'])
+  assert.deepEqual(bowPart?.animation_names, ['bow'])
+  assert.deepEqual(magicBase?.animation_names, ['magic'])
   assert.equal(characters[0].directions.south.idle.frame_count, 5)
   assert.deepEqual(characters[0].directions.east.idle.frames[0].source_rect, { x: 0, y: 64, w: 64, h: 64 })
   assert.deepEqual(characters[0].directions.south.idle.frames[0].source_rect, { x: 0, y: 128, w: 64, h: 64 })
