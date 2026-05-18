@@ -353,6 +353,8 @@ test('LPC catalog picker persists metadata-backed selections in saved recipes', 
   expect(savedRecipes[0].lpc_selections.cloak_back.variant).toBe('black')
 
   await page.getByTestId('nav-exports').click()
+  await expect(page.getByTestId('export-lpc-credit-readiness')).toContainText(/1 selected upstream item/i)
+  await expect(page.getByTestId('export-lpc-credit-readiness')).toContainText(/0 missing credits/i)
   const renderedFrameSet = await readJsonDownload<RenderedFrameSetDownload>(page, async () => {
     await page.getByTestId('export-rendered-frame-set').click()
   })
