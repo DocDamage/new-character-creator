@@ -1,4 +1,4 @@
-import { existsSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import { copyFile, mkdir, readFile, rm, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -49,6 +49,15 @@ type CreditsReportDownload = {
 }
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..')
+const spriteAssetRoot = path.join(repoRoot, 'assets', 'Animated-Pixel-Pack-Characters-V1')
+const qaFallbackPng = path.join(repoRoot, 'public', 'data', 'qa', 'apes_harness_job', 'parts', 'head.png')
+const realLpcInventoryPath = path.join(repoRoot, 'data', 'lpc', 'lpc_asset_inventory.json')
+const forceQaAssetRoutes = process.env.PIXEL_CREATOR_FORCE_QA_ASSET_ROUTES === '1'
+const releaseManifestPath = path.join(repoRoot, 'public', 'data', 'manifests', 'characters.json')
+const releaseManifestText = existsSync(releaseManifestPath) ? readFileSync(releaseManifestPath, 'utf8') : ''
+const releaseBrowserManifestHasLpc = /"class_type"\s*:\s*"lpc_character"/.test(releaseManifestText)
+const privateLpcBrowserAvailable = !forceQaAssetRoutes && (existsSync(realLpcInventoryPath) || releaseBrowserManifestHasLpc)
+const privateLpcBrowserTest = privateLpcBrowserAvailable ? test : test.skip
 
 test.beforeEach(async ({ page }) => {
   const startupConsoleErrors: string[] = []
@@ -57,6 +66,12 @@ test.beforeEach(async ({ page }) => {
       startupConsoleErrors.push(message.text())
     }
   })
+
+  if (forceQaAssetRoutes || !existsSync(spriteAssetRoot)) {
+    await page.route('**/assets/Animated-Pixel-Pack-Characters-V1/**', async (route) => {
+      await route.fulfill({ contentType: 'image/png', path: qaFallbackPng })
+    })
+  }
 
   await page.goto('/', { waitUntil: 'domcontentloaded' })
   await page.locator('#character').waitFor()
@@ -201,7 +216,7 @@ test('creator cockpit filters parts and persists export target profile', async (
   await expect(page.getByTestId('exports-target-profile')).toHaveValue('rpg_maker_mz')
 })
 
-test('LPC picker exposes canonical animations and compatible sheet parts', async ({ page }) => {
+privateLpcBrowserTest('LPC picker exposes canonical animations and compatible sheet parts', async ({ page }) => {
   await page.getByTestId('preview-live-layer').selectOption('torso')
   await expect(page.getByTestId('preview-live-part').locator('optgroup[label="LPC sheet parts"]')).toHaveCount(0)
 
@@ -296,7 +311,7 @@ test('LPC picker exposes canonical animations and compatible sheet parts', async
   await expect(page.getByTestId('fast-live-part').locator('optgroup[label="LPC sheet parts"]')).toHaveCount(0)
 })
 
-test('LPC motion source can borrow attack actions for bases that do not include them', async ({ page }) => {
+privateLpcBrowserTest('LPC motion source can borrow attack actions for bases that do not include them', async ({ page }) => {
   await page.getByTestId('source-pack-filter').selectOption('lpc')
   const revisedBodyOption = page.locator('#character option', { hasText: 'LPC [LPC Revised] Character Basics / Body / Feminine, Thin' })
   const humanBodyOption = page.locator('#character option', { hasText: 'LPC Entry Bodies / Human Male' })
@@ -321,7 +336,7 @@ test('LPC motion source can borrow attack actions for bases that do not include 
   await expect(page.getByText(/Motion source drives pose and frame count/i)).toBeVisible()
 })
 
-test('LPC catalog picker persists metadata-backed selections in saved recipes', async ({ page }) => {
+privateLpcBrowserTest('LPC catalog picker persists metadata-backed selections in saved recipes', async ({ page }) => {
   await page.route('**/data/lpc/lpc_catalog.json', async (route) => {
     await route.fulfill({
       status: 200,
