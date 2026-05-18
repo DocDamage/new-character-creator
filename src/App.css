@@ -1090,6 +1090,18 @@ input {
   display: inline-flex;
 }
 
+.context-menu-area {
+  position: relative;
+  display: grid;
+  min-width: 0;
+  outline: none;
+}
+
+.context-menu-area:focus-visible > article {
+  border-color: var(--focus);
+  box-shadow: 0 0 0 2px rgba(94, 184, 255, 0.22);
+}
+
 .icon-button {
   width: 34px;
   min-width: 34px;

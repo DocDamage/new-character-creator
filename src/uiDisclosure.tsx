@@ -55,6 +55,38 @@ type ContextMenuAction = {
   onSelect: () => void
 }
 
+function ContextMenuItems({
+  actions,
+  onClose,
+  returnFocus,
+}: {
+  actions: ContextMenuAction[]
+  onClose: () => void
+  returnFocus?: () => void
+}) {
+  return (
+    <div className="context-menu" role="menu">
+      {actions.map((action) => (
+        <button
+          key={action.id}
+          type="button"
+          role="menuitem"
+          disabled={action.disabled}
+          title={action.disabled ? action.disabledReason : action.label}
+          onClick={() => {
+            if (action.disabled) return
+            action.onSelect()
+            onClose()
+            returnFocus?.()
+          }}
+        >
+          {action.label}
+        </button>
+      ))}
+    </div>
+  )
+}
+
 type ContextMenuButtonProps = {
   label?: string
   actions: ContextMenuAction[]
@@ -104,26 +136,60 @@ export function ContextMenuButton({ label = 'More actions', actions }: ContextMe
         ...
       </button>
       {open ? (
-        <div className="context-menu" role="menu">
-          {actions.map((action) => (
-            <button
-              key={action.id}
-              type="button"
-              role="menuitem"
-              disabled={action.disabled}
-              title={action.disabled ? action.disabledReason : action.label}
-              onClick={() => {
-                if (action.disabled) return
-                action.onSelect()
-                setOpen(false)
-                buttonRef.current?.focus()
-              }}
-            >
-              {action.label}
-            </button>
-          ))}
-        </div>
+        <ContextMenuItems actions={actions} onClose={() => setOpen(false)} returnFocus={() => buttonRef.current?.focus()} />
       ) : null}
     </span>
+  )
+}
+
+type ContextMenuAreaProps = {
+  label: string
+  actions: ContextMenuAction[]
+  children: ReactNode
+}
+
+export function ContextMenuArea({ label, actions, children }: ContextMenuAreaProps) {
+  const [open, setOpen] = useState(false)
+  const areaRef = useRef<HTMLDivElement | null>(null)
+
+  useEffect(() => {
+    if (!open) return
+    const onPointerDown = (event: PointerEvent) => {
+      if (!areaRef.current?.contains(event.target as Node)) setOpen(false)
+    }
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setOpen(false)
+        areaRef.current?.focus()
+      }
+    }
+    window.addEventListener('pointerdown', onPointerDown)
+    window.addEventListener('keydown', onKeyDown)
+    return () => {
+      window.removeEventListener('pointerdown', onPointerDown)
+      window.removeEventListener('keydown', onKeyDown)
+    }
+  }, [open])
+
+  return (
+    <div
+      ref={areaRef}
+      className="context-menu-area"
+      tabIndex={0}
+      aria-label={label}
+      onContextMenu={(event) => {
+        event.preventDefault()
+        setOpen(true)
+      }}
+      onKeyDown={(event) => {
+        if (event.key === 'ContextMenu' || (event.shiftKey && event.key === 'F10')) {
+          event.preventDefault()
+          setOpen(true)
+        }
+      }}
+    >
+      {children}
+      {open ? <ContextMenuItems actions={actions} onClose={() => setOpen(false)} returnFocus={() => areaRef.current?.focus()} /> : null}
+    </div>
   )
 }
