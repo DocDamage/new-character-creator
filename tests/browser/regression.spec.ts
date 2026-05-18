@@ -553,7 +553,7 @@ test('imported APES parts include image and mask files in full package exports',
 })
 
 test('Duelyst audit stays usable with or without the local package', async ({ page }) => {
-  const privatePackageAvailable = existsSync(path.join(repoRoot, 'assets', 'Duelyst-Unit-Animations.unitypackage'))
+  const privatePackageAvailable = !forceQaAssetRoutes && existsSync(path.join(repoRoot, 'assets', 'Duelyst-Unit-Animations.unitypackage'))
   const runPrivateAssetPath = process.env.PIXEL_CREATOR_PRIVATE_ASSETS === '1'
   if (runPrivateAssetPath) {
     test.setTimeout(360_000)
@@ -573,6 +573,7 @@ test('Duelyst audit stays usable with or without the local package', async ({ pa
   }
 
   await page.getByTestId('nav-audit').click()
+  await page.getByRole('tab', { name: 'Duelyst' }).click()
   await page.getByTestId('run-duelyst-audit').click()
   await expect(page.getByTestId('run-duelyst-audit')).toBeEnabled({ timeout: runPrivateAssetPath ? 300_000 : 120_000 })
 
