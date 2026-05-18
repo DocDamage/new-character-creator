@@ -7,13 +7,31 @@ const lpcDirectionRows: Array<[Direction, number]> = [
   ['west', 3],
 ]
 
+const maxLpcBaseSheets = 360
+const maxLpcPartSheetsPerLabel = 180
+
 export function buildLpcCharacterManifests(inventory: LpcAssetInventory | null): CharacterManifest[] {
   if (!inventory) return []
 
-  return inventory.sheets
+  const selectableSheets = inventory.sheets
     .filter(isSelectableLpcSheet)
     .sort((left, right) => lpcSheetSortScore(left) - lpcSheetSortScore(right) || left.path.localeCompare(right.path))
-    .slice(0, 900)
+
+  const baseSheets = selectableSheets
+    .filter(isLpcBaseSheet)
+    .slice(0, maxLpcBaseSheets)
+  const partSheetsByLabel = new Map<PartLabel, LpcAssetInventory['sheets']>()
+  for (const sheet of selectableSheets) {
+    if (isLpcBaseSheet(sheet)) continue
+    const label = inferLpcPartLabelForCharacter(sheet)
+    const bucket = partSheetsByLabel.get(label) ?? []
+    if (bucket.length >= maxLpcPartSheetsPerLabel) continue
+    bucket.push(sheet)
+    partSheetsByLabel.set(label, bucket)
+  }
+  const partSheets = Array.from(partSheetsByLabel.values()).flat()
+
+  return [...baseSheets, ...partSheets]
     .map((sheet, index) => {
       const path = buildLpcSheetUrl(inventory, sheet.path) ?? sheet.path
       const animation = inferLpcAnimation(sheet.file_name)
@@ -85,14 +103,14 @@ function isSelectableLpcSheet(sheet: LpcAssetInventory['sheets'][number]) {
   if (!sheet.lpc_grid || sheet.frame_rows !== 4 || !sheet.frame_columns || sheet.frame_columns < 1) return false
   const normalized = [sheet.file_name, sheet.path, ...sheet.tags].join(' ').toLowerCase()
   if (normalized.includes('headless')) return false
-  return isLpcBaseSheet(sheet) || /\b(hair|hat|hood|helmet|shirt|pants|skirt|dress|shoe|boot|armor|weapon|sword|bow|shield|cape|cloak|beard|eyes|ears|gloves?)\b/.test(normalized)
+  return isLpcBaseSheet(sheet) || /\b(hair|hairs|hat|hats|hood|hoods|helmet|helmets|shirt|shirts|pants|skirt|skirts|dress|dresses|shoe|shoes|boot|boots|armor|armour|weapon|weapons|sword|swords|bow|bows|shield|shields|cape|capes|cloak|cloaks|beard|beards|eyes|ears|glove|gloves)\b/.test(normalized)
 }
 
 export function isLpcBaseSheet(sheet: LpcAssetInventory['sheets'][number]) {
   const normalized = [sheet.category, sheet.file_name, sheet.path, ...sheet.tags].join(' ').toLowerCase()
   const path = sheet.path.replaceAll('\\', '/').toLowerCase()
   const fileAndTags = [sheet.file_name, ...sheet.tags].join(' ').toLowerCase()
-  if (/\b(clothes?|hair|helmet|weapon|shield|armor|pants|shirt|shoe|cape|cloak|hat|hood|beard|eyes|ears|gloves?)\b/.test(normalized)) return false
+  if (/\b(clothes?|hair|hairs|helmet|helmets|weapon|weapons|shield|shields|armor|armour|pants|shirt|shirts|shoe|shoes|boot|boots|cape|capes|cloak|cloaks|hat|hats|hood|hoods|beard|beards|eyes|ears|glove|gloves)\b/.test(normalized)) return false
   return /\bbase\b/.test(fileAndTags) || path.includes('/bases/') || sheet.category.toLowerCase().includes('bases')
 }
 
@@ -104,23 +122,30 @@ function lpcSheetSortScore(sheet: LpcAssetInventory['sheets'][number]) {
 }
 
 function inferLpcPartLabelForCharacter(sheet: LpcAssetInventory['sheets'][number]): PartLabel {
-  const normalized = [sheet.category, sheet.file_name, ...sheet.tags].join(' ').toLowerCase()
+  const path = sheet.path.replaceAll('\\', '/').toLowerCase()
+  const fileName = sheet.file_name.toLowerCase()
+  if (path.includes('/feet_') || fileName.startsWith('feet_')) return 'front_leg'
+  if (path.includes('/hands_') || fileName.startsWith('hands_')) return 'front_arm'
+  if (path.includes('/legs_') || fileName.startsWith('legs_')) return 'front_leg'
+  if (path.includes('/head_') || fileName.startsWith('head_')) return 'hair_hat_hood'
+  if (path.includes('/torso_') || fileName.startsWith('torso_')) return 'torso'
+
+  const normalized = [sheet.category, sheet.file_name, sheet.path, ...sheet.tags].join(' ').toLowerCase()
   return lpcPartLabelHints.find(([, hints]) => hints.some((hint) => normalized.includes(hint)))?.[0] ?? 'accessory'
 }
 
 const lpcPartLabelHints: Array<[PartLabel, string[]]> = [
   ['hair_hat_hood', ['hair', 'hat', 'hood', 'helmet']],
-  ['head', ['head', 'face_skin', 'skin']],
-  ['face', ['face', 'eyes', 'nose', 'mouth', 'beard']],
-  ['torso', ['torso', 'body', 'shirt', 'armor', 'dress', 'chest']],
-  ['front_arm', ['arm', 'sleeve', 'glove']],
-  ['front_leg', ['leg', 'pants', 'trousers']],
-  ['feet', ['feet', 'boot', 'shoe']],
-  ['weapon', ['weapon', 'sword', 'bow', 'axe', 'staff', 'wand']],
+  ['face', ['face', 'eyes', 'ears', 'nose', 'mouth', 'beard']],
+  ['front_leg', ['leg', 'pants', 'trousers', 'feet', 'boot', 'shoe']],
+  ['front_arm', ['glove', 'hands']],
   ['shield', ['shield']],
+  ['weapon', ['weapon', 'sword', 'bow', 'axe', 'staff', 'wand']],
   ['cloak_back', ['cloak', 'cape']],
   ['back_item', ['backpack', 'quiver', 'wings']],
   ['aura_effect', ['aura', 'effect', 'magic']],
+  ['torso', ['torso', 'body', 'shirt', 'sleeve', 'armor', 'armour', 'dress', 'chest']],
+  ['head', ['head', 'face_skin', 'skin']],
   ['accessory', ['accessory', 'jewelry', 'earring', 'belt']],
 ]
 
