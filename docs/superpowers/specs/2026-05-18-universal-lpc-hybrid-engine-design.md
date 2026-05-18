@@ -221,6 +221,39 @@ The first implementation should keep final exported frames on a 64x64 canvas for
 
 Recommendation: support standard 64x64 animations first, expose oversize items as selectable only when the current export profile supports them, and show a readiness warning otherwise.
 
+## Future Rigging And Animation Authoring
+
+Bone/rig-based animation authoring is a mandatory future capability, but it is gated behind a stable LPC engine, source-family separation, recipe migration, and export pipeline. It should not be implemented as part of the initial catalog/composition fix because it introduces a second animation model.
+
+The rigging system should add:
+
+- a 2D skeleton model with named bones, joints, pivots, constraints, and attachment points
+- per-layer attachments so bodies, clothes, hair, weapons, capes, and custom parts can follow a rig without losing their source-family provenance
+- keyframed pose editing with onion-skin previews
+- animation-profile output so a newly authored action can become normal spritesheet frames
+- frame baking that writes reviewed custom animation frames, not hidden procedural state
+- optional AI/APES/PixelLab assistance for missing frames, cleanup, in-betweens, and consistency checks
+- provenance for every generated or edited frame
+
+The rigging system should not replace Universal LPC metadata. It should consume catalog-backed draw records and custom parts, then bake new frames into the same reviewed asset pipeline used by exports. Game exports should still receive spritesheets, frame metadata, and credits; they should not need this app's rig runtime.
+
+Initial rigging scope after the stable foundation:
+
+- create a new animation from an existing LPC-compatible body and selected parts
+- clone timing from a reference animation such as slash, thrust, shoot, or walk
+- edit key poses on a small number of frames
+- bake to a named custom animation profile
+- mark every missing, unsupported, generated, or manually edited frame for review
+
+Deferred rigging scope:
+
+- mesh deformation
+- runtime skeletal export to game engines
+- automatic rig extraction from arbitrary sprite sheets
+- physics simulation for capes, hair, or cloth
+
+This phase becomes eligible only when the prior phases meet their acceptance criteria and the preview/export renderer uses one shared composition path.
+
 ## Composition Algorithm
 
 Input:
@@ -560,6 +593,15 @@ Phase 6: Oversize and AI extension
 - Add missing-animation queue.
 - PixelLab/AI outputs become reviewed custom parts with provenance, never silent upstream replacements.
 
+Phase 7: Mandatory future rigging and animation authoring
+
+- Add a 2D skeleton model with bones, joints, pivots, constraints, and attachment points.
+- Add a keyframe editor with onion-skin previews for creating new animation profiles.
+- Bake rig output into reviewed custom spritesheet frames.
+- Route baked frames through the same credits, provenance, readiness, preview, and export systems as catalog-backed assets.
+- Keep game exports frame-based unless a later export profile explicitly supports runtime skeletons.
+- Start only after the LPC engine, source-family boundaries, recipe migration, and export path are stable.
+
 ## Test Plan
 
 Tool tests:
@@ -574,6 +616,8 @@ Tool tests:
 - resolve xlong hair foreground/background draw records in z-order
 - classify longsword oversize layers as unsupported for standard 64x64 export
 - produce selected-item credits report entries
+- serialize future rig definitions separately from baked spritesheet frames
+- verify baked custom animation frames retain source-family provenance and review status
 
 Browser tests:
 
@@ -590,12 +634,14 @@ Browser tests:
 - context menus open by right click and keyboard, stay in the viewport, and return focus on close
 - icon buttons, badges, and disabled actions expose tooltips on hover and focus
 - metadata/details are hidden by default but available through `View info`
+- after the rigging phase exists, a baked custom animation appears as a normal selectable/exportable animation profile with review warnings
 
 Visual/manual QA:
 
 - screen capture for cape/hair/weapon ordering
 - screen capture for tab density at desktop and mobile widths
 - verify long item names, warnings, and tooltip text do not overflow controls
+- after the rigging phase exists, hand-check onion skin, pivots, baked frame alignment, and pixel cleanup
 - export a package and inspect Godot/RPG Maker metadata for selected item provenance
 
 ## Acceptance Criteria
@@ -612,6 +658,8 @@ Visual/manual QA:
 - File paths, frame geometry, full credits, cache paths, and debug counts are hidden by default and available through `View info`.
 - Right-click/context-menu actions exist for preview frames, source/part rows, recipe layers, and export/credit records.
 - Every icon-only action, readiness badge, disabled menu item, and compatibility indicator has a hover/focus tooltip.
+- Bone/rig-based animation authoring is present in the roadmap as a mandatory later phase, gated behind stable composition, family separation, recipe migration, and exports.
+- Baked rig animations become reviewed custom animation frames with provenance and export readiness, not hidden procedural state.
 - Exported credits list selected upstream item credits with authors, licenses, URLs, and upstream commit.
 - The app runs in degraded mode if upstream metadata is missing, with clear warnings and no crash.
 
@@ -626,3 +674,5 @@ Visual/manual QA:
 - Preserve a read-only all-source audit view, but keep composition pickers family-scoped.
 - Build one shared context-menu, tooltip, and details-drawer system instead of one-off menus inside each panel.
 - Hide deep metadata by default while keeping blocking readiness warnings visible.
+- Make bone/rig animation authoring a required future phase, but do not begin it until catalog composition, family boundaries, migration, and exports are stable.
+- Bake future rig output into spritesheet frames for export instead of requiring downstream games to run this app's rigging system.
