@@ -1,5 +1,6 @@
 import type { AnimationName } from './types.ts'
 import type { LpcCatalog, LpcCatalogItem, LpcRecipeSelection } from './lpcCatalog.ts'
+import { lpcFrameGeometry } from './lpcAssetResolver.ts'
 
 type PickerOptionsInput = {
   catalog: LpcCatalog
@@ -153,6 +154,9 @@ function compatibilityWarnings(item: LpcCatalogItem, selectedTags: ReadonlySet<s
   }
   if (item.animations.length > 0 && !item.animations.includes(animation) && !(animation === 'idle' && item.animations.includes('walk'))) {
     warnings.push(`Uses animation fallback for ${animation}.`)
+  }
+  if (item.layers.some((layer) => layer.custom_animation && lpcFrameGeometry[layer.custom_animation]?.oversize)) {
+    warnings.push('Contains oversize layers that require an oversize export profile.')
   }
   return warnings
 }

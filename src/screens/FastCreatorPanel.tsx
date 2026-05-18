@@ -157,6 +157,9 @@ export function FastCreatorPanel({
   )
   const activeLpcSelection = lpcSelections[activePartLabel]
   const activeLpcItem = activeLpcSelection && lpcCatalog ? lpcCatalog.items[activeLpcSelection.item_id] : undefined
+  const activeLpcOption = activeLpcSelection
+    ? lpcCatalogOptions.find((option) => option.item_id === activeLpcSelection.item_id)
+    : undefined
   const lpcCreditReadiness = useMemo(
     () => lpcCatalog ? buildLpcSelectionCreditReadiness(lpcCatalog, lpcSelections) : null,
     [lpcCatalog, lpcSelections],
@@ -352,6 +355,11 @@ export function FastCreatorPanel({
             <p className="mode-note">
               {activeLpcItem.name} stores {activeLpcItem.layers.length} upstream layer record(s), {activeLpcItem.credits.length} credit record(s), and {activeLpcItem.animations.length || 'fallback'} animation hint(s).
             </p>
+          ) : null}
+          {activeLpcOption?.warnings.length ? (
+            <div className="warning-list compact-warning-list" data-testid="lpc-catalog-selection-warnings">
+              {activeLpcOption.warnings.map((warning) => <p key={warning}>{warning}</p>)}
+            </div>
           ) : null}
         </section>
       ) : null}
