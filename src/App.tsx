@@ -41,7 +41,7 @@ import { layerBundleToExtractedParts, lpcSheetsToExtractedParts, parseLayerBundl
 import { canUseLpcPartForAnimation, getCharacterLabelValue, isLpcExtractedPart, isLpcMannequin, isLpcPartSourceForLayer, isLpcSourceCharacterId, isPartCompatibleWithMannequin } from './lpcPartCompatibility'
 import { buildManualMaskPart } from './manualParts'
 import { buildLpcCharacterManifests } from './lpcCharacters'
-import type { LpcCatalog, LpcRecipeSelection, RecipeModeId, SourceFamilyId } from './lpcCatalog'
+import type { LpcCatalog, LpcRecipeSelection, RecipeModeId } from './lpcCatalog'
 import { hydratePartLibraryAssets, persistPartLibraryAssets } from './partAssetStore'
 import { CompositeCanvas } from './CompositeCanvas'
 import { PixelCanvas } from './PixelCanvas'
@@ -54,6 +54,7 @@ import { FastCreatorPanel } from './screens/FastCreatorPanel'
 import { PartLibraryPanel } from './screens/PartLibraryPanel'
 import { SettingsPanel } from './screens/SettingsPanel'
 import { WorkstationPanel } from './screens/WorkstationPanel'
+import { canShowCharacterInRecipeMode, sourceFamilyForRecipeMode } from './sourceFamilyRegistry'
 import type { AnimationName, ApesBridgeStatus, ApesFinetuneManifest, ApesJob, ApesOutputInventory, ApesPreflightReport, ApesReport, AssetManifest, CharacterManifest, ComposerLayerSettings, Direction, DuelystApesJobBatch, DuelystPackageAudit, ExtractedPart, ExtractionMethod, LpcAssetInventory, PaletteRules, PartLabel, Rect, VariationPreset } from './types'
 import {
   buildExportManifest,
@@ -127,12 +128,6 @@ type LocalAssetToolPayload = {
 }
 
 type SourcePackFilter = 'all' | 'sprite' | 'duelyst' | 'lpc'
-
-function sourceFamilyForRecipeMode(recipeMode: RecipeModeId): SourceFamilyId {
-  if (recipeMode === 'lpc_character') return 'lpc'
-  if (recipeMode === 'duelyst_review') return 'duelyst'
-  return 'sprite_pack'
-}
 
 function sourcePackForRecipeMode(recipeMode: RecipeModeId): SourcePackFilter {
   if (recipeMode === 'lpc_character') return 'lpc'
@@ -560,10 +555,14 @@ function App() {
   const animationSourceOptions = useMemo(() => getCompatibleAnimationSources(selectedCharacter, characters), [characters, selectedCharacter])
   const animationSourceCharacter = getActiveAnimationCharacter(selectedCharacter, animationSourceOptions, animationSourceId) ?? selectedCharacter
   const hasBorrowedAnimationSource = Boolean(animationSourceCharacter && selectedCharacter && animationSourceCharacter.character_id !== selectedCharacter.character_id)
-  const activeSourcePackFilter = sourcePackFilter === 'all' ? sourcePackForRecipeMode(recipeMode) : sourcePackFilter
   const sourceCharacterOptions = useMemo(
-    () => characters.filter((character) => isMainSourceCharacter(character) && getSourcePackFilter(character) === activeSourcePackFilter),
-    [activeSourcePackFilter, characters],
+    () => characters.filter((character) =>
+      isMainSourceCharacter(character) &&
+      (sourcePackFilter === 'all'
+        ? canShowCharacterInRecipeMode(character, recipeMode)
+        : getSourcePackFilter(character) === sourcePackFilter),
+    ),
+    [characters, recipeMode, sourcePackFilter],
   )
   const frameCharacter = screen === 'workstation' ? selectedCharacter : animationSourceCharacter
   const frame = getFrameRef(frameCharacter, animation, direction, frameIndex)
