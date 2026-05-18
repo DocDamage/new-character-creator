@@ -59,16 +59,19 @@ test('LPC selected-item credit readiness reports missing and review-needed credi
   const readiness = buildLpcSelectionCreditReadiness(catalog, {
     cape: { slot_id: 'cape', item_id: 'cape:cape_solid', variant: 'black', type_name: 'cape', enabled: true },
     hair: { slot_id: 'hair', item_id: 'hair:hair_xlong', variant: 'raven', type_name: 'hair', enabled: true },
+    cape_trim: { slot_id: 'cape_trim', item_id: 'cape_trim:cape_trim', variant: 'white', type_name: 'cape_trim', enabled: true },
     weapon: { slot_id: 'weapon', item_id: 'weapon:weapon_sword_longsword', variant: 'longsword', type_name: 'weapon', enabled: false },
   })
 
-  assert.equal(readiness.selected_count, 2)
+  assert.equal(readiness.selected_count, 3)
   assert.equal(readiness.ok_count, 1)
+  assert.equal(readiness.needs_review_count, 1)
   assert.equal(readiness.missing_count, 1)
   assert.equal(readiness.release_blocking, true)
   assert.deepEqual(readiness.items.map((item) => [item.item_id, item.status]), [
     ['cape:cape_solid', 'ok'],
     ['hair:hair_xlong', 'missing'],
+    ['cape_trim:cape_trim', 'needs_review'],
   ])
 })
 

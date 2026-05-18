@@ -102,7 +102,7 @@ export function buildLpcSelectionCreditReadiness(catalog: LpcCatalog, selections
     needs_review_count: needsReviewCount,
     missing_count: missingCount,
     custom_count: 0,
-    release_blocking: missingCount > 0,
+    release_blocking: missingCount > 0 || needsReviewCount > 0,
     items,
   }
 }

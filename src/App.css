@@ -152,6 +152,11 @@ button:hover {
   color: var(--text-strong);
 }
 
+button:disabled {
+  cursor: not-allowed;
+  opacity: 0.58;
+}
+
 button.active,
 button.primary {
   color: #141922;
@@ -1525,6 +1530,11 @@ input {
 button.recommended-export {
   border-color: rgba(108, 214, 143, 0.72);
   box-shadow: inset 0 0 0 1px rgba(108, 214, 143, 0.18);
+}
+
+button.blocked-export {
+  border-color: rgba(255, 181, 71, 0.62);
+  box-shadow: inset 0 0 0 1px rgba(255, 181, 71, 0.16);
 }
 
 @media (max-width: 1200px) {

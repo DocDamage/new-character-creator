@@ -639,7 +639,8 @@ Status as of the local `main` branch after the 2026-05-18 follow-up slices:
 - Phase 5 recipe and credits migration is partially implemented. Saved recipes
   store `recipe_mode`, `source_family`, and `lpc_selections`; exported credit
   reports include `selected_lpc_catalog_items`; Exports shows selected upstream
-  credit readiness before download.
+  credit readiness before download and blocks release-package exports when
+  selected catalog credits are missing or require manual review.
 - Phase 6 has the first missing-animation foundation only. APES Lab now exposes
   a downloadable missing-animation queue built from catalog draw records with
   `missing` or `unsupported` status. Provider configuration, generation jobs,
@@ -655,8 +656,6 @@ Most recent focused verification:
 
 Remaining high-value slices:
 
-- Add release-blocking export affordances for missing/review-needed selected
-  catalog credits instead of only showing readiness text.
 - Apply shared context menus and Details drawer to preview frames, part rows,
   recipe layers, export records, and credits.
 - Replace `title` attributes with a real tooltip primitive for badges, disabled

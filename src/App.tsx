@@ -41,6 +41,7 @@ import { layerBundleToExtractedParts, lpcSheetsToExtractedParts, parseLayerBundl
 import { canUseLpcPartForAnimation, getCharacterLabelValue, isLpcExtractedPart, isLpcMannequin, isLpcPartSourceForLayer, isLpcSourceCharacterId, isPartCompatibleWithMannequin } from './lpcPartCompatibility'
 import { buildManualMaskPart } from './manualParts'
 import { buildLpcCharacterManifests } from './lpcCharacters'
+import { buildLpcSelectionCreditReadiness } from './lpcCatalogPicker'
 import type { LpcCatalog, LpcRecipeSelection, RecipeModeId } from './lpcCatalog'
 import { hydratePartLibraryAssets, persistPartLibraryAssets } from './partAssetStore'
 import { CompositeCanvas } from './CompositeCanvas'
@@ -1638,19 +1639,30 @@ function App() {
     }
   }
 
+  function blockReleaseExportForLpcCredits() {
+    if (!recipe || recipe.recipe_mode !== 'lpc_character' || !lpcCatalog) return false
+    const readiness = buildLpcSelectionCreditReadiness(lpcCatalog, recipe.lpc_selections ?? {})
+    if (!readiness.release_blocking) return false
+    setExportStatus(`Release export blocked: resolve ${readiness.missing_count} missing and ${readiness.needs_review_count} review-needed LPC credit item(s), or download the credits report for details.`)
+    return true
+  }
+
   function exportGeneric() {
     if (!recipe || !selectedCharacter) return
+    if (blockReleaseExportForLpcCredits()) return
     downloadJson(`${recipe.character_id}_manifest.json`, buildExportManifest(selectedCharacter, recipe, apesJobs, { placeholderModeEnabled: apesAllowPlaceholder }))
   }
 
   async function exportGodotScene() {
     if (!recipe) return
+    if (blockReleaseExportForLpcCredits()) return
     const { buildGodotSceneText } = await loadExportPackage()
     downloadText(`${recipe.character_id}.tscn`, buildGodotSceneText(recipe))
   }
 
   async function exportSpriteFrames() {
     if (!recipe || !selectedCharacter) return
+    if (blockReleaseExportForLpcCredits()) return
     setExportStatus('Building Godot SpriteFrames resource...')
     try {
       const { buildGodotSpriteFramesResource, buildRenderedFrameSet } = await loadExportPackage()
@@ -1664,21 +1676,25 @@ function App() {
 
   function exportUnityMetadata() {
     if (!recipe || !selectedCharacter) return
+    if (blockReleaseExportForLpcCredits()) return
     downloadJson(`${recipe.character_id}_unity_2d.json`, buildUnity2DMetadata(selectedCharacter, recipe))
   }
 
   function exportRpgMakerMetadata() {
     if (!recipe || !selectedCharacter) return
+    if (blockReleaseExportForLpcCredits()) return
     downloadJson(`${recipe.character_id}_rpg_maker_mz.json`, buildRpgMakerMzMetadata(selectedCharacter, recipe))
   }
 
   function exportAsepriteReference() {
     if (!recipe || !selectedCharacter) return
+    if (blockReleaseExportForLpcCredits()) return
     downloadJson(`${recipe.character_id}_aseprite_reference.json`, buildAsepriteReference(selectedCharacter, recipe))
   }
 
   async function exportCurrentSpriteSheet() {
     if (!animationSourceCharacter) return
+    if (blockReleaseExportForLpcCredits()) return
     const currentFrames = getFrames(animationSourceCharacter, animation, direction)
     await downloadSpriteSheet(
       `${recipe?.character_id ?? selectedCharacter.character_id}_${animation}_${direction}_sheet.png`,
@@ -1689,11 +1705,13 @@ function App() {
 
   async function exportAnimationSheets() {
     if (!animationSourceCharacter) return
+    if (blockReleaseExportForLpcCredits()) return
     await downloadAllDirectionSpriteSheets(animationSourceCharacter, animation)
   }
 
   async function exportRenderedFrameSet() {
     if (!recipe || !selectedCharacter) return
+    if (blockReleaseExportForLpcCredits()) return
     setExportStatus('Rendering full frame set...')
     try {
       const { buildRenderedFrameSet } = await loadExportPackage()
@@ -1723,6 +1741,7 @@ function App() {
 
   async function exportFullPackageManifest() {
     if (!recipe || !selectedCharacter) return
+    if (blockReleaseExportForLpcCredits()) return
     setExportStatus('Building full package manifest...')
     try {
       const { buildFullPackageManifest } = await loadExportPackage()
@@ -1739,6 +1758,7 @@ function App() {
 
   async function exportRenderedFrameSetZip() {
     if (!recipe || !selectedCharacter) return
+    if (blockReleaseExportForLpcCredits()) return
     setExportStatus('Building rendered frame zip...')
     try {
       const { downloadRenderedFrameSetZip } = await loadExportPackage()
@@ -1751,6 +1771,7 @@ function App() {
 
   async function exportFullPackageZip() {
     if (!recipe || !selectedCharacter) return
+    if (blockReleaseExportForLpcCredits()) return
     setExportStatus('Building full package zip...')
     try {
       const { downloadFullPackageZip } = await loadExportPackage()

@@ -389,6 +389,17 @@ privateLpcBrowserTest('LPC catalog picker persists metadata-backed selections in
   })
 
   await page.getByTestId('nav-fast').click()
+  await page.getByTestId('fast-live-layer').selectOption('hair_hat_hood')
+  await page.getByTestId('lpc-catalog-item-select').selectOption('hair:hair_xlong')
+  await page.getByTestId('lpc-catalog-variant-select').selectOption('raven')
+  await page.getByTestId('save-recipe-button').click()
+  await page.getByTestId('nav-exports').click()
+  await expect(page.getByTestId('export-lpc-credit-readiness')).toContainText(/1 missing credits/i)
+  await expect(page.getByTestId('export-full-package-zip')).toBeDisabled()
+  await expect(page.getByTestId('export-rendered-frame-set')).toBeDisabled()
+  await expect(page.getByTestId('export-credits-report')).toBeEnabled()
+
+  await page.getByTestId('nav-fast').click()
   await page.getByTestId('fast-live-layer').selectOption('weapon')
   await page.getByTestId('lpc-catalog-item-select').selectOption('weapon:weapon_sword_longsword')
   await expect(page.getByTestId('lpc-catalog-selection-warnings')).toContainText(/oversize export profile/i)
@@ -883,7 +894,7 @@ function makeBrowserLpcCatalogFixture() {
       has_palette_definitions: false,
       has_credits_csv: true,
     },
-    summary: { item_count: 2, layer_count: 3, variant_count: 2, credit_count: 2, type_counts: { cape: 1, weapon: 1 } },
+    summary: { item_count: 3, layer_count: 4, variant_count: 3, credit_count: 2, type_counts: { cape: 1, hair: 1, weapon: 1 } },
     items: {
       'cape:cape_solid': {
         item_id: 'cape:cape_solid',
@@ -901,6 +912,23 @@ function makeBrowserLpcCatalogFixture() {
         recolors: [],
         layers: [{ layer_id: 'layer_1', z_pos: 85, paths_by_body_type: { male: 'cape/solid/female/' } }],
         credits: [{ file: 'cape/solid', notes: '', authors: ['Artist'], licenses: ['OGA-BY 3.0'], urls: ['https://example.test'] }],
+      },
+      'hair:hair_xlong': {
+        item_id: 'hair:hair_xlong',
+        name: 'Xlong',
+        type_name: 'hair',
+        path: ['hair', 'xlong'],
+        tags: ['hair'],
+        required_tags: [],
+        excluded_tags: [],
+        required_body_types: ['male'],
+        variants: ['raven'],
+        animations: ['walk', 'idle'],
+        preview: { row: 0, column: 0, x_offset: 0, y_offset: 0 },
+        match_body_color: false,
+        recolors: [],
+        layers: [{ layer_id: 'layer_1', z_pos: 120, paths_by_body_type: { male: 'hair/xlong/adult/fg/' } }],
+        credits: [],
       },
       'weapon:weapon_sword_longsword': {
         item_id: 'weapon:weapon_sword_longsword',

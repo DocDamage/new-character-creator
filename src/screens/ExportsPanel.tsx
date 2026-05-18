@@ -104,9 +104,19 @@ export function ExportsPanel({
   const lpcCreditReadiness = lpcCatalog && recipe?.recipe_mode === 'lpc_character'
     ? buildLpcSelectionCreditReadiness(lpcCatalog, recipe.lpc_selections ?? {})
     : null
+  const releaseExportBlocked = Boolean(lpcCreditReadiness?.release_blocking)
+  const releaseBlockSummary = releaseExportBlocked && lpcCreditReadiness
+    ? `Release package exports are blocked until ${lpcCreditReadiness.missing_count} missing and ${lpcCreditReadiness.needs_review_count} review-needed LPC credit item(s) are resolved.`
+    : ''
 
   function targetButtonClass(testId: string, baseClass = '') {
     return [baseClass, activeExportTarget.recommendedActionTestId === testId ? 'recommended-export' : '']
+      .filter(Boolean)
+      .join(' ')
+  }
+
+  function releaseButtonClass(testId: string, baseClass = '') {
+    return [targetButtonClass(testId, baseClass), releaseExportBlocked ? 'blocked-export' : '']
       .filter(Boolean)
       .join(' ')
   }
@@ -145,19 +155,19 @@ export function ExportsPanel({
         </div>
       </section>
       <div className="export-grid">
-        <button className={targetButtonClass('export-generic-manifest', 'primary')} data-testid="export-generic-manifest" onClick={exportGeneric}>Download generic manifest</button>
-        <button className={targetButtonClass('export-full-package-manifest', 'primary')} data-testid="export-full-package-manifest" onClick={() => void exportFullPackageManifest()}>Download full package manifest</button>
-        <button className={targetButtonClass('export-rendered-frame-set')} data-testid="export-rendered-frame-set" onClick={() => void exportRenderedFrameSet()}>Download rendered frame set</button>
-        <button className={targetButtonClass('export-full-package-zip', 'primary')} data-testid="export-full-package-zip" onClick={() => void exportFullPackageZip()}>Download full package zip</button>
-        <button className={targetButtonClass('export-rendered-frame-zip')} data-testid="export-rendered-frame-zip" onClick={() => void exportRenderedFrameSetZip()}>Download rendered frame zip</button>
-        <button onClick={exportCurrentSpriteSheet}>Download current spritesheet</button>
-        <button onClick={exportAnimationSheets}>Download current action sheets</button>
-        <button data-testid="export-godot-scene" onClick={exportGodotScene}>Download Godot scene</button>
+        <button className={releaseButtonClass('export-generic-manifest', 'primary')} data-testid="export-generic-manifest" onClick={exportGeneric} disabled={releaseExportBlocked} aria-describedby={releaseExportBlocked ? 'release-export-blocker' : undefined}>Download generic manifest</button>
+        <button className={releaseButtonClass('export-full-package-manifest', 'primary')} data-testid="export-full-package-manifest" onClick={() => void exportFullPackageManifest()} disabled={releaseExportBlocked} aria-describedby={releaseExportBlocked ? 'release-export-blocker' : undefined}>Download full package manifest</button>
+        <button className={releaseButtonClass('export-rendered-frame-set')} data-testid="export-rendered-frame-set" onClick={() => void exportRenderedFrameSet()} disabled={releaseExportBlocked} aria-describedby={releaseExportBlocked ? 'release-export-blocker' : undefined}>Download rendered frame set</button>
+        <button className={releaseButtonClass('export-full-package-zip', 'primary')} data-testid="export-full-package-zip" onClick={() => void exportFullPackageZip()} disabled={releaseExportBlocked} aria-describedby={releaseExportBlocked ? 'release-export-blocker' : undefined}>Download full package zip</button>
+        <button className={releaseButtonClass('export-rendered-frame-zip')} data-testid="export-rendered-frame-zip" onClick={() => void exportRenderedFrameSetZip()} disabled={releaseExportBlocked} aria-describedby={releaseExportBlocked ? 'release-export-blocker' : undefined}>Download rendered frame zip</button>
+        <button onClick={exportCurrentSpriteSheet} disabled={releaseExportBlocked} aria-describedby={releaseExportBlocked ? 'release-export-blocker' : undefined}>Download current spritesheet</button>
+        <button onClick={exportAnimationSheets} disabled={releaseExportBlocked} aria-describedby={releaseExportBlocked ? 'release-export-blocker' : undefined}>Download current action sheets</button>
+        <button data-testid="export-godot-scene" onClick={exportGodotScene} disabled={releaseExportBlocked} aria-describedby={releaseExportBlocked ? 'release-export-blocker' : undefined}>Download Godot scene</button>
         <button onClick={() => downloadJson(`${selectedCharacter.character_id}_batch_queue.json`, batchVariants)}>Download batch queue</button>
-        <button data-testid="export-sprite-frames" onClick={() => void exportSpriteFrames()}>Download SpriteFrames resource</button>
-        <button data-testid="export-unity-metadata" onClick={exportUnityMetadata}>Download Unity 2D metadata</button>
-        <button data-testid="export-rpg-maker-metadata" className={targetButtonClass('export-rpg-maker-metadata')} onClick={exportRpgMakerMetadata}>Download RPG Maker MZ metadata</button>
-        <button data-testid="export-aseprite-reference" className={targetButtonClass('export-aseprite-reference')} onClick={exportAsepriteReference}>Download Aseprite reference</button>
+        <button data-testid="export-sprite-frames" onClick={() => void exportSpriteFrames()} disabled={releaseExportBlocked} aria-describedby={releaseExportBlocked ? 'release-export-blocker' : undefined}>Download SpriteFrames resource</button>
+        <button data-testid="export-unity-metadata" onClick={exportUnityMetadata} disabled={releaseExportBlocked} aria-describedby={releaseExportBlocked ? 'release-export-blocker' : undefined}>Download Unity 2D metadata</button>
+        <button data-testid="export-rpg-maker-metadata" className={releaseButtonClass('export-rpg-maker-metadata')} onClick={exportRpgMakerMetadata} disabled={releaseExportBlocked} aria-describedby={releaseExportBlocked ? 'release-export-blocker' : undefined}>Download RPG Maker MZ metadata</button>
+        <button data-testid="export-aseprite-reference" className={releaseButtonClass('export-aseprite-reference')} onClick={exportAsepriteReference} disabled={releaseExportBlocked} aria-describedby={releaseExportBlocked ? 'release-export-blocker' : undefined}>Download Aseprite reference</button>
         <button data-testid="export-credits-report" onClick={() => void exportCreditsReport()}>Download credits report</button>
       </div>
       <div className={`settings-card ${lpcCreditReadiness?.release_blocking ? 'settings-card-warning' : ''}`} data-testid="export-lpc-credit-readiness">
@@ -167,6 +177,7 @@ export function ExportsPanel({
             <span>
               {lpcCreditReadiness.selected_count} selected upstream item(s), {lpcCreditReadiness.ok_count} ready, {lpcCreditReadiness.needs_review_count} need review, {lpcCreditReadiness.missing_count} missing credits.
             </span>
+            {releaseExportBlocked ? <span id="release-export-blocker">{releaseBlockSummary} Download the credits report for the unresolved item list.</span> : null}
             {lpcCreditReadiness.items.length > 0 ? (
               <code>{lpcCreditReadiness.items.map((item) => `${item.item_name} / ${item.variant}: ${item.status}`).join('\n')}</code>
             ) : (
