@@ -638,6 +638,7 @@ test('harvest workflows are exposed and produce usable app artifacts', async ({ 
   await expect(page.getByText(/Preview: .*_head\.png/i)).toBeVisible()
 
   await page.getByTestId('nav-apes').click()
+  await expect(page.getByTestId('missing-animation-queue')).toContainText('LPC catalog-backed recipes')
   await page.getByTestId('generation-style-notes').fill('Playwright generation pass')
   const generationManifest = await readJsonDownload<Record<string, unknown>>(page, async () => {
     await page.getByTestId('download-generation-manifest').click()

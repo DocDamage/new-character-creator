@@ -1,8 +1,10 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { apesQaHarnessJobId } from '../appPersistence'
 import { clampFrameInput } from '../inputUtils'
+import type { LpcCatalog } from '../lpcCatalog'
+import { buildMissingAnimationQueue } from '../missingAnimationQueue'
 import { humanoid64Preset } from '../presets'
-import type { AnimationName, ApesFinetuneManifest, ApesJob, ApesOutputInventory, ApesPreflightReport, CharacterManifest, Direction, DuelystApesJobBatch, ExtractedPart, PartLabel } from '../types'
+import type { AnimationName, ApesFinetuneManifest, ApesJob, ApesOutputInventory, ApesPreflightReport, CharacterManifest, Direction, DuelystApesJobBatch, ExtractedPart, KitbashRecipe, PartLabel } from '../types'
 import { downloadJson, getFrames, slugLabel } from '../utils'
 
 type ApesLabPanelProps = {
@@ -19,6 +21,8 @@ type ApesLabPanelProps = {
   loadApesQaHarnessReport: () => Promise<void>
   clearApesQaHarnessParts: () => void
   selectedCharacter: CharacterManifest
+  recipe: KitbashRecipe | null
+  lpcCatalog: LpcCatalog | null
   partLibrary: ExtractedPart[]
   apesAnimations: AnimationName[]
   apesDirections: Direction[]
@@ -60,6 +64,8 @@ export function ApesLabPanel({
   loadApesQaHarnessReport,
   clearApesQaHarnessParts,
   selectedCharacter,
+  recipe,
+  lpcCatalog,
   partLibrary,
   apesAnimations,
   apesDirections,
@@ -107,6 +113,19 @@ export function ApesLabPanel({
   const finetuneDatasetCount = Object.keys(apesFinetuneManifest?.datasets ?? {}).length
   const finetuneCommandCount = Object.keys(apesFinetuneManifest?.commands ?? {}).length
   const duelystBatchQueuedCount = duelystApesJobBatch?.job_configs?.length ?? 0
+  const missingAnimationQueue = useMemo(
+    () => recipe?.recipe_mode === 'lpc_character' && lpcCatalog
+      ? buildMissingAnimationQueue({
+          catalog: lpcCatalog,
+          recipe,
+          bodyType: inferLpcBodyType(selectedCharacter),
+          animations: apesAnimations,
+          directions: apesDirections,
+          frameRange: apesFrameRange,
+        })
+      : null,
+    [apesAnimations, apesDirections, apesFrameRange, lpcCatalog, recipe, selectedCharacter],
+  )
   const preflightChecks = apesPreflight
     ? [
         { label: 'Python', value: apesPreflight.python.version, status: apesPreflight.python.version.startsWith('3.7') ? 'pass' : 'warn' },
@@ -278,6 +297,29 @@ export function ApesLabPanel({
         </label>
         <button data-testid="download-generation-manifest" onClick={downloadGenerationManifest}>Download generation manifest</button>
       </div>
+      <div className="settings-card" data-testid="missing-animation-queue">
+        <strong>Missing animation queue</strong>
+        {missingAnimationQueue ? (
+          <>
+            <span>
+              {missingAnimationQueue.summary.issue_count} catalog issue(s), {missingAnimationQueue.summary.affected_frame_count} affected frame(s), {missingAnimationQueue.summary.unsupported_count} unsupported, {missingAnimationQueue.summary.missing_count} missing.
+            </span>
+            {missingAnimationQueue.items.length > 0 ? (
+              <code>{missingAnimationQueue.items.slice(0, 4).map((item) => `${item.item_name} / ${item.layer_id}: ${item.warnings.join('; ')}`).join('\n')}</code>
+            ) : (
+              <span>No catalog-backed missing or unsupported animation records for the selected APES frame range.</span>
+            )}
+            <button
+              data-testid="download-missing-animation-queue"
+              onClick={() => downloadJson(`${recipe?.character_id ?? selectedCharacter.character_id}_missing_animation_queue.json`, missingAnimationQueue)}
+            >
+              Download queue JSON
+            </button>
+          </>
+        ) : (
+          <span>LPC catalog-backed recipes will list missing and unsupported draw records here for AI/APES handoff.</span>
+        )}
+      </div>
       <div data-testid="apes-bridge-status" className={`settings-card ${apesPreflight && !apesPreflight.ready ? 'settings-card-warning' : ''}`}>
         <strong>Bridge status</strong>
         <span>{apesBridgeStatus}</span>
@@ -427,4 +469,14 @@ export function ApesLabPanel({
       </div>
     </section>
   )
+}
+
+function inferLpcBodyType(character: CharacterManifest) {
+  const bodyLabel = [character.display_name, String(character.labels?.lpc_path ?? '')].join(' ').toLowerCase()
+  if (bodyLabel.includes('female') || bodyLabel.includes('feminine') || bodyLabel.includes('woman')) return 'female'
+  if (bodyLabel.includes('muscular')) return 'muscular'
+  if (bodyLabel.includes('pregnant')) return 'pregnant'
+  if (bodyLabel.includes('teen')) return 'teen'
+  if (bodyLabel.includes('child')) return 'child'
+  return 'male'
 }
