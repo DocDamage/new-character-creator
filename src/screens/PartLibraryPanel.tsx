@@ -1,5 +1,6 @@
 import { useState, type Dispatch, type SetStateAction } from 'react'
 import { CompositeCanvas } from '../CompositeCanvas'
+import { isPartCompatibleWithMannequin } from '../lpcPartCompatibility'
 import { partLabels } from '../presets'
 import type { AnimationName, CharacterManifest, Direction, ExtractedPart, ExtractionMethod, KitbashRecipe, PartLabel } from '../types'
 import { downloadJson, slugLabel } from '../utils'
@@ -66,7 +67,8 @@ export function PartLibraryPanel({
   })
   const visibleParts = filteredParts.slice(0, visibleLimit)
   const visibleIds = visibleParts.map((part) => part.part_id)
-  const reviewedPartsForActiveLabel = parts.filter((part) => part.reviewed && part.label === activePartLabel)
+  const recipeMannequin = characters.find((character) => character.character_id === recipe?.base_character)
+  const reviewedPartsForActiveLabel = parts.filter((part) => part.reviewed && part.label === activePartLabel && isPartCompatibleWithMannequin(part, recipeMannequin))
   const selectedActivePart = selectedPartIds[activePartLabel]
 
   function selectActivePart(partId: string) {

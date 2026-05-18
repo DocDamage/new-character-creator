@@ -1,5 +1,6 @@
 import type { AnimationName, ApesJob, CharacterManifest, ComposerLayerSettings, Direction, ExtractedPart, KitbashRecipe, PaletteRules, PartLabel, Rect } from './types'
 import { layerOrder, palettePresets } from './presets'
+import { resolveCompatiblePartSelection } from './lpcPartCompatibility'
 
 export function getFrameRef(
   character: CharacterManifest | undefined,
@@ -280,16 +281,17 @@ export function makeRecipe(
     base_character: character.character_id,
     layers: layerOrder.map((label) => {
       const selectedPart = partLibrary.find((part) => part.part_id === selectedPartIds[label])
+      const { compatibleSelectedPart, compatibleSelectedSource } = resolveCompatiblePartSelection(character, selectedPart, selectedParts[label])
       const settings = layerSettings[label]
       return {
         label,
-        source_character: selectedPart?.character_id ?? selectedParts[label] ?? character.character_id,
-        source_part_id: selectedPart?.part_id,
+        source_character: compatibleSelectedPart?.character_id ?? compatibleSelectedSource ?? character.character_id,
+        source_part_id: compatibleSelectedPart?.part_id,
         offset: settings?.offset ?? [0, 0],
         visible: settings?.visible ?? true,
         locked: settings?.locked ?? false,
         extraction_method:
-          selectedPart?.extraction_method ??
+          compatibleSelectedPart?.extraction_method ??
           (label === 'head' || label === 'torso' || label.includes('arm') || label.includes('leg') ? 'apes' : 'preset_region'),
       }
     }),

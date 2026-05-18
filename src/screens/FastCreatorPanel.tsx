@@ -10,7 +10,7 @@ import {
   type RecipeReadiness,
 } from '../creatorCockpit'
 import { clampOffsetInput, clampSignedInput, clampUnsignedInput } from '../inputUtils'
-import { isLpcPartSourceForLayer } from '../lpcPartCompatibility'
+import { isLpcMannequin, isLpcPartSourceForLayer, isPartCompatibleWithMannequin } from '../lpcPartCompatibility'
 import { layerOrder, palettePresets } from '../presets'
 import type { AnimationName, CharacterManifest, ComposerLayerSettings, Direction, ExtractedPart, KitbashRecipe, PaletteRules, PartLabel } from '../types'
 import { slugLabel } from '../utils'
@@ -112,7 +112,7 @@ export function FastCreatorPanel({
   createApesJob,
   localToolsAvailable,
 }: FastCreatorPanelProps) {
-  const reviewedParts = partLibrary.filter((part) => part.reviewed)
+  const reviewedParts = partLibrary.filter((part) => part.reviewed && isPartCompatibleWithMannequin(part, selectedCharacter))
   const [partSearch, setPartSearch] = useState('')
   const [partMethodFilter, setPartMethodFilter] = useState<ExtractedPart['extraction_method'] | 'all'>('all')
   const activeExportTarget = getExportTargetProfile(exportTargetProfile)
@@ -126,11 +126,11 @@ export function FastCreatorPanel({
   const reviewedPartsForActiveLabel = reviewedParts.filter((part) => part.label === activePartLabel)
   const selectedActivePart = selectedPartIds[activePartLabel]
   const lpcPartsForActiveLabel = useMemo(
-    () => characters
+    () => isLpcMannequin(selectedCharacter) ? characters
       .filter((character) => isLpcPartSourceForLayer(character, activePartLabel))
       .sort((left, right) => left.display_name.localeCompare(right.display_name))
-      .slice(0, 180),
-    [activePartLabel, characters],
+      .slice(0, 180) : [],
+    [activePartLabel, characters, selectedCharacter],
   )
   const selectedActiveSource = selectedParts[activePartLabel]
   const selectedActiveSourceCharacter = selectedActiveSource

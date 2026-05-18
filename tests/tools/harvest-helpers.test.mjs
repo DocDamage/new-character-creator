@@ -5,6 +5,7 @@ import { renderExportFilenameTemplate } from '../../src/filenameTemplates.ts'
 import { buildGenerationManifest } from '../../src/generationManifest.ts'
 import { layerBundleToExtractedParts, lpcSheetsToExtractedParts, parseLayerBundleManifest } from '../../src/layerBundle.ts'
 import { buildLpcCharacterManifests } from '../../src/lpcCharacters.ts'
+import { resolveCompatiblePartSelection } from '../../src/lpcPartCompatibility.ts'
 import { analyzeAlphaData } from '../../src/sourceAnalysis.ts'
 import {
   buildRecipeReadiness,
@@ -391,6 +392,45 @@ test('LPC inventory sheets can be exposed as cropped source characters', () => {
         tags: ['base'],
       },
       {
+        path: 'Stand & Walk Bases/Copper/idle.png',
+        category: 'Stand & Walk Bases',
+        file_name: 'idle.png',
+        width: 128,
+        height: 256,
+        frame_width: 64,
+        frame_height: 64,
+        frame_columns: 2,
+        frame_rows: 4,
+        lpc_grid: true,
+        tags: ['base'],
+      },
+      {
+        path: 'Stand & Walk Bases/Copper/walk.png',
+        category: 'Stand & Walk Bases',
+        file_name: 'walk.png',
+        width: 576,
+        height: 256,
+        frame_width: 64,
+        frame_height: 64,
+        frame_columns: 9,
+        frame_rows: 4,
+        lpc_grid: true,
+        tags: ['base'],
+      },
+      {
+        path: 'Bases/Androgynous/Recolors/Copper/Sitting - Chair.png',
+        category: 'Bases',
+        file_name: 'Sitting - Chair.png',
+        width: 64,
+        height: 256,
+        frame_width: 64,
+        frame_height: 64,
+        frame_columns: 1,
+        frame_rows: 4,
+        lpc_grid: true,
+        tags: ['base', 'sitting'],
+      },
+      {
         path: 'Clothes/Blue/Pants/Idle.png',
         category: 'Clothes',
         file_name: 'Idle.png',
@@ -419,13 +459,15 @@ test('LPC inventory sheets can be exposed as cropped source characters', () => {
     ],
   })
 
-  assert.equal(characters.length, 7)
+  assert.equal(characters.length, 8)
   const shirtPart = characters.find((character) => character.labels.lpc_path === 'Clothes/Blue/Shirt, Long-Sleeved')
   const runPart = characters.find((character) => character.labels.lpc_path === 'Clothes/Blue/Shirt')
   const pantsPart = characters.find((character) => character.labels.lpc_path === 'Clothes/Blue/Pants')
   const bowPart = characters.find((character) => character.labels.lpc_path === 'lpc_entry/png/WEAPON_bow')
   const longEarsPart = characters.find((character) => character.labels.lpc_path === 'Long ears/LongEars_female_d')
   const magicBase = characters.find((character) => character.labels.lpc_path === 'Androgynous Bases/Copper')
+  const standWalkBase = characters.find((character) => character.labels.lpc_path === 'Stand & Walk Bases/Copper')
+  const partialSittingBase = characters.find((character) => character.labels.lpc_path === 'Bases/Androgynous/Recolors/Copper/Sitting - Chair')
   assert.equal(characters[0].class_type, 'lpc_character')
   assert.equal(characters[0].labels.lpc_role, 'base')
   assert.equal(shirtPart?.labels.lpc_role, 'part')
@@ -439,6 +481,8 @@ test('LPC inventory sheets can be exposed as cropped source characters', () => {
   assert.deepEqual(longEarsPart?.directions.south.walk.frames[0].source_rect, { x: 0, y: 640, w: 64, h: 64 })
   assert.deepEqual(longEarsPart?.directions.north.hurt.frames[0].source_rect, { x: 0, y: 1280, w: 64, h: 64 })
   assert.deepEqual(magicBase?.animation_names, ['idle', 'walk', 'spellcast', 'shoot', 'slash', 'thrust', 'hurt'])
+  assert.deepEqual(standWalkBase?.animation_names, ['idle', 'walk'])
+  assert.equal(partialSittingBase, undefined)
   assert.equal(characters[0].directions.south.idle.frame_count, 5)
   assert.deepEqual(characters[0].directions.east.idle.frames[0].source_rect, { x: 0, y: 64, w: 64, h: 64 })
   assert.deepEqual(characters[0].directions.south.idle.frames[0].source_rect, { x: 0, y: 128, w: 64, h: 64 })
@@ -466,6 +510,29 @@ test('creator cockpit readiness summarizes selected reviewed parts and warnings'
   assert.equal(readiness.missingReviewedLayerCount, 2)
   assert.equal(readiness.warningCount, 1)
   assert.equal(readiness.state, 'needs_review')
+})
+
+test('compatibility filtering ignores stale LPC part selections on non-LPC mannequins', () => {
+  const spriteCharacter = makeCharacterManifest()
+  const lpcCharacter = {
+    ...spriteCharacter,
+    character_id: 'lpc-base-copper',
+    class_type: 'lpc_character',
+    labels: { lpc_role: 'base' },
+  }
+  const lpcPart = makeExtractedPart({
+    part_id: 'lpc_torso_sheet',
+    character_id: 'lpc-torso-sheet',
+    label: 'torso',
+    tags: ['lpc'],
+  })
+  const lpcSelection = resolveCompatiblePartSelection(lpcCharacter, lpcPart, 'lpc-source-torso')
+  const spriteSelection = resolveCompatiblePartSelection(spriteCharacter, lpcPart, 'lpc-source-torso')
+
+  assert.equal(lpcSelection.compatibleSelectedPart?.part_id, 'lpc_torso_sheet')
+  assert.equal(lpcSelection.compatibleSelectedSource, 'lpc-source-torso')
+  assert.equal(spriteSelection.compatibleSelectedPart, undefined)
+  assert.equal(spriteSelection.compatibleSelectedSource, undefined)
 })
 
 test('creator cockpit filters reviewed parts while keeping the selected part visible', () => {

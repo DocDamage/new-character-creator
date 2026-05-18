@@ -37,7 +37,7 @@ import {
 import { defaultFilenameTemplate } from './filenameTemplates'
 import { buildGenerationManifest } from './generationManifest'
 import { layerBundleToExtractedParts, lpcSheetsToExtractedParts, parseLayerBundleManifest, type LpcSheetImportOptions } from './layerBundle'
-import { getCharacterLabelValue, isLpcPartSourceForLayer } from './lpcPartCompatibility'
+import { getCharacterLabelValue, isLpcExtractedPart, isLpcMannequin, isLpcPartSourceForLayer, isLpcSourceCharacterId, isPartCompatibleWithMannequin } from './lpcPartCompatibility'
 import { buildManualMaskPart } from './manualParts'
 import { buildLpcCharacterManifests } from './lpcCharacters'
 import { hydratePartLibraryAssets, persistPartLibraryAssets } from './partAssetStore'
@@ -536,16 +536,16 @@ function App() {
   const activeExportTargetProfile = getExportTargetProfile(exportTargetProfile)
   const previewLibraryPartOptions = useMemo(
     () => partLibrary
-      .filter((part) => part.label === selectedRegion)
+      .filter((part) => part.label === selectedRegion && isPartCompatibleWithMannequin(part, selectedCharacter))
       .sort((left, right) => Number(right.reviewed) - Number(left.reviewed) || left.part_id.localeCompare(right.part_id)),
-    [partLibrary, selectedRegion],
+    [partLibrary, selectedCharacter, selectedRegion],
   )
   const previewLpcPartOptions = useMemo(
-    () => characters
+    () => isLpcMannequin(selectedCharacter) ? characters
       .filter((character) => isLpcPartSourceCharacter(character, selectedRegion))
       .sort((left, right) => sortLpcPartSources(left, right, animation))
-      .slice(0, 180),
-    [animation, characters, selectedRegion],
+      .slice(0, 180) : [],
+    [animation, characters, selectedCharacter, selectedRegion],
   )
   const previewSelectedSourceCharacter = selectedParts[selectedRegion]
     ? characters.find((character) => character.character_id === selectedParts[selectedRegion])
@@ -585,6 +585,25 @@ function App() {
     }
     setFrameIndex(0)
   }, [selectedCharacter, animation])
+
+  useEffect(() => {
+    if (!selectedCharacter || isLpcMannequin(selectedCharacter)) return
+    setSelectedParts((current) => {
+      const next = Object.fromEntries(
+        Object.entries(current).filter(([, characterId]) => !isLpcSourceCharacterId(characterId)),
+      ) as Record<PartLabel, string>
+      return Object.keys(next).length === Object.keys(current).length ? current : next
+    })
+    setSelectedPartIds((current) => {
+      const next = Object.fromEntries(
+        Object.entries(current).filter(([, partId]) => {
+          const part = partLibrary.find((item) => item.part_id === partId)
+          return !isLpcExtractedPart(part)
+        }),
+      ) as Partial<Record<PartLabel, string>>
+      return Object.keys(next).length === Object.keys(current).length ? current : next
+    })
+  }, [partLibrary, selectedCharacter])
 
   useEffect(() => {
     if (sourcePackFilter === 'all' || sourceCharacterOptions.length === 0) return

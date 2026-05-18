@@ -54,7 +54,7 @@ export function buildLpcCharacterManifests(inventory: LpcAssetInventory | null):
     .sort((left, right) => lpcSheetSortScore(left.sheets[0]) - lpcSheetSortScore(right.sheets[0]) || left.key.localeCompare(right.key))
 
   const baseGroups = sheetGroups
-    .filter((group) => group.role === 'base')
+    .filter((group) => group.role === 'base' && isUsableLpcBaseGroup(group))
     .slice(0, maxLpcBaseSheets)
   const partGroupsByLabel = new Map<PartLabel, LpcSheetGroup[]>()
   for (const group of sheetGroups) {
@@ -161,6 +161,11 @@ function groupLpcSheets(sheets: LpcSheet[]) {
     groups.set(key, group)
   }
   return groups
+}
+
+function isUsableLpcBaseGroup(group: LpcSheetGroup) {
+  const animations = new Set(group.sheets.map((sheet) => inferLpcAnimation(sheet)))
+  return animations.has('idle') || animations.has('walk') || group.sheets.some(isClassicLpcSheet)
 }
 
 function buildLpcAnimations(inventory: LpcAssetInventory, sheets: LpcSheet[]): AnimationManifest[] {
@@ -279,26 +284,45 @@ const lpcPartLabelHints: Array<[PartLabel, string[]]> = [
 ]
 
 function inferLpcAnimation(sheet: LpcAssetInventory['sheets'][number]): AnimationName {
-  const normalizedSegments = sheet.path
+  const segments = sheet.path
     .replace(/\.png$/i, '')
     .replaceAll('\\', '/')
     .split('/')
-    .flatMap((segment) => segment.toLowerCase().split(/[^a-z0-9]+/))
     .filter(Boolean)
-  const segmentSet = new Set(normalizedSegments)
-  if (segmentSet.has('walkcycle') || segmentSet.has('walk')) return 'walk'
-  if (segmentSet.has('run')) return 'run'
-  if (segmentSet.has('jump')) return 'jump'
-  if (segmentSet.has('sitting') || segmentSet.has('sit')) return 'sitting'
-  if (segmentSet.has('emotes') || segmentSet.has('emote')) return 'emotes'
-  if (segmentSet.has('magic') || segmentSet.has('spellcast') || segmentSet.has('spell')) return 'spellcast'
-  if (segmentSet.has('shoot') || segmentSet.has('bow')) return 'shoot'
-  if (segmentSet.has('swing') || segmentSet.has('slash')) return 'slash'
-  if (segmentSet.has('thrust')) return 'thrust'
-  if (segmentSet.has('attack')) return 'attack'
-  if (segmentSet.has('hurt')) return 'hurt'
-  if (segmentSet.has('idle')) return 'idle'
+  const fileAction = inferActionFromPathSegment(segments.at(-1) ?? '', true)
+  if (fileAction) return fileAction
+  for (const segment of segments.slice(0, -1).reverse()) {
+    const parentAction = inferActionFromPathSegment(segment, false)
+    if (parentAction) return parentAction
+  }
   return 'idle'
+}
+
+function inferActionFromPathSegment(segment: string, allowTokenMatch: boolean): AnimationName | undefined {
+  const exact = canonicalLpcAction(normalizeActionSegment(segment))
+  if (exact) return exact
+  if (!allowTokenMatch) return undefined
+  for (const token of segment.toLowerCase().split(/[^a-z0-9]+/).filter(Boolean)) {
+    const tokenAction = canonicalLpcAction(token)
+    if (tokenAction) return tokenAction
+  }
+  return undefined
+}
+
+function canonicalLpcAction(value: string): AnimationName | undefined {
+  if (value === 'walkcycle' || value === 'walk') return 'walk'
+  if (value === 'run') return 'run'
+  if (value === 'jump') return 'jump'
+  if (value === 'sitting' || value === 'sit') return 'sitting'
+  if (value === 'emotes' || value === 'emote') return 'emotes'
+  if (value === 'magic' || value === 'spellcast' || value === 'spell') return 'spellcast'
+  if (value === 'shoot' || value === 'bow') return 'shoot'
+  if (value === 'swing' || value === 'slash') return 'slash'
+  if (value === 'thrust') return 'thrust'
+  if (value === 'attack') return 'attack'
+  if (value === 'hurt') return 'hurt'
+  if (value === 'idle') return 'idle'
+  return undefined
 }
 
 function getNormalizedTokens(value: string) {

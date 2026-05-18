@@ -1,4 +1,4 @@
-import type { CharacterManifest, PartLabel } from './types'
+import type { CharacterManifest, ExtractedPart, PartLabel } from './types'
 
 const lpcLayerAliases: Partial<Record<PartLabel, PartLabel[]>> = {
   back_arm: ['front_arm'],
@@ -30,3 +30,35 @@ export function isLpcPartSourceForLayer(character: CharacterManifest, label: Par
     getCompatibleLpcPartLabels(label).includes(getCharacterLabelValue(character, 'lpc_part_label') as PartLabel)
 }
 
+export function isLpcMannequin(character: CharacterManifest | undefined) {
+  return Boolean(character && character.class_type === 'lpc_character' && getCharacterLabelValue(character, 'lpc_role') !== 'part')
+}
+
+export function isLpcSourceCharacterId(characterId: string | undefined) {
+  return Boolean(characterId?.startsWith('lpc-'))
+}
+
+export function isLpcExtractedPart(part: ExtractedPart | undefined) {
+  if (!part) return false
+  return part.tags.includes('lpc') ||
+    part.tags.includes('lpc_character') ||
+    part.character_id.startsWith('lpc-') ||
+    part.source_frame_path?.includes('/lpc sprite generator stuff/') === true ||
+    part.image_path.includes('/lpc sprite generator stuff/')
+}
+
+export function isPartCompatibleWithMannequin(part: ExtractedPart, mannequin: CharacterManifest | undefined) {
+  return !isLpcExtractedPart(part) || isLpcMannequin(mannequin)
+}
+
+export function resolveCompatiblePartSelection(
+  mannequin: CharacterManifest,
+  selectedPart: ExtractedPart | undefined,
+  selectedSourceCharacterId: string | undefined,
+) {
+  const compatibleSelectedPart = selectedPart && isPartCompatibleWithMannequin(selectedPart, mannequin) ? selectedPart : undefined
+  const compatibleSelectedSource = selectedSourceCharacterId && (!isLpcSourceCharacterId(selectedSourceCharacterId) || isLpcMannequin(mannequin))
+    ? selectedSourceCharacterId
+    : undefined
+  return { compatibleSelectedPart, compatibleSelectedSource }
+}

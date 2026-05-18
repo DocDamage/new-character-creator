@@ -187,6 +187,9 @@ test('creator cockpit filters parts and persists export target profile', async (
 })
 
 test('LPC picker exposes canonical animations and compatible sheet parts', async ({ page }) => {
+  await page.getByTestId('preview-live-layer').selectOption('torso')
+  await expect(page.getByTestId('preview-live-part').locator('optgroup[label="LPC sheet parts"]')).toHaveCount(0)
+
   await page.getByTestId('source-pack-filter').selectOption('lpc')
   const copperOption = page.locator('#character option', { hasText: 'LPC Androgynous Bases / Copper' })
   await expect(copperOption).toHaveCount(1)
@@ -205,6 +208,15 @@ test('LPC picker exposes canonical animations and compatible sheet parts', async
     const optionCount = await page.getByTestId('preview-live-part').locator('option').count()
     expect(optionCount, `${layer} should expose at least one source option plus the fallback option`).toBeGreaterThan(1)
   }
+
+  await page.getByTestId('preview-live-layer').selectOption('torso')
+  await expect(page.getByTestId('preview-live-part').locator('optgroup[label="LPC sheet parts"]')).toHaveCount(1)
+  await page.getByTestId('source-pack-filter').selectOption('sprite')
+  await expect(page.getByTestId('preview-live-part').locator('optgroup[label="LPC sheet parts"]')).toHaveCount(0)
+
+  await page.getByTestId('nav-fast').click()
+  await page.getByTestId('fast-live-layer').selectOption('torso')
+  await expect(page.getByTestId('fast-live-part').locator('optgroup[label="LPC sheet parts"]')).toHaveCount(0)
 })
 
 test('workstation APES mode does not create fake rectangular APES parts', async ({ page }) => {
