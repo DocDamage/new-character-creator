@@ -60,6 +60,38 @@ test('LPC render plan converts catalog source paths into local reference URLs', 
   assert.equal(catalogRecord.source_path, '/@fs/C:/repo/data/cache/universal-lpc-generator/spritesheets/cape/solid_behind/walk/black.png')
 })
 
+test('LPC render plan uses oversize profile for oversize export targets', () => {
+  const recipe = {
+    character_id: 'recipe_1',
+    recipe_mode: 'lpc_character',
+    source_family: 'lpc',
+    base_canvas: [64, 64],
+    base_character: 'lpc-body',
+    lpc_selections: {
+      weapon: { slot_id: 'weapon', item_id: 'weapon:weapon_sword_longsword', variant: 'longsword', type_name: 'weapon', enabled: true },
+    },
+    layers: [],
+    palette: { hue_shift: 0, saturation: 100, brightness: 100, team_color: 'default' },
+    animation_coverage: ['walk'],
+    export_targets: [],
+  }
+  const plan = buildLpcRenderPlan({
+    catalog: makeCatalog(),
+    recipe,
+    bodyType: 'male',
+    exportTargetProfile: 'lpc_oversize',
+    animation: 'walk',
+    direction: 'south',
+    frameIndex: 0,
+  })
+
+  const oversizeRecord = plan.records.find((record) => record.draw_record?.layer_id === 'layer_2')
+  assert.equal(oversizeRecord.draw_record.animation_status, 'exact')
+  assert.deepEqual(oversizeRecord.source_rect, { x: 0, y: 0, w: 192, h: 192 })
+  assert.deepEqual(oversizeRecord.dest_rect, { x: -64, y: -64, w: 192, h: 192 })
+  assert.deepEqual(plan.warnings, [])
+})
+
 function makeCatalog() {
   return {
     format: 'pixel_creator_lpc_catalog',
@@ -75,7 +107,7 @@ function makeCatalog() {
       has_palette_definitions: false,
       has_credits_csv: true,
     },
-    summary: { item_count: 1, layer_count: 2, variant_count: 1, credit_count: 0, type_counts: {} },
+    summary: { item_count: 2, layer_count: 4, variant_count: 2, credit_count: 0, type_counts: {} },
     items: {
       'cape:cape_solid': {
         item_id: 'cape:cape_solid',
@@ -95,6 +127,26 @@ function makeCatalog() {
         layers: [
           { layer_id: 'layer_1', z_pos: 85, paths_by_body_type: { male: 'cape/solid/female/' } },
           { layer_id: 'layer_2', z_pos: 5, paths_by_body_type: { male: 'cape/solid_behind/' } },
+        ],
+      },
+      'weapon:weapon_sword_longsword': {
+        item_id: 'weapon:weapon_sword_longsword',
+        name: 'Longsword',
+        type_name: 'weapon',
+        path: ['weapons', 'sword'],
+        tags: ['weapon'],
+        required_tags: [],
+        excluded_tags: [],
+        required_body_types: ['male'],
+        variants: ['longsword'],
+        animations: ['walk', 'slash_oversize'],
+        preview: { row: 0, column: 0, x_offset: 0, y_offset: 0 },
+        match_body_color: false,
+        recolors: [],
+        credits: [],
+        layers: [
+          { layer_id: 'layer_1', z_pos: 140, paths_by_body_type: { male: 'weapon/sword/longsword/' } },
+          { layer_id: 'layer_2', z_pos: -1, custom_animation: 'slash_oversize', paths_by_body_type: { male: 'weapon/sword/longsword/attack_slash/behind/' } },
         ],
       },
     },

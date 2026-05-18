@@ -6,6 +6,7 @@ import { getLpcPartFrameRef } from './lpcPartFrames'
 import { buildLpcReplacementRegions } from './lpcReplacement'
 import { buildLpcRenderPlan, hasCatalogRenderSelections, type LpcRenderRecord } from './lpcRenderPlan'
 import { humanoid64Preset } from './presets'
+import { getLpcExportProfileForTarget, type ExportTargetProfileId } from './creatorCockpit'
 import type { AnimationName, ApesJob, CharacterManifest, Direction, ExtractedPart, KitbashRecipe, Rect } from './types'
 import type { LpcCatalog } from './lpcCatalog'
 import {
@@ -31,6 +32,7 @@ type RenderRecipeFrameOptions = {
   direction: Direction
   frameIndex: number
   lpcCatalog?: LpcCatalog | null
+  exportTargetProfile?: ExportTargetProfileId
 }
 
 type RenderedFrameRecord = {
@@ -79,6 +81,7 @@ export async function renderRecipeFrameToDataUrl({
   direction,
   frameIndex,
   lpcCatalog,
+  exportTargetProfile,
 }: RenderRecipeFrameOptions) {
   const canvas = document.createElement('canvas')
   canvas.width = 64
@@ -104,6 +107,7 @@ export async function renderRecipeFrameToDataUrl({
       animation,
       direction,
       frameIndex,
+      exportTargetProfile,
     })
     for (const record of plan.records) {
       await drawRenderRecord(context, record, recipe)
@@ -240,6 +244,7 @@ export async function buildRenderedFrameSet(
   characters: CharacterManifest[],
   partLibrary: ExtractedPart[],
   lpcCatalog?: LpcCatalog | null,
+  exportTargetProfile?: ExportTargetProfileId,
 ): Promise<RenderedFrameSet> {
   const frames: RenderedFrameRecord[] = []
   const spritesheets: RenderedSpriteSheetRecord[] = []
@@ -264,6 +269,7 @@ export async function buildRenderedFrameSet(
             direction,
             frameIndex: frame.index,
             lpcCatalog,
+            exportTargetProfile,
           }),
         })),
       )
@@ -310,9 +316,9 @@ export async function buildFullPackageManifest(
   apesJobs: ApesJob[],
   renderedFrameSet?: RenderedFrameSet,
   lpcCatalog?: LpcCatalog | null,
-  options: { placeholderModeEnabled?: boolean } = {},
+  options: { placeholderModeEnabled?: boolean, exportTargetProfile?: ExportTargetProfileId } = {},
 ) {
-  const resolvedRenderedFrameSet = renderedFrameSet ?? (await buildRenderedFrameSet(character, recipe, characters, partLibrary, lpcCatalog))
+  const resolvedRenderedFrameSet = renderedFrameSet ?? (await buildRenderedFrameSet(character, recipe, characters, partLibrary, lpcCatalog, options.exportTargetProfile))
 
   return {
     format: 'pixel_creator_full_package',
@@ -322,6 +328,8 @@ export async function buildFullPackageManifest(
     source_character: character.character_id,
     manifest: buildExportManifest(character, recipe, apesJobs, options),
     rendered_outputs: resolvedRenderedFrameSet,
+    export_target_profile: options.exportTargetProfile ?? 'generic',
+    lpc_export_profile: options.exportTargetProfile ? getLpcExportProfileForTarget(options.exportTargetProfile) : 'standard_64',
     engine_exports: {
       godot_4: {
         scene_file: `${recipe.character_id}.tscn`,
@@ -390,8 +398,9 @@ export async function downloadRenderedFrameSetZip(
   characters: CharacterManifest[],
   partLibrary: ExtractedPart[],
   lpcCatalog?: LpcCatalog | null,
+  exportTargetProfile?: ExportTargetProfileId,
 ) {
-  const renderedFrameSet = await buildRenderedFrameSet(character, recipe, characters, partLibrary, lpcCatalog)
+  const renderedFrameSet = await buildRenderedFrameSet(character, recipe, characters, partLibrary, lpcCatalog, exportTargetProfile)
   const zip = new JSZip()
   const rootPath = recipe.character_id
 
@@ -421,9 +430,9 @@ export async function downloadFullPackageZip(
   partLibrary: ExtractedPart[],
   apesJobs: ApesJob[],
   lpcCatalog?: LpcCatalog | null,
-  options: { placeholderModeEnabled?: boolean } = {},
+  options: { placeholderModeEnabled?: boolean, exportTargetProfile?: ExportTargetProfileId } = {},
 ) {
-  const renderedFrameSet = await buildRenderedFrameSet(character, recipe, characters, partLibrary, lpcCatalog)
+  const renderedFrameSet = await buildRenderedFrameSet(character, recipe, characters, partLibrary, lpcCatalog, options.exportTargetProfile)
   const packageManifest = await buildFullPackageManifest(character, recipe, characters, partLibrary, apesJobs, renderedFrameSet, lpcCatalog, options)
   const zip = new JSZip()
   const rootPath = recipe.character_id

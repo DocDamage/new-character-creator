@@ -8,21 +8,29 @@ import {
   apesPythonPathStorageKey,
   apesQaHarnessJobId,
   assetRootInputStorageKey,
+  aiProviderConfigStorageKey,
   composerRecipesStorageKey,
   exportTargetProfileStorageKey,
   filenameTemplateStorageKey,
+  generationJobsStorageKey,
+  loadStoredAiProviderConfig,
   loadStoredApesPreflight,
   loadStoredApesJobs,
   loadStoredBoolean,
   loadStoredComposerRecipes,
+  loadStoredGenerationJobs,
   loadStoredPartLibrary,
   loadStoredString,
+  loadStoredTrainingInboxDrafts,
+  loadStoredTrainingLibraryRecords,
   loadStoredVariationPresets,
   makeDraftRecipeId,
   partLibraryStorageKey,
   storeBoolean,
   storeJson,
   storeString,
+  trainingInboxStorageKey,
+  trainingLibraryStorageKey,
   variationPresetsStorageKey,
   type SavedComposerRecipe,
 } from './appPersistence'
@@ -37,12 +45,14 @@ import {
 } from './creatorCockpit'
 import { defaultFilenameTemplate } from './filenameTemplates'
 import { buildGenerationManifest } from './generationManifest'
+import { buildGenerationJobsHandoffPayload, createGenerationJobsFromMissingAnimationQueue, generationJobBlocksRelease } from './generationJobs'
 import { layerBundleToExtractedParts, lpcSheetsToExtractedParts, parseLayerBundleManifest, type LpcSheetImportOptions } from './layerBundle'
 import { canUseLpcPartForAnimation, getCharacterLabelValue, isLpcExtractedPart, isLpcMannequin, isLpcPartSourceForLayer, isLpcSourceCharacterId, isPartCompatibleWithMannequin } from './lpcPartCompatibility'
 import { buildManualMaskPart } from './manualParts'
 import { buildLpcCharacterManifests } from './lpcCharacters'
 import { buildLpcSelectionCreditReadiness } from './lpcCatalogPicker'
 import type { LpcCatalog, LpcRecipeSelection, RecipeModeId } from './lpcCatalog'
+import type { MissingAnimationQueue } from './missingAnimationQueue'
 import { hydratePartLibraryAssets, persistPartLibraryAssets } from './partAssetStore'
 import { CompositeCanvas } from './CompositeCanvas'
 import { PixelCanvas } from './PixelCanvas'
@@ -56,7 +66,8 @@ import { PartLibraryPanel } from './screens/PartLibraryPanel'
 import { SettingsPanel } from './screens/SettingsPanel'
 import { WorkstationPanel } from './screens/WorkstationPanel'
 import { canShowCharacterInRecipeMode, sourceFamilyForRecipeMode } from './sourceFamilyRegistry'
-import type { AnimationName, ApesBridgeStatus, ApesFinetuneManifest, ApesJob, ApesOutputInventory, ApesPreflightReport, ApesReport, AssetManifest, CharacterManifest, ComposerLayerSettings, Direction, DuelystApesJobBatch, DuelystPackageAudit, ExtractedPart, ExtractionMethod, LpcAssetInventory, PaletteRules, PartLabel, Rect, VariationPreset } from './types'
+import { approveTrainingDraft, classifyTrainingInboxDraft, type ClassifyTrainingInboxInput } from './trainingLibrary'
+import type { AiProviderConfig, AnimationName, ApesBridgeStatus, ApesFinetuneManifest, ApesJob, ApesOutputInventory, ApesPreflightReport, ApesReport, AssetManifest, CharacterManifest, ComposerLayerSettings, Direction, DuelystApesJobBatch, DuelystPackageAudit, ExtractedPart, ExtractionMethod, GenerationJob, LpcAssetInventory, PaletteRules, PartLabel, Rect, TrainingInboxDraft, TrainingLibraryRecord, VariationPreset } from './types'
 import {
   buildExportManifest,
   buildAsepriteReference,
@@ -271,6 +282,10 @@ function App() {
   const [savedRecipes, setSavedRecipes] = useState<SavedComposerRecipe[]>(loadStoredComposerRecipes)
   const [extractionMethod, setExtractionMethod] = useState<ExtractionMethod>('apes')
   const [apesJobs, setApesJobs] = useState<ApesJob[]>(loadStoredApesJobs)
+  const [aiProviderConfig, setAiProviderConfig] = useState<AiProviderConfig>(loadStoredAiProviderConfig)
+  const [generationJobs, setGenerationJobs] = useState<GenerationJob[]>(loadStoredGenerationJobs)
+  const [trainingInboxDrafts, setTrainingInboxDrafts] = useState<TrainingInboxDraft[]>(loadStoredTrainingInboxDrafts)
+  const [trainingLibraryRecords, setTrainingLibraryRecords] = useState<TrainingLibraryRecord[]>(loadStoredTrainingLibraryRecords)
   const [batchSeed, setBatchSeed] = useState('ash-ronin-001')
   const [batchCount, setBatchCount] = useState(8)
   const [palette, setPalette] = useState(palettePresets[0])
@@ -509,6 +524,38 @@ function App() {
   }, [apesJobs])
 
   useEffect(() => {
+    setPersistenceWarning(
+      storeJson(aiProviderConfigStorageKey, aiProviderConfig)
+        ? ''
+        : 'Could not persist AI provider configuration in browser storage. Download handoff JSON before reloading.',
+    )
+  }, [aiProviderConfig])
+
+  useEffect(() => {
+    setPersistenceWarning(
+      storeJson(generationJobsStorageKey, generationJobs)
+        ? ''
+        : 'Could not persist generation jobs in browser storage. Download handoff JSON before reloading.',
+    )
+  }, [generationJobs])
+
+  useEffect(() => {
+    setPersistenceWarning(
+      storeJson(trainingInboxStorageKey, trainingInboxDrafts)
+        ? ''
+        : 'Could not persist Training Inbox drafts in browser storage. Download handoff JSON before reloading.',
+    )
+  }, [trainingInboxDrafts])
+
+  useEffect(() => {
+    setPersistenceWarning(
+      storeJson(trainingLibraryStorageKey, trainingLibraryRecords)
+        ? ''
+        : 'Could not persist Training Library records in browser storage. Download handoff JSON before reloading.',
+    )
+  }, [trainingLibraryRecords])
+
+  useEffect(() => {
     if (!storeString(assetRootInputStorageKey, assetRootInput)) {
       setPersistenceWarning('Could not persist the asset root setting in browser storage.')
     }
@@ -571,19 +618,33 @@ function App() {
   const framePath = frame?.path ?? getFramePath(frameCharacter, animation, direction, frameIndex)
   const onionPath = onionFrame?.path ?? getFramePath(frameCharacter, animation, direction, Math.max(frameIndex - 1, 0))
   const frames = getFrames(animationSourceCharacter, animation, direction)
-  const recipe = selectedCharacter
-    ? {
-        ...makeRecipe(selectedCharacter, selectedParts, partLibrary, selectedPartIds, layerSettings, recipeId, palette, paletteRules, animationSourceCharacter),
-        recipe_mode: recipeMode,
-        source_family: sourceFamilyForRecipeMode(recipeMode),
-        lpc_selections: recipeMode === 'lpc_character' ? lpcSelections : undefined,
-      }
-    : null
+  const recipe = useMemo(
+    () => selectedCharacter
+      ? {
+          ...makeRecipe(selectedCharacter, selectedParts, partLibrary, selectedPartIds, layerSettings, recipeId, palette, paletteRules, animationSourceCharacter),
+          recipe_mode: recipeMode,
+          source_family: sourceFamilyForRecipeMode(recipeMode),
+          lpc_selections: recipeMode === 'lpc_character' ? lpcSelections : undefined,
+        }
+      : null,
+    [animationSourceCharacter, layerSettings, lpcSelections, palette, paletteRules, partLibrary, recipeId, recipeMode, selectedCharacter, selectedPartIds, selectedParts],
+  )
   const recipeReadiness = useMemo(
     () => buildRecipeReadiness({ selectedPartIds, partLibrary, layerLabels: layerOrder }),
     [selectedPartIds, partLibrary],
   )
   const activeExportTargetProfile = getExportTargetProfile(exportTargetProfile)
+  const currentGenerationReleaseBlockers = useMemo(
+    () => recipe && selectedCharacter
+      ? generationJobs.filter((job) => (
+          job.recipe_id === recipe.character_id &&
+          job.character_id === selectedCharacter.character_id &&
+          job.target_profile === exportTargetProfile &&
+          generationJobBlocksRelease(job)
+        ))
+      : [],
+    [exportTargetProfile, generationJobs, recipe, selectedCharacter],
+  )
   const previewLibraryPartOptions = useMemo(
     () => partLibrary
       .filter((part) => part.label === selectedRegion && isPartCompatibleWithMannequin(part, selectedCharacter))
@@ -892,6 +953,90 @@ function App() {
       return
     }
     setApesJobs((current) => [job, ...current])
+    setScreen('apes')
+  }
+
+  function createGenerationJobsFromQueue(queue: MissingAnimationQueue) {
+    if (!selectedCharacter || !recipe) return
+    const existingQueueItemIds = new Set(
+      generationJobs
+        .filter((job) => (
+          job.recipe_id === recipe.character_id &&
+          job.character_id === selectedCharacter.character_id &&
+          job.target_profile === exportTargetProfile
+        ))
+        .flatMap((job) => job.source_queue_item_ids),
+    )
+    const newQueue = {
+      ...queue,
+      items: queue.items.filter((item) => !existingQueueItemIds.has(item.id)),
+    }
+    const jobs = createGenerationJobsFromMissingAnimationQueue(newQueue, {
+      recipeId: recipe.character_id,
+      characterId: selectedCharacter.character_id,
+      targetProfile: exportTargetProfile,
+      provider: aiProviderConfig,
+      settings: {
+        filename_template: filenameTemplate,
+        style_notes: generationStyleNotes,
+      },
+    })
+    if (jobs.length === 0) {
+      setApesBridgeStatus('No new generation jobs were queued; every current missing-animation item already has a job.')
+      setScreen('apes')
+      return
+    }
+    setGenerationJobs((current) => [...jobs, ...current])
+    setApesBridgeStatus(`Queued ${jobs.length} PixelLab/manual generation job(s). Outputs remain blocked until review and are not selected automatically.`)
+    setScreen('apes')
+  }
+
+  function downloadGenerationJobsHandoff() {
+    if (generationJobs.length === 0) return
+    const payload = buildGenerationJobsHandoffPayload(generationJobs)
+    setGenerationJobs(payload.jobs)
+    setAiProviderConfig((current) => ({
+      ...current,
+      manual_handoff: {
+        ...current.manual_handoff,
+        status: 'exported',
+        exported_at: payload.exported_at,
+      },
+    }))
+    downloadJson(`${recipe?.character_id ?? selectedCharacter?.character_id ?? 'character'}_generation_jobs_handoff.json`, payload)
+    setApesBridgeStatus(`Generation handoff exported with ${payload.job_count} job(s). Import generated files only after review.`)
+  }
+
+  function createTrainingInboxDraft(input: Omit<ClassifyTrainingInboxInput, 'provenance'>) {
+    const draft = classifyTrainingInboxDraft({
+      ...input,
+      provenance: {
+        created_at: new Date().toISOString(),
+        created_by: 'APES Lab wizard',
+        source: 'training-inbox-wizard',
+      },
+    })
+    setTrainingInboxDrafts((current) => [draft, ...current.filter((item) => item.draft_id !== draft.draft_id)])
+    const redCount = draft.validation_findings.filter((finding) => finding.level === 'red').length
+    setApesBridgeStatus(
+      redCount > 0
+        ? `Training draft saved with ${redCount} red finding(s). It is not selectable for export or training.`
+        : 'Training draft saved for review. Approve it to move it into the Training Library.',
+    )
+    setScreen('apes')
+  }
+
+  function approveTrainingInboxDraft(draftId: string) {
+    const draft = trainingInboxDrafts.find((item) => item.draft_id === draftId)
+    if (!draft) return
+    try {
+      const record = approveTrainingDraft(draft, { approved_by: 'APES Lab reviewer' })
+      setTrainingLibraryRecords((current) => [record, ...current.filter((item) => item.record_id !== record.record_id)])
+      setTrainingInboxDrafts((current) => current.filter((item) => item.draft_id !== draftId))
+      setApesBridgeStatus('Training Library record approved. It remains separate from selectable frame parts.')
+    } catch (error) {
+      setApesBridgeStatus(`Training draft approval blocked. ${error instanceof Error ? error.message : String(error)}`)
+    }
     setScreen('apes')
   }
 
@@ -1647,26 +1792,38 @@ function App() {
     return true
   }
 
+  function getCurrentGenerationReleaseBlockers() {
+    return currentGenerationReleaseBlockers
+  }
+
+  function blockReleaseExport() {
+    if (blockReleaseExportForLpcCredits()) return true
+    const blockers = getCurrentGenerationReleaseBlockers()
+    if (blockers.length === 0) return false
+    setExportStatus(`Release export blocked: review ${blockers.length} PixelLab/manual generation job(s) for ${activeExportTargetProfile.label} before downloading release exports.`)
+    return true
+  }
+
   function exportGeneric() {
     if (!recipe || !selectedCharacter) return
-    if (blockReleaseExportForLpcCredits()) return
+    if (blockReleaseExport()) return
     downloadJson(`${recipe.character_id}_manifest.json`, buildExportManifest(selectedCharacter, recipe, apesJobs, { placeholderModeEnabled: apesAllowPlaceholder }))
   }
 
   async function exportGodotScene() {
     if (!recipe) return
-    if (blockReleaseExportForLpcCredits()) return
+    if (blockReleaseExport()) return
     const { buildGodotSceneText } = await loadExportPackage()
     downloadText(`${recipe.character_id}.tscn`, buildGodotSceneText(recipe))
   }
 
   async function exportSpriteFrames() {
     if (!recipe || !selectedCharacter) return
-    if (blockReleaseExportForLpcCredits()) return
+    if (blockReleaseExport()) return
     setExportStatus('Building Godot SpriteFrames resource...')
     try {
       const { buildGodotSpriteFramesResource, buildRenderedFrameSet } = await loadExportPackage()
-      const renderedFrameSet = await buildRenderedFrameSet(selectedCharacter, recipe, characters, partLibrary, lpcCatalog)
+      const renderedFrameSet = await buildRenderedFrameSet(selectedCharacter, recipe, characters, partLibrary, lpcCatalog, exportTargetProfile)
       downloadText(`${recipe.character_id}_sprite_frames.tres`, buildGodotSpriteFramesResource(recipe, renderedFrameSet, 'rendered/frames'))
       setExportStatus(`Godot SpriteFrames resource ready with ${renderedFrameSet.frame_count} rendered frame(s).`)
     } catch (error) {
@@ -1676,25 +1833,25 @@ function App() {
 
   function exportUnityMetadata() {
     if (!recipe || !selectedCharacter) return
-    if (blockReleaseExportForLpcCredits()) return
+    if (blockReleaseExport()) return
     downloadJson(`${recipe.character_id}_unity_2d.json`, buildUnity2DMetadata(selectedCharacter, recipe))
   }
 
   function exportRpgMakerMetadata() {
     if (!recipe || !selectedCharacter) return
-    if (blockReleaseExportForLpcCredits()) return
+    if (blockReleaseExport()) return
     downloadJson(`${recipe.character_id}_rpg_maker_mz.json`, buildRpgMakerMzMetadata(selectedCharacter, recipe))
   }
 
   function exportAsepriteReference() {
     if (!recipe || !selectedCharacter) return
-    if (blockReleaseExportForLpcCredits()) return
+    if (blockReleaseExport()) return
     downloadJson(`${recipe.character_id}_aseprite_reference.json`, buildAsepriteReference(selectedCharacter, recipe))
   }
 
   async function exportCurrentSpriteSheet() {
     if (!animationSourceCharacter) return
-    if (blockReleaseExportForLpcCredits()) return
+    if (blockReleaseExport()) return
     const currentFrames = getFrames(animationSourceCharacter, animation, direction)
     await downloadSpriteSheet(
       `${recipe?.character_id ?? selectedCharacter.character_id}_${animation}_${direction}_sheet.png`,
@@ -1705,17 +1862,17 @@ function App() {
 
   async function exportAnimationSheets() {
     if (!animationSourceCharacter) return
-    if (blockReleaseExportForLpcCredits()) return
+    if (blockReleaseExport()) return
     await downloadAllDirectionSpriteSheets(animationSourceCharacter, animation)
   }
 
   async function exportRenderedFrameSet() {
     if (!recipe || !selectedCharacter) return
-    if (blockReleaseExportForLpcCredits()) return
+    if (blockReleaseExport()) return
     setExportStatus('Rendering full frame set...')
     try {
       const { buildRenderedFrameSet } = await loadExportPackage()
-      const renderedFrameSet = await buildRenderedFrameSet(selectedCharacter, recipe, characters, partLibrary, lpcCatalog)
+      const renderedFrameSet = await buildRenderedFrameSet(selectedCharacter, recipe, characters, partLibrary, lpcCatalog, exportTargetProfile)
       downloadJson(`${recipe.character_id}_rendered_frame_set.json`, renderedFrameSet)
       setExportStatus(`Rendered ${renderedFrameSet.frame_count} frame(s) and ${renderedFrameSet.spritesheet_count} spritesheet record(s).`)
     } catch (error) {
@@ -1741,12 +1898,12 @@ function App() {
 
   async function exportFullPackageManifest() {
     if (!recipe || !selectedCharacter) return
-    if (blockReleaseExportForLpcCredits()) return
+    if (blockReleaseExport()) return
     setExportStatus('Building full package manifest...')
     try {
       const { buildFullPackageManifest } = await loadExportPackage()
       const packageManifest = {
-        ...(await buildFullPackageManifest(selectedCharacter, recipe, characters, partLibrary, apesJobs, undefined, lpcCatalog, { placeholderModeEnabled: apesAllowPlaceholder })),
+        ...(await buildFullPackageManifest(selectedCharacter, recipe, characters, partLibrary, apesJobs, undefined, lpcCatalog, { placeholderModeEnabled: apesAllowPlaceholder, exportTargetProfile })),
         filename_template: filenameTemplate,
       }
       downloadJson(`${recipe.character_id}_full_package_manifest.json`, packageManifest)
@@ -1758,11 +1915,11 @@ function App() {
 
   async function exportRenderedFrameSetZip() {
     if (!recipe || !selectedCharacter) return
-    if (blockReleaseExportForLpcCredits()) return
+    if (blockReleaseExport()) return
     setExportStatus('Building rendered frame zip...')
     try {
       const { downloadRenderedFrameSetZip } = await loadExportPackage()
-      const summary = await downloadRenderedFrameSetZip(selectedCharacter, recipe, characters, partLibrary, lpcCatalog)
+      const summary = await downloadRenderedFrameSetZip(selectedCharacter, recipe, characters, partLibrary, lpcCatalog, exportTargetProfile)
       setExportStatus(`Rendered frame zip ready with ${summary.frame_count} frame(s) and ${summary.spritesheet_count} spritesheet(s).`)
     } catch (error) {
       setExportStatus(`Rendered frame zip failed: ${error instanceof Error ? error.message : String(error)}`)
@@ -1771,11 +1928,11 @@ function App() {
 
   async function exportFullPackageZip() {
     if (!recipe || !selectedCharacter) return
-    if (blockReleaseExportForLpcCredits()) return
+    if (blockReleaseExport()) return
     setExportStatus('Building full package zip...')
     try {
       const { downloadFullPackageZip } = await loadExportPackage()
-      const summary = await downloadFullPackageZip(selectedCharacter, recipe, characters, partLibrary, apesJobs, lpcCatalog, { placeholderModeEnabled: apesAllowPlaceholder })
+      const summary = await downloadFullPackageZip(selectedCharacter, recipe, characters, partLibrary, apesJobs, lpcCatalog, { placeholderModeEnabled: apesAllowPlaceholder, exportTargetProfile })
       setExportStatus(`Full package zip ready with ${summary.frame_count} frame(s), ${summary.spritesheet_count} spritesheet(s), and ${summary.part_count} selected part folder(s).`)
     } catch (error) {
       setExportStatus(`Full package zip failed: ${error instanceof Error ? error.message : String(error)}`)
@@ -2347,7 +2504,16 @@ function App() {
           {screen === 'apes' ? (
             <ApesLabPanel
               jobs={apesJobs}
+              aiProviderConfig={aiProviderConfig}
+              generationJobs={generationJobs}
+              exportTargetProfile={exportTargetProfile}
+              trainingInboxDrafts={trainingInboxDrafts}
+              trainingLibraryRecords={trainingLibraryRecords}
               createApesJob={createApesJob}
+              createGenerationJobsFromQueue={createGenerationJobsFromQueue}
+              downloadGenerationJobsHandoff={downloadGenerationJobsHandoff}
+              createTrainingInboxDraft={createTrainingInboxDraft}
+              approveTrainingInboxDraft={approveTrainingInboxDraft}
               runApesPreflight={runApesPreflight}
               runApesJob={runApesJob}
               runPreparedDuelystJobs={runPreparedDuelystJobs}
@@ -2420,6 +2586,12 @@ function App() {
               exportTargetProfile={exportTargetProfile}
               setExportTargetProfile={setExportTargetProfile}
               recipeReadiness={recipeReadiness}
+              generationReleaseBlockCount={currentGenerationReleaseBlockers.length}
+              generationReleaseBlockSummary={
+                currentGenerationReleaseBlockers.length > 0
+                  ? `Review ${currentGenerationReleaseBlockers.length} PixelLab/manual generation job(s) for ${activeExportTargetProfile.label} before downloading release exports.`
+                  : ''
+              }
             />
           ) : null}
           {screen === 'settings' ? (

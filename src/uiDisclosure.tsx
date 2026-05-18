@@ -1,4 +1,27 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react'
+import { cloneElement, isValidElement, useEffect, useId, useRef, useState, type ReactElement, type ReactNode } from 'react'
+
+type TooltipProps = {
+  content: ReactNode
+  children: ReactElement<{ 'aria-describedby'?: string }>
+}
+
+export function Tooltip({ content, children }: TooltipProps) {
+  const tooltipId = useId()
+  const describedChild = isValidElement<{ 'aria-describedby'?: string }>(children)
+    ? cloneElement(children, {
+        'aria-describedby': [children.props['aria-describedby'], tooltipId].filter(Boolean).join(' ') || undefined,
+      })
+    : children
+
+  return (
+    <span className="tooltip-wrap">
+      {describedChild}
+      <span id={tooltipId} className="tooltip-content" role="tooltip">
+        {content}
+      </span>
+    </span>
+  )
+}
 
 export type DetailsRecord = {
   title: string
@@ -33,7 +56,9 @@ export function DetailsDrawer({ record, onClose }: DetailsDrawerProps) {
           <strong>{record.title}</strong>
           {record.subtitle ? <span>{record.subtitle}</span> : null}
         </div>
-        <button ref={closeButtonRef} type="button" aria-label="Close details" title="Close details" onClick={onClose}>x</button>
+        <Tooltip content="Close details">
+          <button ref={closeButtonRef} type="button" aria-label="Close details" onClick={onClose}>x</button>
+        </Tooltip>
       </div>
       <dl>
         {record.fields.map((field) => (
@@ -67,21 +92,38 @@ function ContextMenuItems({
   return (
     <div className="context-menu" role="menu">
       {actions.map((action) => (
-        <button
-          key={action.id}
-          type="button"
-          role="menuitem"
-          disabled={action.disabled}
-          title={action.disabled ? action.disabledReason : action.label}
-          onClick={() => {
-            if (action.disabled) return
-            action.onSelect()
-            onClose()
-            returnFocus?.()
-          }}
-        >
-          {action.label}
-        </button>
+        action.disabled && action.disabledReason ? (
+          <Tooltip key={action.id} content={action.disabledReason}>
+            <button
+              type="button"
+              role="menuitem"
+              disabled
+              onClick={() => {
+                if (action.disabled) return
+                action.onSelect()
+                onClose()
+                returnFocus?.()
+              }}
+            >
+              {action.label}
+            </button>
+          </Tooltip>
+        ) : (
+          <button
+            key={action.id}
+            type="button"
+            role="menuitem"
+            disabled={action.disabled}
+            onClick={() => {
+              if (action.disabled) return
+              action.onSelect()
+              onClose()
+              returnFocus?.()
+            }}
+          >
+            {action.label}
+          </button>
+        )
       ))}
     </div>
   )
@@ -94,12 +136,13 @@ type ContextMenuButtonProps = {
 
 export function ContextMenuButton({ label = 'More actions', actions }: ContextMenuButtonProps) {
   const [open, setOpen] = useState(false)
+  const wrapRef = useRef<HTMLSpanElement | null>(null)
   const buttonRef = useRef<HTMLButtonElement | null>(null)
 
   useEffect(() => {
     if (!open) return
     const onPointerDown = (event: PointerEvent) => {
-      if (!buttonRef.current?.parentElement?.contains(event.target as Node)) setOpen(false)
+      if (!wrapRef.current?.contains(event.target as Node)) setOpen(false)
     }
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
@@ -116,25 +159,26 @@ export function ContextMenuButton({ label = 'More actions', actions }: ContextMe
   }, [open])
 
   return (
-    <span className="context-menu-wrap">
-      <button
-        ref={buttonRef}
-        type="button"
-        className="icon-button"
-        aria-haspopup="menu"
-        aria-expanded={open}
-        aria-label={label}
-        title={label}
-        onClick={() => setOpen((value) => !value)}
-        onKeyDown={(event) => {
-          if (event.key === 'ContextMenu' || (event.shiftKey && event.key === 'F10')) {
-            event.preventDefault()
-            setOpen(true)
-          }
-        }}
-      >
-        ...
-      </button>
+    <span ref={wrapRef} className="context-menu-wrap">
+      <Tooltip content="More actions">
+        <button
+          ref={buttonRef}
+          type="button"
+          className="icon-button"
+          aria-haspopup="menu"
+          aria-expanded={open}
+          aria-label={label}
+          onClick={() => setOpen((value) => !value)}
+          onKeyDown={(event) => {
+            if (event.key === 'ContextMenu' || (event.shiftKey && event.key === 'F10')) {
+              event.preventDefault()
+              setOpen(true)
+            }
+          }}
+        >
+          ...
+        </button>
+      </Tooltip>
       {open ? (
         <ContextMenuItems actions={actions} onClose={() => setOpen(false)} returnFocus={() => buttonRef.current?.focus()} />
       ) : null}
@@ -146,9 +190,16 @@ type ContextMenuAreaProps = {
   label: string
   actions: ContextMenuAction[]
   children: ReactNode
+  allowInteractiveTargetEvents?: boolean
 }
 
-export function ContextMenuArea({ label, actions, children }: ContextMenuAreaProps) {
+function isInteractiveContextTarget(target: EventTarget | null, container: HTMLElement | null) {
+  if (!(target instanceof HTMLElement) || !container) return false
+  const interactive = target.closest('button, input, select, textarea, a[href], summary, [role="button"], [role="menuitem"], [contenteditable="true"]')
+  return Boolean(interactive && container.contains(interactive) && interactive !== container)
+}
+
+export function ContextMenuArea({ label, actions, children, allowInteractiveTargetEvents = false }: ContextMenuAreaProps) {
   const [open, setOpen] = useState(false)
   const areaRef = useRef<HTMLDivElement | null>(null)
 
@@ -178,11 +229,13 @@ export function ContextMenuArea({ label, actions, children }: ContextMenuAreaPro
       tabIndex={0}
       aria-label={label}
       onContextMenu={(event) => {
+        if (!allowInteractiveTargetEvents && isInteractiveContextTarget(event.target, areaRef.current)) return
         event.preventDefault()
         setOpen(true)
       }}
       onKeyDown={(event) => {
         if (event.key === 'ContextMenu' || (event.shiftKey && event.key === 'F10')) {
+          if (!allowInteractiveTargetEvents && isInteractiveContextTarget(event.target, areaRef.current)) return
           event.preventDefault()
           setOpen(true)
         }

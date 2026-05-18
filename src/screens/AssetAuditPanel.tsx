@@ -4,7 +4,7 @@ import { partLabels } from '../presets'
 import { analyzeImageSource } from '../sourceAnalysis'
 import type { AssetManifest, DuelystPackageAudit, DuelystPackageCandidate, LpcAssetInventory, SourceAlphaAnalysis } from '../types'
 import type { LpcCatalog } from '../lpcCatalog'
-import { ContextMenuArea, ContextMenuButton, DetailsDrawer, type DetailsRecord } from '../uiDisclosure'
+import { ContextMenuArea, ContextMenuButton, DetailsDrawer, Tooltip, type DetailsRecord } from '../uiDisclosure'
 import { slugLabel } from '../utils'
 
 type AssetAuditPanelProps = {
@@ -207,14 +207,15 @@ export function AssetAuditPanel({
           <p>Build catalog metadata from Universal LPC definitions; use local sheet inventory as a degraded fallback for imports.</p>
         </div>
         <div className="audit-actions">
-          <button
-            data-testid="run-lpc-catalog"
-            onClick={() => void runLpcCatalog()}
-            disabled={!localToolsAvailable || lpcBusy}
-            title={localToolsAvailable ? 'Build catalog from upstream sheet definitions' : 'Start the local tool server first'}
-          >
-            Build LPC catalog
-          </button>
+          <Tooltip content={localToolsAvailable ? 'Build catalog from upstream sheet definitions' : 'Start the local tool server first'}>
+            <button
+              data-testid="run-lpc-catalog"
+              onClick={() => void runLpcCatalog()}
+              disabled={!localToolsAvailable || lpcBusy}
+            >
+              Build LPC catalog
+            </button>
+          </Tooltip>
           <button
             className="primary"
             data-testid="run-lpc-inventory"
@@ -231,10 +232,18 @@ export function AssetAuditPanel({
         <span>{lpcStatus}</span>
         {lpcCatalog ? (
           <div className="part-meta">
-            <span title="Catalog items parsed from sheet definitions">{lpcCatalog.summary.item_count} catalog items</span>
-            <span title="Layer records with upstream z positions">{lpcCatalog.summary.layer_count} layers</span>
-            <span title="Credit records available for selected-item reports">{lpcCatalog.summary.credit_count} credits</span>
-            <span title={lpcCatalog.source.commit ?? 'No upstream commit found'}>{lpcCatalog.source.commit ? 'commit cached' : 'commit unknown'}</span>
+            <Tooltip content="Catalog items parsed from sheet definitions">
+              <span tabIndex={0}>{lpcCatalog.summary.item_count} catalog items</span>
+            </Tooltip>
+            <Tooltip content="Layer records with upstream z positions">
+              <span tabIndex={0}>{lpcCatalog.summary.layer_count} layers</span>
+            </Tooltip>
+            <Tooltip content="Credit records available for selected-item reports">
+              <span tabIndex={0}>{lpcCatalog.summary.credit_count} credits</span>
+            </Tooltip>
+            <Tooltip content={lpcCatalog.source.commit ?? 'No upstream commit found'}>
+              <span tabIndex={0}>{lpcCatalog.source.commit ? 'commit cached' : 'commit unknown'}</span>
+            </Tooltip>
           </div>
         ) : null}
         {lpcInventory ? (

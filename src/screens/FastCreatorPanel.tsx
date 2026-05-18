@@ -15,6 +15,7 @@ import { buildLpcCatalogPickerOptions, buildLpcSelectionCreditReadiness } from '
 import { layerOrder, palettePresets } from '../presets'
 import type { AnimationName, CharacterManifest, ComposerLayerSettings, Direction, ExtractedPart, KitbashRecipe, PaletteRules, PartLabel, RecipeModeId } from '../types'
 import type { LpcCatalog, LpcRecipeSelection } from '../lpcCatalog'
+import { ContextMenuArea, ContextMenuButton, DetailsDrawer, Tooltip, type DetailsRecord } from '../uiDisclosure'
 import { slugLabel } from '../utils'
 
 type FastCreatorPanelProps = {
@@ -92,6 +93,12 @@ function inferLpcBodyType(character: CharacterManifest) {
   return 'male'
 }
 
+const recipeModeHints: Record<RecipeModeId, string> = {
+  lpc_character: 'Universal LPC bodies, catalog parts, and LPC-compatible custom parts',
+  sprite_kitbash: 'Use sprite-pack bodies and reviewed extracted parts',
+  duelyst_review: 'Review staged Duelyst frames and prepare APES jobs',
+}
+
 export function FastCreatorPanel({
   selectedCharacter,
   animationSourceCharacter,
@@ -140,6 +147,7 @@ export function FastCreatorPanel({
   const [partSearch, setPartSearch] = useState('')
   const [lpcCatalogSearch, setLpcCatalogSearch] = useState('')
   const [partMethodFilter, setPartMethodFilter] = useState<ExtractedPart['extraction_method'] | 'all'>('all')
+  const [detailsRecord, setDetailsRecord] = useState<DetailsRecord | null>(null)
   const activeExportTarget = getExportTargetProfile(exportTargetProfile)
   const lpcBodyType = inferLpcBodyType(selectedCharacter)
   const lpcCatalogOptions = useMemo(
@@ -160,6 +168,16 @@ export function FastCreatorPanel({
   const activeLpcOption = activeLpcSelection
     ? lpcCatalogOptions.find((option) => option.item_id === activeLpcSelection.item_id)
     : undefined
+  const activeLpcWarnings = activeExportTarget.lpcExportProfile === 'oversize'
+    ? (activeLpcOption?.warnings ?? []).filter((warning) => !/oversize export profile/i.test(warning))
+    : (activeLpcOption?.warnings ?? [])
+  const activeLpcStatus = activeLpcSelection && activeLpcItem
+    ? activeExportTarget.lpcExportProfile === 'oversize'
+      ? 'Oversize enabled for catalog draw records.'
+      : activeLpcWarnings.length > 0
+        ? 'Standard 64x64 profile needs review.'
+        : 'Standard 64x64 profile ready.'
+    : ''
   const lpcCreditReadiness = useMemo(
     () => lpcCatalog ? buildLpcSelectionCreditReadiness(lpcCatalog, lpcSelections) : null,
     [lpcCatalog, lpcSelections],
@@ -247,6 +265,119 @@ export function FastCreatorPanel({
     })
   }
 
+  function setLayerSelectedPart(label: PartLabel, partId: string) {
+    setSelectedPartIds((current) => ({
+      ...current,
+      [label]: partId || undefined,
+    }))
+  }
+
+  function clearLayerSelection(label: PartLabel) {
+    setSelectedPartIds((current) => {
+      const next = { ...current }
+      delete next[label]
+      return next
+    })
+    setSelectedParts((current) => {
+      const next = { ...current }
+      delete next[label]
+      return next
+    })
+  }
+
+  function showLayerDetails(label: PartLabel) {
+    const selectedPartId = selectedPartIds[label]
+    const selectedPart = selectedPartId ? partLibrary.find((part) => part.part_id === selectedPartId) : undefined
+    const sourceCharacterId = selectedParts[label] ?? selectedCharacter.character_id
+    const sourceCharacter = characters.find((character) => character.character_id === sourceCharacterId)
+    const lpcSelection = lpcSelections[label]
+    const lpcItem = lpcSelection && lpcCatalog ? lpcCatalog.items[lpcSelection.item_id] : undefined
+    const settings = layerSettings[label] ?? { offset: [0, 0], visible: true, locked: false }
+    const selectedPartAnimations = selectedPart?.compatibility?.animations ?? []
+    const selectedPartDirections = selectedPart?.compatibility?.directions ?? []
+    const selectedPartWarnings = selectedPart?.warnings ?? []
+    const sourceWarnings = sourceCharacter?.source_quality_warnings ?? []
+    const lpcCreditCount = lpcItem?.credits?.length ?? 0
+    const warnings = [
+      ...selectedPartWarnings,
+      ...sourceWarnings,
+      ...(lpcItem && lpcCreditCount === 0 ? ['LPC catalog item has no credit records.'] : []),
+    ]
+
+    setDetailsRecord({
+      title: `${slugLabel(label)} layer`,
+      subtitle: selectedPart ? selectedPart.part_id : (sourceCharacter?.display_name ?? sourceCharacterId),
+      fields: [
+        { label: 'Layer label', value: label },
+        { label: 'Selected part', value: selectedPart ? selectedPart.part_id : 'none; using source character' },
+        { label: 'Source character', value: sourceCharacter ? `${sourceCharacter.display_name} (${sourceCharacter.character_id})` : sourceCharacterId },
+        { label: 'Review state', value: selectedPart ? (selectedPart.reviewed ? 'reviewed' : 'needs review') : 'source character' },
+        { label: 'Compatibility', value: selectedPart ? `${selectedPartAnimations.join(', ') || 'no animations'} / ${selectedPartDirections.join(', ') || 'no directions'}` : `${sourceCharacter?.animation_names.join(', ') || 'unknown animations'} / source sheet` },
+        { label: 'Recipe mode', value: recipeMode },
+        { label: 'Source family', value: selectedPart?.source_family ?? String(sourceCharacter?.labels?.source_family ?? 'unspecified') },
+        { label: 'LPC catalog selection', value: lpcSelection ? `${lpcSelection.enabled ? 'enabled' : 'disabled'} / ${lpcSelection.item_id} / ${lpcSelection.variant || 'default'}` : 'none' },
+        { label: 'LPC item', value: lpcItem ? `${lpcItem.name} / ${lpcItem.type_name} / ${lpcItem.layers.length} layer record(s)` : 'none' },
+        { label: 'Layer controls', value: `${settings.visible ? 'visible' : 'hidden'}, ${settings.locked ? 'locked' : 'unlocked'}, offset ${settings.offset[0]},${settings.offset[1]}` },
+        { label: 'Recipe readiness', value: `${recipeReadiness.state}; ${recipeReadiness.missingReviewedLayerCount} layer(s) need reviewed parts; ${recipeReadiness.warningCount} warning(s)` },
+        { label: 'Warnings', value: warnings.join(' ') || 'none' },
+      ],
+    })
+  }
+
+  function showPreviewDetails(kind: 'direction' | 'composite') {
+    setDetailsRecord({
+      title: kind === 'direction' ? 'All-direction preview' : 'Composite preview',
+      subtitle: `${slugLabel(currentAnimation)} / ${currentDirection} / frame ${currentFrameIndex + 1}`,
+      fields: [
+        { label: 'Source character', value: `${animationSourceCharacter.display_name} (${animationSourceCharacter.character_id})` },
+        { label: 'Base character', value: `${selectedCharacter.display_name} (${selectedCharacter.character_id})` },
+        { label: 'Recipe', value: recipe ? `${recipe.character_id} / ${recipe.recipe_mode ?? 'unspecified mode'}` : 'none' },
+        { label: 'Source family', value: recipe?.source_family ?? 'unspecified' },
+        { label: 'Directions', value: mainDirections.join(', ') },
+        { label: 'Frame count', value: String(animationSourceCharacter.directions[currentDirection]?.[currentAnimation]?.frame_count ?? 0) },
+        { label: 'Selected reviewed parts', value: String(selectedReviewedParts.length) },
+        { label: 'LPC selections', value: String(Object.values(lpcSelections).filter((selection) => selection.enabled).length) },
+        { label: 'Readiness', value: `${recipeReadiness.state}; ${recipeReadiness.warningCount} warning(s)` },
+      ],
+    })
+  }
+
+  function buildLayerActions(label: PartLabel, settings: ComposerLayerSettings) {
+    const selectedPartId = selectedPartIds[label]
+    const selectedSourceId = selectedParts[label]
+    return [
+      {
+        id: 'view-details',
+        label: 'View details',
+        onSelect: () => showLayerDetails(label),
+      },
+      {
+        id: 'activate-layer',
+        label: 'Activate layer',
+        disabled: activePartLabel === label,
+        disabledReason: 'This layer is already active in the live picker.',
+        onSelect: () => setActivePartLabel(label),
+      },
+      {
+        id: 'clear-layer-selection',
+        label: 'Clear layer selection',
+        disabled: !selectedPartId && !selectedSourceId,
+        disabledReason: 'This layer is already using the base source character.',
+        onSelect: () => clearLayerSelection(label),
+      },
+      {
+        id: 'toggle-visible',
+        label: settings.visible ? 'Hide layer' : 'Show layer',
+        onSelect: () => updateLayerSetting(label, { visible: !settings.visible }),
+      },
+      {
+        id: 'toggle-locked',
+        label: settings.locked ? 'Unlock layer' : 'Lock layer',
+        onSelect: () => updateLayerSetting(label, { locked: !settings.locked }),
+      },
+    ]
+  }
+
   return (
     <section className="panel wide-panel">
       <div className="panel-heading">
@@ -264,19 +395,22 @@ export function FastCreatorPanel({
           ['lpc_character', 'LPC Character'],
           ['sprite_kitbash', 'Sprite Kitbash'],
           ['duelyst_review', 'Duelyst Review'],
-        ].map(([id, label]) => (
-          <button
-            key={id}
-            type="button"
-            role="tab"
-            aria-selected={recipeMode === id}
-            className={recipeMode === id ? 'active' : ''}
-            onClick={() => setRecipeMode(id as RecipeModeId)}
-            title={id === 'lpc_character' ? 'Universal LPC bodies, catalog parts, and LPC-compatible custom parts' : id === 'duelyst_review' ? 'Review staged Duelyst frames and prepare APES jobs' : 'Use sprite-pack bodies and reviewed extracted parts'}
-          >
-            {label}
-          </button>
-        ))}
+        ].map(([id, label]) => {
+          const modeId = id as RecipeModeId
+          return (
+            <Tooltip key={id} content={recipeModeHints[modeId]}>
+              <button
+                type="button"
+                role="tab"
+                aria-selected={recipeMode === id}
+                className={recipeMode === id ? 'active' : ''}
+                onClick={() => setRecipeMode(modeId)}
+              >
+                {label}
+              </button>
+            </Tooltip>
+          )
+        })}
       </div>
       {recipeMode === 'duelyst_review' ? (
         <p className="mode-note">Duelyst Review keeps staged units in review/training space. They can feed APES and extraction, but they are not LPC bodies or LPC catalog parts.</p>
@@ -345,20 +479,24 @@ export function FastCreatorPanel({
             </label>
           </div>
           <div className="part-meta">
-            <span title="Catalog draw records are persisted now; renderer migration follows after parity tests.">metadata-backed</span>
-            <span title="Current body key used for catalog filtering">{lpcBodyType}</span>
-            <span title="Release-blocking selected-item credits">{lpcCreditReadiness?.missing_count ?? 0} missing credits</span>
-            <span title="Selected item credits needing attribution review">{lpcCreditReadiness?.needs_review_count ?? 0} needs review</span>
-            <span title="Enabled catalog selections">{lpcCreditReadiness?.selected_count ?? 0} selected</span>
+            <Tooltip content="Catalog draw records are persisted now; renderer migration follows after parity tests."><span>metadata-backed</span></Tooltip>
+            <Tooltip content={activeExportTarget.hint}><span>{activeExportTarget.lpcExportProfile === 'oversize' ? 'oversize LPC export' : 'standard 64 LPC export'}</span></Tooltip>
+            <Tooltip content="Current body key used for catalog filtering"><span>{lpcBodyType}</span></Tooltip>
+            <Tooltip content="Release-blocking selected-item credits"><span>{lpcCreditReadiness?.missing_count ?? 0} missing credits</span></Tooltip>
+            <Tooltip content="Selected item credits needing attribution review"><span>{lpcCreditReadiness?.needs_review_count ?? 0} needs review</span></Tooltip>
+            <Tooltip content="Enabled catalog selections"><span>{lpcCreditReadiness?.selected_count ?? 0} selected</span></Tooltip>
           </div>
           {activeLpcSelection && activeLpcItem ? (
             <p className="mode-note">
               {activeLpcItem.name} stores {activeLpcItem.layers.length} upstream layer record(s), {activeLpcItem.credits.length} credit record(s), and {activeLpcItem.animations.length || 'fallback'} animation hint(s).
             </p>
           ) : null}
-          {activeLpcOption?.warnings.length ? (
+          {activeLpcStatus ? (
+            <p className="mode-note" data-testid="lpc-catalog-selection-status">{activeLpcStatus}</p>
+          ) : null}
+          {activeLpcWarnings.length ? (
             <div className="warning-list compact-warning-list" data-testid="lpc-catalog-selection-warnings">
-              {activeLpcOption.warnings.map((warning) => <p key={warning}>{warning}</p>)}
+              {activeLpcWarnings.map((warning) => <p key={warning}>{warning}</p>)}
             </div>
           ) : null}
         </section>
@@ -472,6 +610,7 @@ export function FastCreatorPanel({
             <span>Export target</span>
             <select
               data-testid="export-target-profile"
+              aria-label="Export target profile"
               value={exportTargetProfile}
               onChange={(event) => setExportTargetProfile(event.target.value as ExportTargetProfileId)}
             >
@@ -489,25 +628,36 @@ export function FastCreatorPanel({
           <button onClick={openSettingsRepair} disabled={localToolsAvailable}>Check setup</button>
         </div>
       </section>
-      <DirectionPreviewGrid character={animationSourceCharacter} animation={currentAnimation} frameIndex={currentFrameIndex} directions={mainDirections} />
+      <ContextMenuArea
+        label="Actions for all-direction preview"
+        actions={[{ id: 'view-details', label: 'View details', onSelect: () => showPreviewDetails('direction') }]}
+      >
+        <DirectionPreviewGrid character={animationSourceCharacter} animation={currentAnimation} frameIndex={currentFrameIndex} directions={mainDirections} />
+      </ContextMenuArea>
       {recipe ? (
-        <section className="composite-preview-panel">
-          <div>
-            <strong>Composite preview</strong>
-            <span>{slugLabel(currentAnimation)} / {currentDirection} / frame {currentFrameIndex + 1}</span>
-          </div>
-          <CompositeCanvas
-            recipe={recipe}
-            characters={characters}
-            partLibrary={partLibrary}
-            animation={currentAnimation}
-            direction={currentDirection}
-            frameIndex={currentFrameIndex}
-            lpcCatalog={lpcCatalog}
-            scale={3}
-            label={`composite ${currentAnimation} ${currentDirection} frame ${currentFrameIndex + 1}`}
-          />
-        </section>
+        <ContextMenuArea
+          label="Actions for composite preview"
+          actions={[{ id: 'view-details', label: 'View details', onSelect: () => showPreviewDetails('composite') }]}
+        >
+          <section className="composite-preview-panel">
+            <div>
+              <strong>Composite preview</strong>
+              <span>{slugLabel(currentAnimation)} / {currentDirection} / frame {currentFrameIndex + 1}</span>
+            </div>
+            <CompositeCanvas
+              recipe={recipe}
+              characters={characters}
+              partLibrary={partLibrary}
+              animation={currentAnimation}
+              direction={currentDirection}
+              frameIndex={currentFrameIndex}
+              lpcCatalog={lpcCatalog}
+              exportTargetProfile={exportTargetProfile}
+              scale={3}
+              label={`composite ${currentAnimation} ${currentDirection} frame ${currentFrameIndex + 1}`}
+            />
+          </section>
+        </ContextMenuArea>
       ) : null}
       <div className="part-grid">
         {layerOrder.map((label) => {
@@ -520,81 +670,84 @@ export function FastCreatorPanel({
           })
           const totalApprovedOptions = reviewedParts.filter((part) => part.label === label).length
           const settings = layerSettings[label] ?? { offset: [0, 0], visible: true, locked: false }
+          const layerActions = buildLayerActions(label, settings)
           return (
-            <div key={label} className="composer-layer">
-              <label className="field">
-                <span>{slugLabel(label)} source</span>
-                <select
-                  value={selectedParts[label] ?? selectedCharacter.character_id}
-                  onChange={(event) => setSelectedParts((current) => ({ ...current, [label]: event.target.value }))}
-                >
-                  {characters.map((character) => (
-                    <option key={character.character_id} value={character.character_id}>
-                      {character.display_name}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label className="field">
-                <span>Approved part ({approvedOptions.length}/{totalApprovedOptions})</span>
-                <select
-                  value={selectedPartIds[label] ?? ''}
-                  onChange={(event) =>
-                    setSelectedPartIds((current) => ({
-                      ...current,
-                      [label]: event.target.value || undefined,
-                    }))
-                  }
-                  disabled={approvedOptions.length === 0}
-                >
-                  <option value="">{approvedOptions.length === 0 ? 'no reviewed parts' : 'use source character'}</option>
-                  {approvedOptions.map((part) => (
-                    <option key={part.part_id} value={part.part_id}>
-                      {slugLabel(part.extraction_method)} / {part.character_id} / {part.part_id}
-                      {part.part_id === selectedPartIds[label] && !partMatchesActiveFilter(part, label, partSearch, partMethodFilter) ? ' / selected outside filter' : ''}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <div className="layer-controls">
-                <label>
-                  <input
-                    type="checkbox"
-                    checked={settings.visible}
-                    onChange={(event) => updateLayerSetting(label, { visible: event.target.checked })}
-                  />
-                  <span>Visible</span>
+            <ContextMenuArea key={label} label={`Actions for ${slugLabel(label)} recipe layer`} actions={layerActions}>
+              <article className="composer-layer" data-testid={`fast-layer-card-${label}`}>
+                <div className="part-meta">
+                  <span>{slugLabel(label)}</span>
+                  <span>{selectedPartIds[label] ? 'approved part selected' : 'source character'}</span>
+                  <ContextMenuButton label={`More actions for ${slugLabel(label)} recipe layer`} actions={layerActions} />
+                </div>
+                <label className="field">
+                  <span>{slugLabel(label)} source</span>
+                  <select
+                    value={selectedParts[label] ?? selectedCharacter.character_id}
+                    onChange={(event) => setSelectedParts((current) => ({ ...current, [label]: event.target.value }))}
+                  >
+                    {characters.map((character) => (
+                      <option key={character.character_id} value={character.character_id}>
+                        {character.display_name}
+                      </option>
+                    ))}
+                  </select>
                 </label>
-                <label>
-                  <input
-                    type="checkbox"
-                    checked={settings.locked}
-                    onChange={(event) => updateLayerSetting(label, { locked: event.target.checked })}
-                  />
-                  <span>Locked</span>
+                <label className="field">
+                  <span>Approved part ({approvedOptions.length}/{totalApprovedOptions})</span>
+                  <select
+                    value={selectedPartIds[label] ?? ''}
+                    onChange={(event) => setLayerSelectedPart(label, event.target.value)}
+                    disabled={approvedOptions.length === 0}
+                  >
+                    <option value="">{approvedOptions.length === 0 ? 'no reviewed parts' : 'use source character'}</option>
+                    {approvedOptions.map((part) => (
+                      <option key={part.part_id} value={part.part_id}>
+                        {slugLabel(part.extraction_method)} / {part.character_id} / {part.part_id}
+                        {part.part_id === selectedPartIds[label] && !partMatchesActiveFilter(part, label, partSearch, partMethodFilter) ? ' / selected outside filter' : ''}
+                      </option>
+                    ))}
+                  </select>
                 </label>
-                <label>
-                  <span>X</span>
-                  <input
-                    aria-label={`${slugLabel(label)} x offset`}
-                    type="text"
-                    inputMode="numeric"
-                    value={settings.offset[0]}
-                    onChange={(event) => updateLayerSetting(label, { offset: [clampOffsetInput(event.target.value), settings.offset[1]] })}
-                  />
-                </label>
-                <label>
-                  <span>Y</span>
-                  <input
-                    aria-label={`${slugLabel(label)} y offset`}
-                    type="text"
-                    inputMode="numeric"
-                    value={settings.offset[1]}
-                    onChange={(event) => updateLayerSetting(label, { offset: [settings.offset[0], clampOffsetInput(event.target.value)] })}
-                  />
-                </label>
-              </div>
-            </div>
+                <div className="layer-controls">
+                  <label>
+                    <input
+                      type="checkbox"
+                      checked={settings.visible}
+                      onChange={(event) => updateLayerSetting(label, { visible: event.target.checked })}
+                    />
+                    <span>Visible</span>
+                  </label>
+                  <label>
+                    <input
+                      type="checkbox"
+                      checked={settings.locked}
+                      onChange={(event) => updateLayerSetting(label, { locked: event.target.checked })}
+                    />
+                    <span>Locked</span>
+                  </label>
+                  <label>
+                    <span>X</span>
+                    <input
+                      aria-label={`${slugLabel(label)} x offset`}
+                      type="text"
+                      inputMode="numeric"
+                      value={settings.offset[0]}
+                      onChange={(event) => updateLayerSetting(label, { offset: [clampOffsetInput(event.target.value), settings.offset[1]] })}
+                    />
+                  </label>
+                  <label>
+                    <span>Y</span>
+                    <input
+                      aria-label={`${slugLabel(label)} y offset`}
+                      type="text"
+                      inputMode="numeric"
+                      value={settings.offset[1]}
+                      onChange={(event) => updateLayerSetting(label, { offset: [settings.offset[0], clampOffsetInput(event.target.value)] })}
+                    />
+                  </label>
+                </div>
+              </article>
+            </ContextMenuArea>
           )
         })}
       </div>
@@ -641,6 +794,7 @@ export function FastCreatorPanel({
         <span>{selectedReviewedParts.length} approved parts selected in recipe</span>
         <span>{savedRecipes.length} saved recipe(s)</span>
       </div>
+      <DetailsDrawer record={detailsRecord} onClose={() => setDetailsRecord(null)} />
     </section>
   )
 }

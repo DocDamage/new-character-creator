@@ -90,13 +90,26 @@ export function buildMissingAnimationQueue({
     format: 'pixel_creator_missing_animation_queue',
     version: 1,
     recipe_id: recipe.character_id,
-    summary: {
-      issue_count: items.length,
-      missing_count: items.filter((item) => item.status === 'missing').length,
-      unsupported_count: items.filter((item) => item.status === 'unsupported').length,
-      affected_frame_count: items.reduce((total, item) => total + item.affected_frames.length, 0),
-    },
+    summary: summarizeQueueItems(items),
     items,
+  }
+}
+
+export function filterMissingAnimationQueue(queue: MissingAnimationQueue, excludedItemIds: ReadonlySet<string>): MissingAnimationQueue {
+  const items = queue.items.filter((item) => !excludedItemIds.has(item.id))
+  return {
+    ...queue,
+    summary: summarizeQueueItems(items),
+    items,
+  }
+}
+
+function summarizeQueueItems(items: MissingAnimationQueueItem[]): MissingAnimationQueue['summary'] {
+  return {
+    issue_count: items.length,
+    missing_count: items.filter((item) => item.status === 'missing').length,
+    unsupported_count: items.filter((item) => item.status === 'unsupported').length,
+    affected_frame_count: items.reduce((total, item) => total + item.affected_frames.length, 0),
   }
 }
 

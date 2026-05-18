@@ -1,6 +1,8 @@
 import type { AnimationName, Direction, FrameRef, KitbashRecipe, Rect } from './types.ts'
 import type { LpcCatalog, LpcDrawRecord } from './lpcCatalog.ts'
+import { getLpcExportProfileForTarget, type ExportTargetProfileId } from './creatorCockpit.ts'
 import { buildLpcDrawRecords } from './lpcComposition.ts'
+import type { LpcExportProfile } from './lpcAssetResolver.ts'
 
 export type LpcRenderRecord = {
   kind: 'catalog' | 'base_body'
@@ -15,6 +17,7 @@ export type LpcRenderRecord = {
 export type LpcRenderPlan = {
   records: LpcRenderRecord[]
   warnings: string[]
+  export_profile: LpcExportProfile
 }
 
 type BuildLpcRenderPlanOptions = {
@@ -25,6 +28,8 @@ type BuildLpcRenderPlanOptions = {
   animation: AnimationName
   direction: Direction
   frameIndex: number
+  exportProfile?: LpcExportProfile
+  exportTargetProfile?: ExportTargetProfileId
 }
 
 const bodyZPosition = 50
@@ -38,7 +43,10 @@ export function buildLpcRenderPlan({
   animation,
   direction,
   frameIndex,
+  exportProfile,
+  exportTargetProfile,
 }: BuildLpcRenderPlanOptions): LpcRenderPlan {
+  const lpcExportProfile = exportProfile ?? (exportTargetProfile ? getLpcExportProfileForTarget(exportTargetProfile) : 'standard_64')
   const catalogRecords = buildLpcDrawRecords({
     catalog,
     selections: recipe.lpc_selections ?? {},
@@ -46,6 +54,7 @@ export function buildLpcRenderPlan({
     animation,
     direction,
     frameIndex,
+    exportProfile: lpcExportProfile,
   }).map((record): LpcRenderRecord => ({
     kind: 'catalog',
     z_pos: record.z_pos,
@@ -75,6 +84,7 @@ export function buildLpcRenderPlan({
   return {
     records,
     warnings: records.flatMap((record) => record.warnings),
+    export_profile: lpcExportProfile,
   }
 }
 

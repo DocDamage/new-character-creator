@@ -102,6 +102,13 @@ test('manual cleanup save persists after reload', async ({ page }) => {
 test('rendered export and package downloads stay structurally valid', async ({ page }) => {
   await page.getByTestId('nav-exports').click()
 
+  await page.getByTestId('export-rendered-frame-set').click({ button: 'right' })
+  await page.getByRole('menuitem', { name: 'View details' }).click()
+  await expect(page.getByRole('dialog', { name: 'Details' })).toContainText('Download rendered frame set')
+  await expect(page.getByRole('dialog', { name: 'Details' })).toContainText('Target profile')
+  await expect(page.getByRole('dialog', { name: 'Details' })).toContainText('Rendered frame set JSON')
+  await page.getByRole('button', { name: 'Close details' }).click()
+
   const renderedFrameSet = await readJsonDownload<RenderedFrameSetDownload>(page, async () => {
     await page.getByTestId('export-rendered-frame-set').click()
   })
@@ -200,6 +207,14 @@ test('creator cockpit filters parts and persists export target profile', async (
   const reviewedPresetPartValue = await approvedPartSelect.locator('option').nth(1).getAttribute('value')
   expect(reviewedPresetPartValue).toBeTruthy()
   await approvedPartSelect.selectOption(reviewedPresetPartValue ?? undefined)
+  const fastLayerWithApprovedPart = page.locator('[data-testid^="fast-layer-card-"]').filter({ hasText: /Approved part \(1\/1\)/ }).first()
+  await fastLayerWithApprovedPart.getByRole('button', { name: /More actions for .* recipe layer/i }).click()
+  await page.getByRole('menuitem', { name: 'View details' }).click()
+  await expect(page.getByRole('dialog', { name: 'Details' })).toContainText(reviewedPresetPartValue ?? '')
+  await expect(page.getByRole('dialog', { name: 'Details' })).toContainText('Recipe readiness')
+  await page.getByRole('button', { name: 'Close details' }).click()
+  await fastLayerWithApprovedPart.getByLabel(/x offset/i).click({ button: 'right' })
+  await expect(page.getByRole('menu')).toHaveCount(0)
   await page.getByTestId('fast-part-search').fill('manual-only-no-match')
   await expect(page.getByLabel(/Approved part \(1\/1\)/).first()).toContainText(/selected outside filter/)
 
@@ -407,6 +422,9 @@ privateLpcBrowserTest('LPC catalog picker persists metadata-backed selections in
   await page.getByTestId('fast-live-layer').selectOption('weapon')
   await page.getByTestId('lpc-catalog-item-select').selectOption('weapon:weapon_sword_longsword')
   await expect(page.getByTestId('lpc-catalog-selection-warnings')).toContainText(/oversize export profile/i)
+  await page.getByTestId('export-target-profile').selectOption('lpc_oversize')
+  await expect(page.getByTestId('lpc-catalog-selection-status')).toContainText(/oversize enabled/i)
+  await expect(page.getByTestId('lpc-catalog-selection-warnings')).toHaveCount(0)
 })
 
 test('workstation APES mode does not create fake rectangular APES parts', async ({ page }) => {
@@ -748,6 +766,13 @@ test('LPC inventory browser can filter, select, label, and import sheets', async
 
   await page.route('**/__local/asset-tools', async (route) => {
     const payload = route.request().postDataJSON() as { action?: string }
+    if (payload.action === 'lpc-catalog') {
+      await route.fulfill({
+        contentType: 'application/json',
+        body: JSON.stringify({ ok: true, statusCode: 0, stdout: 'Built fixture LPC catalog', stderr: '', lpcCatalog: makeBrowserLpcCatalogFixture() }),
+      })
+      return
+    }
     if (payload.action === 'lpc-inventory') {
       await route.fulfill({
         contentType: 'application/json',
@@ -762,6 +787,11 @@ test('LPC inventory browser can filter, select, label, and import sheets', async
   })
 
   await page.getByTestId('nav-audit').click()
+  await page.getByTestId('run-lpc-catalog').click()
+  await expect(page.getByText('3 catalog items')).toBeVisible()
+  await page.getByText('3 catalog items').focus()
+  await expect(page.getByRole('tooltip', { name: 'Catalog items parsed from sheet definitions' })).toBeVisible()
+  await expect(page.getByText('3 catalog items')).not.toHaveAttribute('title')
   await page.getByTestId('run-lpc-inventory').click()
   await expect(page.getByTestId('lpc-browser')).toBeVisible()
   await page.getByTestId('lpc-search').fill('hair')
@@ -780,6 +810,11 @@ test('LPC inventory browser can filter, select, label, and import sheets', async
   const importedPart = page.locator('.part-library-list article').filter({ hasText: 'lpc_hair_long_png_001' })
   await expect(importedPart).toBeVisible()
   await expect(importedPart.getByText('hair hat hood')).toBeVisible()
+  await importedPart.click({ button: 'right' })
+  await page.getByRole('menuitem', { name: 'View details' }).click()
+  await expect(page.getByRole('dialog', { name: 'Details' })).toContainText('lpc_hair_long_png_001')
+  await expect(page.getByRole('dialog', { name: 'Details' })).toContainText('reviewed')
+  await page.getByRole('button', { name: 'Close details' }).click()
   await expect(importedPart.getByRole('button', { name: 'Mark unreviewed' })).toBeVisible()
 })
 

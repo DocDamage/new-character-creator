@@ -1,15 +1,26 @@
 import { useMemo, useState } from 'react'
 import { apesQaHarnessJobId } from '../appPersistence'
+import { defaultExportTargetProfileId, exportTargetProfiles, type ExportTargetProfileId } from '../creatorCockpit'
 import { clampFrameInput } from '../inputUtils'
 import type { LpcCatalog } from '../lpcCatalog'
-import { buildMissingAnimationQueue } from '../missingAnimationQueue'
+import { buildMissingAnimationQueue, filterMissingAnimationQueue, type MissingAnimationQueue } from '../missingAnimationQueue'
 import { humanoid64Preset } from '../presets'
-import type { AnimationName, ApesFinetuneManifest, ApesJob, ApesOutputInventory, ApesPreflightReport, CharacterManifest, Direction, DuelystApesJobBatch, ExtractedPart, KitbashRecipe, PartLabel } from '../types'
+import type { ClassifyTrainingInboxInput } from '../trainingLibrary'
+import type { AiProviderConfig, AnimationName, ApesFinetuneManifest, ApesJob, ApesOutputInventory, ApesPreflightReport, CharacterManifest, Direction, DuelystApesJobBatch, ExtractedPart, GenerationJob, KitbashRecipe, PartLabel, SourceFamilyId, TrainingInboxDraft, TrainingLibraryRecord } from '../types'
 import { downloadJson, getFrames, slugLabel } from '../utils'
 
 type ApesLabPanelProps = {
   jobs: ApesJob[]
+  aiProviderConfig: AiProviderConfig
+  generationJobs: GenerationJob[]
+  exportTargetProfile: ExportTargetProfileId
+  trainingInboxDrafts: TrainingInboxDraft[]
+  trainingLibraryRecords: TrainingLibraryRecord[]
   createApesJob: () => void
+  createGenerationJobsFromQueue: (queue: MissingAnimationQueue) => void
+  downloadGenerationJobsHandoff: () => void
+  createTrainingInboxDraft: (input: Omit<ClassifyTrainingInboxInput, 'provenance'>) => void
+  approveTrainingInboxDraft: (draftId: string) => void
   runApesPreflight: () => Promise<void>
   runApesJob: (jobId: string) => Promise<void>
   runPreparedDuelystJobs: () => Promise<void>
@@ -52,7 +63,16 @@ type ApesLabPanelProps = {
 
 export function ApesLabPanel({
   jobs,
+  aiProviderConfig,
+  generationJobs,
+  exportTargetProfile,
+  trainingInboxDrafts,
+  trainingLibraryRecords,
   createApesJob,
+  createGenerationJobsFromQueue,
+  downloadGenerationJobsHandoff,
+  createTrainingInboxDraft,
+  approveTrainingInboxDraft,
   runApesPreflight,
   runApesJob,
   runPreparedDuelystJobs,
@@ -93,6 +113,15 @@ export function ApesLabPanel({
   downloadGenerationManifest,
 }: ApesLabPanelProps) {
   const [reportText, setReportText] = useState('')
+  const [trainingSourceText, setTrainingSourceText] = useState('')
+  const [trainingGoal, setTrainingGoal] = useState('review generated animation set')
+  const [trainingAnimation, setTrainingAnimation] = useState<AnimationName>(apesAnimations[0] ?? selectedCharacter.animation_names[0] ?? 'idle')
+  const [trainingExportProfile, setTrainingExportProfile] = useState<ExportTargetProfileId>(defaultExportTargetProfileId)
+  const [trainingSourceFamily, setTrainingSourceFamily] = useState<SourceFamilyId>('custom')
+  const [trainingFrameWidth, setTrainingFrameWidth] = useState('64')
+  const [trainingFrameHeight, setTrainingFrameHeight] = useState('64')
+  const [trainingColumns, setTrainingColumns] = useState('4')
+  const [trainingRows, setTrainingRows] = useState('1')
   const apesParts = partLibrary.filter((part) => part.extraction_method === 'apes')
   const reviewedApesParts = apesParts.filter((part) => part.reviewed)
   const qaHarnessParts = apesParts.filter((part) => part.tags.includes('qa_harness') || part.part_id.startsWith(`${apesQaHarnessJobId}_`))
@@ -113,18 +142,37 @@ export function ApesLabPanel({
   const finetuneDatasetCount = Object.keys(apesFinetuneManifest?.datasets ?? {}).length
   const finetuneCommandCount = Object.keys(apesFinetuneManifest?.commands ?? {}).length
   const duelystBatchQueuedCount = duelystApesJobBatch?.job_configs?.length ?? 0
+  const generationJobsBlockedCount = generationJobs.filter((job) => job.review_gate.release_blocked).length
+  const generationJobsReadyCount = generationJobs.filter((job) => job.status === 'handoff_ready' || job.status === 'exported').length
+  const consumedMissingAnimationItemIds = useMemo(
+    () => new Set(
+      generationJobs
+        .filter((job) => (
+          job.recipe_id === recipe?.character_id &&
+          job.character_id === selectedCharacter.character_id &&
+          job.target_profile === exportTargetProfile
+        ))
+        .flatMap((job) => job.source_queue_item_ids),
+    ),
+    [exportTargetProfile, generationJobs, recipe?.character_id, selectedCharacter.character_id],
+  )
+  const trainingDraftRedCount = trainingInboxDrafts.reduce((count, draft) => count + Number(draft.validation_findings.some((finding) => finding.level === 'red')), 0)
+  const trainingSourceNames = splitTrainingSourceNames(trainingSourceText)
   const missingAnimationQueue = useMemo(
     () => recipe?.recipe_mode === 'lpc_character' && lpcCatalog
-      ? buildMissingAnimationQueue({
-          catalog: lpcCatalog,
-          recipe,
-          bodyType: inferLpcBodyType(selectedCharacter),
-          animations: apesAnimations,
-          directions: apesDirections,
-          frameRange: apesFrameRange,
-        })
+      ? filterMissingAnimationQueue(
+          buildMissingAnimationQueue({
+            catalog: lpcCatalog,
+            recipe,
+            bodyType: inferLpcBodyType(selectedCharacter),
+            animations: apesAnimations,
+            directions: apesDirections,
+            frameRange: apesFrameRange,
+          }),
+          consumedMissingAnimationItemIds,
+        )
       : null,
-    [apesAnimations, apesDirections, apesFrameRange, lpcCatalog, recipe, selectedCharacter],
+    [apesAnimations, apesDirections, apesFrameRange, consumedMissingAnimationItemIds, lpcCatalog, recipe, selectedCharacter],
   )
   const preflightChecks = apesPreflight
     ? [
@@ -188,6 +236,14 @@ export function ApesLabPanel({
         <article>
           <strong>Fine-tune prep</strong>
           <span>{apesFinetuneManifest ? `${finetuneDatasetCount} dataset section(s)` : 'not prepared in this browser yet'}</span>
+        </article>
+        <article>
+          <strong>Training Inbox</strong>
+          <span>{trainingInboxDrafts.length} draft(s), {trainingDraftRedCount} blocked</span>
+        </article>
+        <article>
+          <strong>Training Library</strong>
+          <span>{trainingLibraryRecords.length} approved record(s)</span>
         </article>
         <article>
           <strong>Duelyst batch</strong>
@@ -297,6 +353,149 @@ export function ApesLabPanel({
         </label>
         <button data-testid="download-generation-manifest" onClick={downloadGenerationManifest}>Download generation manifest</button>
       </div>
+      <div className="settings-card" data-testid="ai-provider-status">
+        <strong>PixelLab / future AI provider</strong>
+        <span>
+          {aiProviderConfig.name}: {aiProviderConfig.configured ? 'configured' : 'manual handoff required'}.
+          Manual handoff is {aiProviderConfig.manual_handoff.enabled ? aiProviderConfig.manual_handoff.status : 'disabled'}.
+        </span>
+        <span>
+          {generationJobs.length} generation job(s), {generationJobsReadyCount} ready for handoff, {generationJobsBlockedCount} blocked until review.
+        </span>
+        {!aiProviderConfig.configured ? (
+          <code>Export handoff JSON, generate the missing animation layers externally, then import reviewed outputs through the Part Library or APES review flow. No generated output is selected automatically.</code>
+        ) : null}
+        <button data-testid="download-generation-jobs-handoff" onClick={downloadGenerationJobsHandoff} disabled={generationJobs.length === 0}>
+          Download generation handoff JSON
+        </button>
+      </div>
+      <div className="settings-card" data-testid="training-inbox-wizard">
+        <strong>Training Inbox wizard</strong>
+        <label className="field">
+          <span>Source names</span>
+          <textarea
+            data-testid="training-source-names"
+            value={trainingSourceText}
+            onChange={(event) => setTrainingSourceText(event.target.value)}
+            placeholder="generated/hero/walk/south/frame_000.png"
+          />
+        </label>
+        <div className="apes-config">
+          <label className="field">
+            <span>Goal</span>
+            <input data-testid="training-goal" value={trainingGoal} onChange={(event) => setTrainingGoal(event.target.value)} />
+          </label>
+          <label className="field">
+            <span>Animation</span>
+            <select data-testid="training-animation" value={trainingAnimation} onChange={(event) => setTrainingAnimation(event.target.value)}>
+              {Array.from(new Set([...selectedCharacter.animation_names, ...apesAnimations, 'idle', 'walk', 'attack'])).map((name) => (
+                <option key={name} value={name}>{slugLabel(name)}</option>
+              ))}
+            </select>
+          </label>
+          <label className="field">
+            <span>Export profile</span>
+            <select data-testid="training-export-profile" value={trainingExportProfile} onChange={(event) => setTrainingExportProfile(event.target.value as ExportTargetProfileId)}>
+              {exportTargetProfiles.map((profile) => (
+                <option key={profile.id} value={profile.id}>{profile.label}</option>
+              ))}
+            </select>
+          </label>
+          <label className="field">
+            <span>Source family</span>
+            <select data-testid="training-source-family" value={trainingSourceFamily} onChange={(event) => setTrainingSourceFamily(event.target.value as SourceFamilyId)}>
+              {(['custom', 'sprite_pack', 'lpc', 'duelyst'] as SourceFamilyId[]).map((family) => (
+                <option key={family} value={family}>{slugLabel(family)}</option>
+              ))}
+            </select>
+          </label>
+          <label className="field">
+            <span>Frame width</span>
+            <input data-testid="training-frame-width" inputMode="numeric" value={trainingFrameWidth} onChange={(event) => setTrainingFrameWidth(event.target.value)} />
+          </label>
+          <label className="field">
+            <span>Frame height</span>
+            <input data-testid="training-frame-height" inputMode="numeric" value={trainingFrameHeight} onChange={(event) => setTrainingFrameHeight(event.target.value)} />
+          </label>
+          <label className="field">
+            <span>Columns</span>
+            <input data-testid="training-columns" inputMode="numeric" value={trainingColumns} onChange={(event) => setTrainingColumns(event.target.value)} />
+          </label>
+          <label className="field">
+            <span>Rows</span>
+            <input data-testid="training-rows" inputMode="numeric" value={trainingRows} onChange={(event) => setTrainingRows(event.target.value)} />
+          </label>
+        </div>
+        <button
+          className="primary"
+          data-testid="save-training-draft"
+          disabled={trainingSourceNames.length === 0}
+          onClick={() => createTrainingInboxDraft({
+            sourceNames: trainingSourceNames,
+            goal: trainingGoal,
+            animation: trainingAnimation,
+            directions: apesDirections.length > 0 ? apesDirections : mainDirections,
+            frameLayout: {
+              columns: Number(trainingColumns) || 0,
+              rows: Number(trainingRows) || 0,
+              frame_count: Math.max((Number(trainingColumns) || 0) * (Number(trainingRows) || 0), trainingSourceNames.length),
+            },
+            frameSize: {
+              width: Number(trainingFrameWidth) || 0,
+              height: Number(trainingFrameHeight) || 0,
+            },
+            exportProfile: trainingExportProfile,
+            sourceFamily: trainingSourceFamily,
+            files: trainingSourceNames.map((sourceName) => ({
+              source_name: sourceName,
+              width: Number(trainingFrameWidth) || 0,
+              height: Number(trainingFrameHeight) || 0,
+              has_transparency: true,
+              source_family: trainingSourceFamily,
+            })),
+          })}
+        >
+          Save draft
+        </button>
+        <div className="job-list compact-list">
+          {trainingInboxDrafts.slice(0, 5).map((draft) => {
+            const redCount = draft.validation_findings.filter((finding) => finding.level === 'red').length
+            const yellowCount = draft.validation_findings.filter((finding) => finding.level === 'yellow').length
+            return (
+              <article key={draft.draft_id} className={`job ${redCount > 0 ? 'failed' : 'prepared'}`}>
+                <div>
+                  <strong>{draft.animation} / {draft.source_kind}</strong>
+                  <span>{redCount} red, {yellowCount} yellow</span>
+                </div>
+                <p>{draft.source_names.slice(0, 2).join(', ')}{draft.source_names.length > 2 ? `, +${draft.source_names.length - 2}` : ''}</p>
+                <code>{draft.validation_findings.map((finding) => `${finding.level}: ${finding.message}`).join('\n')}</code>
+                <div className="job-actions">
+                  <button data-testid={`approve-training-draft-${draft.draft_id}`} onClick={() => approveTrainingInboxDraft(draft.draft_id)} disabled={redCount > 0}>
+                    Approve to library
+                  </button>
+                </div>
+              </article>
+            )
+          })}
+          {trainingInboxDrafts.length === 0 ? <p className="empty">Draft animation sets wait here until validation and review.</p> : null}
+        </div>
+      </div>
+      {trainingLibraryRecords.length > 0 ? (
+        <div className="settings-card" data-testid="training-library-records">
+          <strong>Training Library</strong>
+          <div className="job-list compact-list">
+            {trainingLibraryRecords.slice(0, 5).map((record) => (
+              <article key={record.record_id} className="job complete">
+                <div>
+                  <strong>{record.animation} / {record.source_kind}</strong>
+                  <span>{record.export_profile}</span>
+                </div>
+                <p>{record.source_family_compatibility.requested} / {record.directions.join(', ')}</p>
+              </article>
+            ))}
+          </div>
+        </div>
+      ) : null}
       <div className="settings-card" data-testid="missing-animation-queue">
         <strong>Missing animation queue</strong>
         {missingAnimationQueue ? (
@@ -314,6 +513,14 @@ export function ApesLabPanel({
               onClick={() => downloadJson(`${recipe?.character_id ?? selectedCharacter.character_id}_missing_animation_queue.json`, missingAnimationQueue)}
             >
               Download queue JSON
+            </button>
+            <button
+              className="primary"
+              data-testid="create-generation-jobs-from-queue"
+              onClick={() => createGenerationJobsFromQueue(missingAnimationQueue)}
+              disabled={missingAnimationQueue.items.length === 0}
+            >
+              Create generation jobs from queue
             </button>
           </>
         ) : (
@@ -419,6 +626,23 @@ export function ApesLabPanel({
           )}
         />
       </label>
+      <div className="job-list" data-testid="generation-job-list">
+        {generationJobs.map((job) => (
+          <article key={job.job_id} className={`job ${job.review_gate.release_blocked ? 'prepared' : 'complete'}`}>
+            <div>
+              <strong>{job.job_id}</strong>
+              <span>{job.status}</span>
+            </div>
+            <p>{job.source_queue_item_labels.join(', ')} for {slugLabel(job.target_animation)} / {job.target_profile}</p>
+            <p>{job.provider.name}: {job.provider.configured ? 'configured' : 'manual handoff'}.</p>
+            <p>{job.review_gate.release_blocked ? 'Blocked from release until review. Outputs are not selected automatically.' : 'Review approved.'}</p>
+            <div className="job-actions">
+              <button onClick={() => downloadJson(`${job.job_id}.json`, job)}>Download job JSON</button>
+            </div>
+          </article>
+        ))}
+        {generationJobs.length === 0 ? <p className="empty">No PixelLab/future AI generation jobs yet. Create them from the missing animation queue above.</p> : null}
+      </div>
       <div className="job-list">
         {jobs.map((job) => (
           <article key={job.job_id} className={`job ${job.status}`}>
@@ -479,4 +703,13 @@ function inferLpcBodyType(character: CharacterManifest) {
   if (bodyLabel.includes('teen')) return 'teen'
   if (bodyLabel.includes('child')) return 'child'
   return 'male'
+}
+
+function splitTrainingSourceNames(value: string) {
+  return Array.from(new Set(
+    value
+      .split(/[\n,]+/)
+      .map((item) => item.trim())
+      .filter(Boolean),
+  ))
 }

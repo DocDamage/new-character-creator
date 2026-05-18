@@ -468,3 +468,153 @@ export type GenerationManifest = {
   filename_template: string
   layer_bundle_targets: string[]
 }
+
+export type TrainingSourceKind =
+  | 'dropped'
+  | 'generated'
+  | 'baked'
+  | 'reference'
+  | 'cleanup-pair'
+  | 'missing-animation'
+  | 'final-custom-animation'
+
+export type TrainingReviewState = 'draft' | 'needs_changes' | 'ready_for_review' | 'approved'
+export type TrainingValidationLevel = 'red' | 'yellow' | 'green'
+
+export type TrainingValidationFinding = {
+  level: TrainingValidationLevel
+  code: string
+  message: string
+}
+
+export type TrainingFrameLayout = {
+  columns: number
+  rows: number
+  frame_count: number
+}
+
+export type TrainingFrameSize = {
+  width: number
+  height: number
+}
+
+export type TrainingSourceFileDescriptor = {
+  source_name: string
+  kind?: TrainingSourceKind
+  animation?: AnimationName
+  direction?: Direction
+  frame_index?: number
+  width?: number
+  height?: number
+  has_transparency?: boolean
+  pivot?: { x: number; y: number } | null
+  labels?: string[]
+  source_family?: SourceFamilyId
+}
+
+export type TrainingSourceFamilyCompatibility = {
+  requested: SourceFamilyId
+  detected: SourceFamilyId[]
+  compatible: boolean
+  notes: string[]
+}
+
+export type TrainingProvenance = {
+  created_at: string
+  created_by: string
+  source?: string
+  source_draft_id?: string
+  approved_at?: string
+  approved_by?: string
+}
+
+export type TrainingInboxDraft = {
+  draft_id: string
+  source_kind: TrainingSourceKind
+  source_names: string[]
+  goal: string
+  animation: AnimationName
+  directions: Direction[]
+  frame_layout: TrainingFrameLayout
+  frame_size: TrainingFrameSize
+  export_profile: string
+  source_family_compatibility: TrainingSourceFamilyCompatibility
+  validation_findings: TrainingValidationFinding[]
+  review_state: Exclude<TrainingReviewState, 'approved'>
+  provenance: TrainingProvenance
+}
+
+export type TrainingLibraryRecord = Omit<TrainingInboxDraft, 'draft_id' | 'review_state' | 'provenance'> & {
+  record_id: string
+  draft_id: string
+  review_state: 'approved'
+  provenance: TrainingProvenance & {
+    source_draft_id: string
+    approved_at: string
+    approved_by: string
+  }
+}
+
+export type AiProviderType = 'pixellab' | 'manual_handoff' | 'custom'
+
+export type AiProviderConfig = {
+  provider_id: string
+  name: string
+  type: AiProviderType
+  configured: boolean
+  manual_handoff: {
+    enabled: boolean
+    status: 'available' | 'required' | 'exported' | 'imported'
+    exported_at?: string
+    imported_at?: string
+    notes?: string
+  }
+  settings: Record<string, string | number | boolean | null>
+}
+
+export type GenerationJobStatus = 'draft' | 'handoff_ready' | 'exported' | 'running' | 'failed' | 'complete' | 'review_required' | 'reviewed'
+
+export type GenerationJob = {
+  job_id: string
+  created_at: string
+  updated_at: string
+  source_queue_item_ids: string[]
+  source_queue_item_labels: string[]
+  recipe_id: string
+  character_id: string
+  target_animation: AnimationName
+  target_profile: string
+  prompt: string
+  settings: Record<string, string | number | boolean | null>
+  provider: AiProviderConfig
+  status: GenerationJobStatus
+  logs: string[]
+  outputs: Array<{
+    output_id: string
+    queue_item_id: string
+    label: string
+    animation: AnimationName
+    profile: string
+    uri: string | null
+    reviewed: boolean
+    auto_selected: false
+    selected_part_id: null
+    release_blocked: boolean
+  }>
+  provenance: {
+    source: 'missing_animation_queue'
+    queue_recipe_id: string
+    queue_item_count: number
+    affected_frame_count: number
+    warnings: string[]
+  }
+  review_gate: {
+    required: true
+    status: 'blocked' | 'ready_for_review' | 'approved' | 'rejected'
+    release_blocked: boolean
+    outputs_auto_selected: false
+    reviewed_at?: string
+    reviewer?: string
+    notes?: string
+  }
+}

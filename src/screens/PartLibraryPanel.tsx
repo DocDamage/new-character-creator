@@ -3,6 +3,7 @@ import { CompositeCanvas } from '../CompositeCanvas'
 import { isPartCompatibleWithMannequin } from '../lpcPartCompatibility'
 import { partLabels } from '../presets'
 import type { AnimationName, CharacterManifest, Direction, ExtractedPart, ExtractionMethod, KitbashRecipe, PartLabel } from '../types'
+import { ContextMenuArea, ContextMenuButton, DetailsDrawer, type DetailsRecord } from '../uiDisclosure'
 import { downloadJson, slugLabel } from '../utils'
 
 type PartReviewFilter = 'all' | 'reviewed' | 'needs_review'
@@ -51,6 +52,7 @@ export function PartLibraryPanel({
   const [reviewFilter, setReviewFilter] = useState<PartReviewFilter>('all')
   const [query, setQuery] = useState('')
   const [visibleLimit, setVisibleLimit] = useState(100)
+  const [detailsRecord, setDetailsRecord] = useState<DetailsRecord | null>(null)
   const reviewedCount = parts.filter((part) => part.reviewed).length
   const byMethod = parts.reduce<Record<string, number>>((acc, part) => {
     acc[part.extraction_method] = (acc[part.extraction_method] ?? 0) + 1
@@ -81,6 +83,80 @@ export function PartLibraryPanel({
       }
       return next
     })
+  }
+
+  function showPartDetails(part: ExtractedPart) {
+    setDetailsRecord({
+      title: part.part_id,
+      subtitle: `${slugLabel(part.label)} / ${slugLabel(part.extraction_method)}`,
+      fields: [
+        { label: 'Source character', value: part.character_id },
+        { label: 'Source frame', value: `${part.source_animation} / ${part.source_direction}${part.source_frame_path ? ` / ${part.source_frame_path}` : ''}` },
+        { label: 'Bounds', value: `${part.bounds.w}x${part.bounds.h} at ${part.bounds.x},${part.bounds.y}` },
+        { label: 'Anchor', value: `${part.anchor.x},${part.anchor.y}` },
+        { label: 'Review state', value: part.reviewed ? 'reviewed' : 'needs review' },
+        { label: 'Source family', value: part.source_family ?? 'unspecified' },
+        { label: 'Recipe modes', value: part.compatible_recipe_modes?.join(', ') || 'unspecified' },
+        { label: 'Compatibility', value: `${part.compatibility.animations.join(', ') || 'no animations'} / ${part.compatibility.directions.join(', ') || 'no directions'}` },
+        { label: 'Image source', value: part.image_asset_key ? `IndexedDB asset: ${part.image_asset_key}` : part.image_path },
+        { label: 'Mask source', value: part.mask_asset_key ? `IndexedDB asset: ${part.mask_asset_key}` : (part.mask_path ?? 'none') },
+        { label: 'Tags', value: part.tags.join(', ') || 'none' },
+        { label: 'Warnings', value: part.warnings.join(' ') || 'none' },
+      ],
+    })
+  }
+
+  function showPreviewDetails() {
+    setDetailsRecord({
+      title: 'Live composite preview',
+      subtitle: `${currentAnimation} / ${currentDirection} / frame ${currentFrameIndex + 1}`,
+      fields: [
+        { label: 'Recipe', value: recipe ? `${recipe.character_id} / ${recipe.recipe_mode ?? 'unspecified mode'}` : 'none' },
+        { label: 'Active layer', value: activePartLabel },
+        { label: 'Selected active part', value: selectedActivePart ?? 'source character' },
+        { label: 'Reviewed options', value: String(reviewedPartsForActiveLabel.length) },
+        { label: 'Library size', value: `${parts.length} total part(s), ${reviewedCount} reviewed` },
+        { label: 'Frame', value: `${currentAnimation} / ${currentDirection} / ${currentFrameIndex + 1}` },
+      ],
+    })
+  }
+
+
+  function buildPartActions(part: ExtractedPart) {
+    const canUseForActiveLayer = part.reviewed && part.label === activePartLabel && isPartCompatibleWithMannequin(part, recipeMannequin)
+    return [
+      {
+        id: 'view-details',
+        label: 'View details',
+        onSelect: () => showPartDetails(part),
+      },
+      {
+        id: 'use-active-layer',
+        label: 'Use for active layer',
+        disabled: !canUseForActiveLayer,
+        disabledReason: part.label !== activePartLabel
+          ? `Switch the active layer to ${slugLabel(part.label)} first.`
+          : !part.reviewed
+            ? 'Review this part before using it in the live picker.'
+            : 'This part is not compatible with the active mannequin.',
+        onSelect: () => selectActivePart(part.part_id),
+      },
+      {
+        id: 'toggle-review',
+        label: part.reviewed ? 'Mark unreviewed' : 'Mark reviewed',
+        onSelect: () => togglePartReviewed(part.part_id),
+      },
+      {
+        id: 'download-metadata',
+        label: 'Download metadata',
+        onSelect: () => downloadJson(`${part.part_id}.json`, part),
+      },
+      {
+        id: 'delete-part',
+        label: 'Delete',
+        onSelect: () => deletePart(part.part_id),
+      },
+    ]
   }
 
   return (
@@ -151,16 +227,21 @@ export function PartLibraryPanel({
           </label>
         </div>
         {recipe ? (
-          <CompositeCanvas
-            recipe={recipe}
-            characters={characters}
-            partLibrary={parts}
-            animation={currentAnimation}
-            direction={currentDirection}
-            frameIndex={currentFrameIndex}
-            scale={3}
-            label={`live composite ${currentAnimation} ${currentDirection} frame ${currentFrameIndex + 1}`}
-          />
+          <ContextMenuArea
+            label="Actions for live composite preview"
+            actions={[{ id: 'view-details', label: 'View details', onSelect: showPreviewDetails }]}
+          >
+            <CompositeCanvas
+              recipe={recipe}
+              characters={characters}
+              partLibrary={parts}
+              animation={currentAnimation}
+              direction={currentDirection}
+              frameIndex={currentFrameIndex}
+              scale={3}
+              label={`live composite ${currentAnimation} ${currentDirection} frame ${currentFrameIndex + 1}`}
+            />
+          </ContextMenuArea>
         ) : null}
       </section>
 
@@ -262,36 +343,43 @@ export function PartLibraryPanel({
       </div>
 
       <div className="part-library-list">
-        {visibleParts.map((part) => (
-          <article key={part.part_id} className={part.reviewed ? 'reviewed' : ''}>
-            <div>
-              <strong>{slugLabel(part.label)}</strong>
-              <span>{part.part_id}</span>
-            </div>
-            <div className="part-meta">
-              <span>{part.character_id}</span>
-              <span>{slugLabel(part.extraction_method)}</span>
-              <span>{part.source_animation} / {part.source_direction}</span>
-              <span>{part.bounds.w}x{part.bounds.h} at {part.bounds.x},{part.bounds.y}</span>
-            </div>
-            <div className="part-meta">
-              {part.tags.map((tag) => (
-                <span key={tag}>{slugLabel(tag)}</span>
-              ))}
-            </div>
-            {part.warnings.length > 0 ? (
-              <p>{part.warnings.join(' ')}</p>
-            ) : null}
-            <div className="job-actions">
-              <button onClick={() => togglePartReviewed(part.part_id)}>{part.reviewed ? 'Mark unreviewed' : 'Mark reviewed'}</button>
-              <button onClick={() => downloadJson(`${part.part_id}.json`, part)}>Download metadata</button>
-              <button onClick={() => deletePart(part.part_id)}>Delete</button>
-            </div>
-          </article>
-        ))}
+        {visibleParts.map((part) => {
+          const actions = buildPartActions(part)
+          return (
+            <ContextMenuArea key={part.part_id} label={`Actions for ${part.part_id}`} actions={actions}>
+              <article className={part.reviewed ? 'reviewed' : ''}>
+                <div>
+                  <strong>{slugLabel(part.label)}</strong>
+                  <span>{part.part_id}</span>
+                  <ContextMenuButton label={`More actions for ${part.part_id}`} actions={actions} />
+                </div>
+                <div className="part-meta">
+                  <span>{part.character_id}</span>
+                  <span>{slugLabel(part.extraction_method)}</span>
+                  <span>{part.source_animation} / {part.source_direction}</span>
+                  <span>{part.bounds.w}x{part.bounds.h} at {part.bounds.x},{part.bounds.y}</span>
+                </div>
+                <div className="part-meta">
+                  {part.tags.map((tag) => (
+                    <span key={tag}>{slugLabel(tag)}</span>
+                  ))}
+                </div>
+                {part.warnings.length > 0 ? (
+                  <p>{part.warnings.join(' ')}</p>
+                ) : null}
+                <div className="job-actions">
+                  <button onClick={() => togglePartReviewed(part.part_id)}>{part.reviewed ? 'Mark unreviewed' : 'Mark reviewed'}</button>
+                  <button onClick={() => downloadJson(`${part.part_id}.json`, part)}>Download metadata</button>
+                  <button onClick={() => deletePart(part.part_id)}>Delete</button>
+                </div>
+              </article>
+            </ContextMenuArea>
+          )
+        })}
         {parts.length === 0 ? <p className="empty">No parts in the library yet. Extract a region or connected cluster from the Art Workstation.</p> : null}
         {parts.length > 0 && filteredParts.length === 0 ? <p className="empty">No parts match the current filters.</p> : null}
       </div>
+      <DetailsDrawer record={detailsRecord} onClose={() => setDetailsRecord(null)} />
     </section>
   )
 }

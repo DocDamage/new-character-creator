@@ -136,7 +136,10 @@ function inspectReferenceRepo(referenceRoot) {
 
   let commit = null
   try {
-    commit = execFileSync('git', ['-C', referenceRoot, 'rev-parse', 'HEAD'], { encoding: 'utf8' }).trim()
+    commit = execFileSync('git', ['-C', referenceRoot, 'rev-parse', 'HEAD'], {
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'ignore'],
+    }).trim()
   } catch {
     commit = null
   }

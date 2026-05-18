@@ -1,4 +1,5 @@
-import type { ApesJob, ApesPreflightReport, ComposerLayerSettings, ExtractedPart, PaletteRules, PartLabel, RecipeModeId, SourceFamilyId, VariationPreset } from './types'
+import { defaultAiProviderConfig } from './generationJobs.ts'
+import type { AiProviderConfig, ApesJob, ApesPreflightReport, ComposerLayerSettings, ExtractedPart, GenerationJob, PaletteRules, PartLabel, RecipeModeId, SourceFamilyId, TrainingInboxDraft, TrainingLibraryRecord, VariationPreset } from './types'
 import type { LpcRecipeSelection } from './lpcCatalog'
 
 export type SavedComposerRecipe = {
@@ -24,10 +25,14 @@ export const apesPythonPathStorageKey = 'pixel_creator_apes_python_path'
 export const apesAllowPlaceholderStorageKey = 'pixel_creator_apes_allow_placeholder'
 export const apesPreflightStorageKey = 'pixel_creator_apes_preflight'
 export const apesJobsStorageKey = 'pixel_creator_apes_jobs'
+export const aiProviderConfigStorageKey = 'pixel_creator_ai_provider_config'
+export const generationJobsStorageKey = 'pixel_creator_generation_jobs'
 export const apesHarnessGeneratedAtStorageKey = 'pixel_creator_apes_harness_generated_at'
 export const variationPresetsStorageKey = 'pixel_creator_variation_presets'
 export const filenameTemplateStorageKey = 'pixel_creator_filename_template'
 export const exportTargetProfileStorageKey = 'pixel_creator_export_target_profile'
+export const trainingInboxStorageKey = 'pixel_creator_training_inbox'
+export const trainingLibraryStorageKey = 'pixel_creator_training_library'
 export const apesQaHarnessJobId = 'apes_harness_job'
 
 function parseStoredJson<T>(storageKey: string, fallback: T) {
@@ -58,8 +63,24 @@ export function loadStoredApesJobs() {
   return parseStoredJson<ApesJob[]>(apesJobsStorageKey, [])
 }
 
+export function loadStoredAiProviderConfig() {
+  return parseStoredJson<AiProviderConfig>(aiProviderConfigStorageKey, defaultAiProviderConfig)
+}
+
+export function loadStoredGenerationJobs() {
+  return parseStoredJson<GenerationJob[]>(generationJobsStorageKey, [])
+}
+
 export function loadStoredVariationPresets() {
   return parseStoredJson<VariationPreset[]>(variationPresetsStorageKey, [])
+}
+
+export function loadStoredTrainingInboxDrafts() {
+  return parseStoredJson<TrainingInboxDraft[]>(trainingInboxStorageKey, [])
+}
+
+export function loadStoredTrainingLibraryRecords() {
+  return parseStoredJson<TrainingLibraryRecord[]>(trainingLibraryStorageKey, [])
 }
 
 export function loadStoredString(storageKey: string, fallback = '') {

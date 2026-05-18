@@ -72,7 +72,7 @@ export function resolveLpcLayerAsset(options: LpcResolveOptions): Pick<LpcDrawRe
       return {
         source_path: sourcePath,
         source_rect: sourceRectFor(candidate, options.direction, options.frameIndex),
-        dest_rect: { x: 0, y: 0, w: 64, h: 64 },
+        dest_rect: destRectFor(candidate),
         animation_status: candidate === requestedAnimation ? 'exact' : 'fallback',
         resolved_animation: candidate,
         body_type: fallbackBodyType,
@@ -102,6 +102,16 @@ function sourceRectFor(animation: string, direction: Direction, frameIndex: numb
   return {
     x: frame * geometry.frame_width,
     y: row * geometry.frame_height,
+    w: geometry.frame_width,
+    h: geometry.frame_height,
+  }
+}
+
+function destRectFor(animation: string): Rect {
+  const geometry = lpcFrameGeometry[animation] ?? lpcFrameGeometry.walk
+  return {
+    x: geometry.canvas_offset[0],
+    y: geometry.canvas_offset[1],
     w: geometry.frame_width,
     h: geometry.frame_height,
   }

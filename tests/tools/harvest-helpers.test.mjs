@@ -818,8 +818,9 @@ test('creator cockpit filters reviewed parts while keeping the selected part vis
 })
 
 test('creator cockpit export target lookup falls back to generic profile', () => {
-  assert.equal(exportTargetProfiles.length, 5)
+  assert.equal(exportTargetProfiles.length, 6)
   assert.equal(getExportTargetProfile('godot_4').recommendedActionTestId, 'export-full-package-zip')
+  assert.equal(getExportTargetProfile('lpc_oversize').lpcExportProfile, 'oversize')
   assert.equal(getExportTargetProfile('not-real').id, 'generic')
 })
 

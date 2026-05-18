@@ -5,6 +5,7 @@ import { getLpcPartFrameRef } from './lpcPartFrames'
 import { buildLpcReplacementRegions } from './lpcReplacement'
 import { buildLpcRenderPlan, hasCatalogRenderSelections, type LpcRenderRecord } from './lpcRenderPlan'
 import { humanoid64Preset } from './presets'
+import type { ExportTargetProfileId } from './creatorCockpit'
 import type { AnimationName, CharacterManifest, Direction, ExtractedPart, KitbashRecipe, Rect } from './types'
 import type { LpcCatalog } from './lpcCatalog'
 import { getFrameRef } from './utils'
@@ -17,6 +18,7 @@ type CompositeCanvasProps = {
   direction: Direction
   frameIndex: number
   lpcCatalog?: LpcCatalog | null
+  exportTargetProfile?: ExportTargetProfileId
   scale?: number
   label?: string
 }
@@ -31,6 +33,7 @@ export function CompositeCanvas({
   direction,
   frameIndex,
   lpcCatalog,
+  exportTargetProfile,
   scale = 5,
   label,
 }: CompositeCanvasProps) {
@@ -68,6 +71,7 @@ export function CompositeCanvas({
           animation,
           direction,
           frameIndex,
+          exportTargetProfile,
         })
         for (const record of plan.records) {
           if (cancelled) return
@@ -141,7 +145,7 @@ export function CompositeCanvas({
     return () => {
       cancelled = true
     }
-  }, [recipe, characters, partLibrary, animation, direction, frameIndex, lpcCatalog, scale])
+  }, [recipe, characters, partLibrary, animation, direction, frameIndex, lpcCatalog, exportTargetProfile, scale])
 
   return (
     <figure className="pixel-stage composite-stage" aria-label={label}>

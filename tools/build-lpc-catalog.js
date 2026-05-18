@@ -53,7 +53,10 @@ function readJson(filePath) {
 
 function inspectCommit(referenceRoot) {
   try {
-    return execFileSync('git', ['-C', referenceRoot, 'rev-parse', 'HEAD'], { encoding: 'utf8' }).trim()
+    return execFileSync('git', ['-C', referenceRoot, 'rev-parse', 'HEAD'], {
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'ignore'],
+    }).trim()
   } catch {
     return null
   }

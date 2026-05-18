@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { buildMissingAnimationQueue } from '../../src/missingAnimationQueue.ts'
+import { buildMissingAnimationQueue, filterMissingAnimationQueue } from '../../src/missingAnimationQueue.ts'
 
 test('missing animation queue groups unsupported catalog draw records for AI/APES handoff', () => {
   const queue = buildMissingAnimationQueue({
@@ -48,6 +48,23 @@ test('missing animation queue ignores exact and fallback records', () => {
 
   assert.equal(queue.summary.issue_count, 0)
   assert.deepEqual(queue.items, [])
+})
+
+test('missing animation queue filtering removes consumed items and recomputes summary', () => {
+  const queue = buildMissingAnimationQueue({
+    catalog: makeCatalog(),
+    recipe: makeRecipe(),
+    bodyType: 'male',
+    animations: ['walk'],
+    directions: ['south', 'east'],
+    frameRange: [0, 1],
+  })
+
+  const filtered = filterMissingAnimationQueue(queue, new Set([queue.items[0].id]))
+
+  assert.equal(filtered.summary.issue_count, 0)
+  assert.equal(filtered.summary.affected_frame_count, 0)
+  assert.deepEqual(filtered.items, [])
 })
 
 function makeRecipe() {

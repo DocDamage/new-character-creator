@@ -66,6 +66,28 @@ test('LPC composition classifies oversize weapon layers as unsupported for stand
   assert.match(oversize.warnings[0], /oversize export profile/)
 })
 
+test('LPC composition resolves oversize weapon layers exactly for oversize export', () => {
+  const catalog = makeCatalog()
+  const records = buildLpcDrawRecords({
+    catalog,
+    selections: {
+      weapon: { slot_id: 'weapon', item_id: 'weapon:weapon_sword_longsword', variant: 'longsword', type_name: 'weapon', enabled: true },
+    },
+    bodyType: 'male',
+    animation: 'walk',
+    direction: 'south',
+    frameIndex: 0,
+    exportProfile: 'oversize',
+  })
+
+  const oversize = records.find((record) => record.layer_id === 'layer_2')
+  assert.equal(oversize.animation_status, 'exact')
+  assert.equal(oversize.source_path, 'spritesheets/weapon/sword/longsword/attack_slash/behind/slash_oversize/longsword.png')
+  assert.deepEqual(oversize.source_rect, { x: 0, y: 0, w: 192, h: 192 })
+  assert.deepEqual(oversize.dest_rect, { x: -64, y: -64, w: 192, h: 192 })
+  assert.deepEqual(oversize.warnings, [])
+})
+
 function makeCatalog() {
   return {
     format: 'pixel_creator_lpc_catalog',
