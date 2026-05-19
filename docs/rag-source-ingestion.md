@@ -199,6 +199,31 @@ keeps unique-size files without hashing their full contents, writes a compact
 Markdown source for RAG, and writes the full JSON sidecar under ignored
 `data/rag/` for local inspection.
 
+Fetch curated web sources into an ignored private RAG source:
+
+```bash
+npm run rag:fetch-web
+npm run rag:index
+```
+
+The web fetcher reads `docs/rag-web-sources.json`, downloads only configured
+seed URLs, optionally crawls same-origin links that match each source's
+`allow_patterns`, deduplicates by extracted text hash, and writes:
+
+```txt
+docs/rag-sources/private/web-sources.md
+data/rag/web-source-manifest.json
+```
+
+Fetched web text stays private by default. Promote only reviewed summaries or
+properly licensed material into public docs.
+
+Useful overrides:
+
+```bash
+npm run rag:fetch-web -- --config docs/rag-web-sources.json --max-pages 80
+```
+
 Evaluate RAG quality:
 
 ```bash

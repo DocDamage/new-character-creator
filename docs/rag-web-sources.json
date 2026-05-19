@@ -1,0 +1,63 @@
+{
+  "sources": [
+    {
+      "id": "aseprite-docs",
+      "title": "Aseprite Official Docs",
+      "url": "https://www.aseprite.org/docs/cli/",
+      "crawl": true,
+      "max_pages": 12,
+      "allow_patterns": [
+        "/docs/cli/",
+        "/docs/sprite-sheet/",
+        "/docs/exporting/",
+        "/docs/slices/",
+        "/docs/tags/",
+        "/docs/resize/",
+        "/docs/layers/",
+        "/docs/animation/"
+      ],
+      "license": "Official documentation. Keep in private RAG unless reviewed for redistribution.",
+      "notes": "Useful for easier Aseprite CLI and sprite-sheet workflow hookup."
+    },
+    {
+      "id": "lpc-generator-docs",
+      "title": "Universal LPC Sprite Sheet Character Generator",
+      "url": "https://raw.githubusercontent.com/LiberatedPixelCup/Universal-LPC-Spritesheet-Character-Generator/master/README.md",
+      "crawl": false,
+      "max_pages": 1,
+      "license": "Upstream repository license/credits must be reviewed before redistribution.",
+      "notes": "Useful for LPC source catalog, generator behavior, and attribution context."
+    },
+    {
+      "id": "pixellab-docs",
+      "title": "PixelLab Documentation",
+      "url": "https://www.pixellab.ai/docs/",
+      "crawl": true,
+      "max_pages": 8,
+      "allow_patterns": [
+        "/docs/",
+        "/pixellab-api"
+      ],
+      "license": "Official documentation. Keep in private RAG unless reviewed for redistribution.",
+      "notes": "Useful for PixelLab API, editor, and integration workflow hookup."
+    },
+    {
+      "id": "apes-paper",
+      "title": "APES Paper",
+      "url": "https://arxiv.org/abs/2206.02015",
+      "crawl": false,
+      "max_pages": 1,
+      "license": "arXiv abstract page. Use as research citation metadata; review paper license before redistributing extracted text.",
+      "notes": "Useful for APES terminology and method context."
+    },
+    {
+      "id": "opengameart-lpc-search",
+      "title": "OpenGameArt LPC Search",
+      "url": "https://opengameart.org/art-search-advanced?keys=LPC&field_art_type_tid%5B%5D=9&sort_by=count&sort_order=DESC",
+      "crawl": false,
+      "max_pages": 1,
+      "license": "OpenGameArt entries have per-asset licenses. Treat search results as discovery metadata only.",
+      "notes": "Useful for finding additional LPC-compatible sources; do not ingest individual assets without license review."
+    }
+  ]
+}
