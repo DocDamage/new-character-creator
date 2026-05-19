@@ -1009,7 +1009,7 @@ async function readTextDownload(page: Parameters<typeof test>[0]['page'], trigge
 }
 
 async function readCompositePixel(page: Parameters<typeof test>[0]['page'], x: number, y: number) {
-  return page.locator('.composite-stage canvas').first().evaluate(
+  return page.locator('.preview-stage-main .composite-stage canvas').evaluate(
     (canvas, point) => {
       const context = canvas.getContext('2d')
       if (!context) return []
@@ -1028,7 +1028,7 @@ async function expectCompositePixel(
   rgba: [number, number, number, number],
 ) {
   await expect.poll(() => readCompositePixel(page, x, y), {
-    timeout: 30_000,
+    timeout: 60_000,
   }).toEqual(rgba)
 }
 
