@@ -16,3 +16,21 @@ Keys must never be written to localStorage, sessionStorage, IndexedDB, exported 
 ## Tool Rule
 
 Privileged actions require explicit user approval and must run through loopback-only local bridges with path allowlists and redacted audit logs.
+
+## Release Gate
+
+Production readiness is verified with:
+
+```powershell
+npm run production:check
+```
+
+That command includes source hygiene, secret scanning, license audit generation, RAG evaluation, tool tests, release build validation, preview local-tool smoke, and browser regression.
+
+Security-specific checks:
+
+```powershell
+npm run security:scan
+npm run license:audit
+npm run rag:evaluate
+```

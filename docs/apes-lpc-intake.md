@@ -34,9 +34,8 @@ Recommended split:
 - Use LPC metadata import for canonical LPC/ULPC/LPCR sheets.
 - Use APES for unlabeled sheets, loose packs, generated compositions, and QA
   review where part masks are missing.
-- Keep credits and license metadata available for local reference when building
-  exports. This is a private tool, so those records are useful context rather
-  than release-blocking source-tracking gates.
+- Keep credits and license metadata available for local reference and release
+  validation. Missing shipped license coverage is release-blocking.
 
 ## Local Asset Inventory
 
@@ -70,10 +69,25 @@ Largest local top-level buckets by PNG count:
 - `Androgynous Long-Sleeve Shirt`: 140
 - `Androgynous Pants`: 140
 
-Current handling: this local LPC folder is under `assets/` and is ignored by
-git through `/assets/lpc sprite generator stuff/`. Avoid staging the raw folder;
-use `npm run lpc:inventory` to generate ignored local metadata under
-`data/lpc/`.
+Current handling: the LPC folder is a source asset input. The production branch
+now allows curated LPC source files and nearby per-folder `license.txt` files to
+be tracked when they are explicitly part of the release package. Loose root
+files were moved into `Randoms/`, and every shipped LPC asset must resolve to
+nearest-folder license metadata.
+
+Use:
+
+```powershell
+npm run lpc:inventory
+npm run lpc:catalog
+npm run license:audit
+```
+
+`data/lpc/lpc_asset_inventory.json` and `data/lpc/lpc_catalog.json` carry
+`license_file`, `license_scope`, `license_text_hash`, `license_status`, and
+`source_folder` metadata. `docs/asset-license-audit.md` is regenerated from
+that metadata and the release validator fails if shipped LPC catalog entries are
+not covered.
 
 ## Upstream Repo Findings
 
@@ -217,8 +231,14 @@ choose `characters.local.json` for ignored or external assets.
   Details drawer.
 - Oversize/custom-animation catalog items are visibly marked as degraded in the
   standard 64x64 export profile instead of being treated as normal weapon layers.
-- LPC credits/license data is treated as useful private metadata and selected
-  catalog credits are now exported, but raw LPC dumps remain ignored local inputs.
+- LPC credits/license data is production metadata. Selected catalog credits are
+  exported, and shipped LPC catalog entries must report `license_status:
+  "covered"`.
+- The generated audit currently reports 655 covered LPC catalog entries and 0
+  missing entries after the Randoms/per-folder-license cleanup.
+- `npm run production:check` includes secret scanning, license audit, RAG
+  evaluation, tool tests, release validation, preview local-tools smoke, and
+  browser regression.
 
 ## Remaining Next Steps
 
@@ -227,8 +247,9 @@ choose `characters.local.json` for ignored or external assets.
 - Add richer LPC composition validation so mixed body types, equipment anchors,
   palette/recolor metadata, and per-animation offsets can be reviewed before
   export.
-- Add provider configuration, generation job records, and explicit output intake
-  for PixelLab/future AI backends that consume the missing-animation queue.
+- Continue expanding provider output intake for PixelLab/future AI backends that
+  consume the missing-animation queue. Provider calls must stay behind the
+  session-only secret vault and local proxy/backend boundary.
 - Add guided Training Inbox / Training Library records for dropped or generated
   animation sets, with validation and review gates before frames become
   selectable.

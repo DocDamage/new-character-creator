@@ -22,6 +22,9 @@ npm run test:browser
 That harness covers export/package downloads, standalone Godot SpriteFrames resources, credits/provenance report export, manual mask save persistence, recipe save/load, creator cockpit filtering/export-target persistence, Part Library bulk review actions, fake APES-part prevention, APES QA harness generation/import, APES fine-tune prep and Duelyst job-batch queueing, APES local-output image/mask package assets, Duelyst audit behavior, LPC inventory browse/select/label/import, LPC source picker canonical animations and compatible sheet parts, catalog-backed LPC selections, rendered-frame export, upstream credit readiness, right-click LPC source details, missing-animation queue visibility, oversize/custom-animation warnings, placeholder-mode manifest provenance, paged large Part Library imports, page-scoped visible export/review actions, and the portable local setup bundle download from `Settings`.
 
 - APES Lab shows AI Knowledge/RAG status and generation jobs include cited context when a local index is available.
+- AI Studio shows provider/RAG/tool status, chat replies, RAG citations when loaded, and approval-gated tool proposal cards.
+- Settings shows volatile secret count, local proxy status, bridge health actions, and the production check command.
+- Asset Audit shows license readiness, missing-license counts, and blocked release findings.
 
 For optional local cross-browser smoke coverage after installing the full browser set:
 
@@ -42,23 +45,28 @@ Latest verified automated run:
 
 - `npm run lint`
 - `npm run check:source-hygiene`
+- `npm run security:scan`
+- `npm run license:audit`
+- `npm run rag:evaluate`
 - `npm run test:tools`
-- `npm run build`
 - `npm run build:release`
 - `npm run validate:release-package`
 - `npm run test:preview-tools`
-- `npm run test:browser` passed, 18 Chromium tests
-- `npm run test:browser:all` passed, 54 Chromium/Firefox/WebKit tests
+- `npm run test:browser` passed, 21 Chromium tests
+- `npm run test:memory`
+- `npm run production:check`
+- `npm run test:browser:all` optional cross-browser coverage, previously 54 Chromium/Firefox/WebKit tests
 - `npm run test:private-assets` optional/private-machine only
-- `npm run release:check` passed
-- latest focused gate passed with lint, source hygiene, 49 tool tests, public release build/package validation, tokenized preview local-tool smoke, 18 Chromium browser tests, and 54-test cross-browser matrix
-- latest LPC hybrid follow-up smoke passed with `npm run build`, 37 tool tests, and 17 Chromium browser regression tests
+- latest production gate passed with lint, source hygiene, secret scan, license audit, RAG evaluation, 80 tool tests, public release build/package validation, tokenized preview local-tool smoke, and 21 Chromium browser tests
 
 Latest verified local app state:
 
-- `npm run build` passes
+- `npm run production:check` passes
 - `npm run build:release && npm run validate:release-package` passes with no private/local references in emitted text assets
+- `npm run license:audit` reports 655 covered LPC catalog entries and 0 missing
+- `npm run rag:evaluate` passes the Randoms license, PixelLab missing-animation, and secret-policy query set
 - local APES/LPC/Duelyst/repair POST routes require the generated local session token and reject tokenless or cross-origin requests
+- local AI proxy, Aseprite bridge, and PixelLab bridge routes are loopback-only, token-gated, and audit redacted tool calls
 - dev server verified at `http://127.0.0.1:8002/`
 - Duelyst audit scanned 7145 assets, found 696 sprite sheets, staged candidates, and opened `duelyst_f1_elyxstormblade` in the workstation
 - APES env preflight is ready in `apes-gpu-modern`
@@ -209,6 +217,7 @@ Confirm:
    - `npm run validate:release-package`
    - `npm run test:browser`
    - `npm run release:check`
+   - `npm run production:check`
    - `.\tools\apes_bridge\setup_home_pc.ps1`
 
 ## Export Package Contents

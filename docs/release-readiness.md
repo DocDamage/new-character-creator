@@ -1,11 +1,11 @@
 # Release Readiness
 
-Date: 2026-05-18
+Date: 2026-05-19
 
 ## Status
 
-The app/tooling release is conditionally GO for the public static package after
-the May 18, 2026 hardening pass. Private/local tool flows are now a separate
+The app/tooling release is GO for the public static package after the May 19,
+2026 production-readiness pass. Private/local tool flows remain a separate
 local-tools build path and are not part of the distributable static bundle.
 
 Source metadata is optional private debugging data. It is kept in exports where
@@ -14,39 +14,46 @@ using generated packages.
 
 ## Verified Commands
 
-Latest verification after the release hardening pass:
+Latest verification after the production-readiness pass:
 
 - `npm run lint`: passed
 - `npm run check:source-hygiene`: passed
-- `npm run test:tools`: passed, 49 tests
-- `npm run build`: passed
+- `npm run security:scan`: passed
+- `npm run license:audit`: passed, 655 covered LPC catalog entries and 0 missing
+- `npm run rag:evaluate`: passed, 3/3 evaluation queries
+- `npm run test:tools`: passed, 80 tests
 - `npm run build:release`: passed
 - `npm run validate:release-package`: passed
 - `npm run test:preview-tools`: passed
-- `npm run test:browser`: passed, 18 Chromium tests
-- `npm run test:browser:all`: passed, 54 tests across Chromium, Firefox, and WebKit
+- `npm run test:browser`: passed, 21 Chromium tests
+- `npm run test:memory`: passed
+- `npm run production:check`: passed
+- `npm run test:browser:all`: optional cross-browser matrix, previously passed with 54 tests across Chromium, Firefox, and WebKit
 - `npm run test:private-assets`: optional/private-machine only
-- `npm run release:check`: passed
 
-Latest LPC hybrid follow-up verification after the catalog renderer, credits,
-context-menu, missing-animation queue, and oversize-warning slices:
+The certified branch commit for this pass is:
 
-- `npm run build`: passed
-- `npm run test:tools`: passed, 37 tests
-- `npx playwright test tests/browser/regression.spec.ts`: passed, 18 Chromium tests
+```text
+7363392b3 Add production readiness gates
+```
 
 ```powershell
 npm run lint
 npm run check:source-hygiene
+npm run security:scan
+npm run license:audit
+npm run rag:evaluate
 npm run test:tools
-npm run build
+npm run build:release
 npm run validate:release-package
 npm run test:preview-tools
 npm run test:browser -- --reporter=line
+npm run test:memory
+npm run production:check
 npm run test:private-assets
-npm run release:check
 npm run index:assets
 npm run lpc:inventory
+npm run lpc:catalog
 npm run export:character -- 1-warrior-woman
 npm run qa:apes-harness
 micromamba run -n apes-gpu-modern python tools\apes_bridge\check_apes_env.py --json
@@ -75,18 +82,31 @@ picker canonical animations, LPC body-base mannequin coverage, compatible
 LPC sheet-part selection, catalog-backed LPC recipe persistence, rendered-frame
 export, selected upstream credit readiness in Exports, right-click `View info`
 details on LPC source cards, missing-animation queue visibility in APES Lab, and
-oversize/custom-animation warnings in the LPC catalog picker. Private Duelyst package harvesting is available through
+oversize/custom-animation warnings in the LPC catalog picker, AI Studio/tool
+proposal and volatile secret surfaces, production-readiness status cards, and
+the image-cache performance budget. Private Duelyst package harvesting is available through
 `npm run test:private-assets` and is intentionally opt-in outside the standard
-release gate.
-Browser regression is served from `npm run build && npx vite preview` so the
-suite exercises the production bundle rather than the Vite dev transform path.
+production gate. Browser regression is served from a built Vite preview so the
+suite exercises bundled behavior rather than the Vite dev transform path.
 
 ## Implemented Release Fixes
 
 - Generated/runtime lint folders are ignored by ESLint.
-- `npm run release:check` now runs the release gate in one command: lint,
+- `npm run release:check` remains the narrower release-package gate: lint,
   source-hygiene checks, tool tests, production build, release-package
   validation, preview local-tool smoke, and browser regression.
+- `npm run production:check` is the current production gate. It runs lint,
+  source hygiene, secret scanning, license audit generation, RAG evaluation,
+  tool tests, release build validation, preview local-tool smoke, and browser
+  regression.
+- `npm run security:scan` scans source, docs, public assets, generated data, and
+  release output for provider-looking keys while ignoring known redacted or
+  non-secret sentinel strings.
+- `npm run license:audit` regenerates `docs/asset-license-audit.md` from the
+  LPC catalog and fails when covered/missing counts indicate missing shipped
+  license metadata.
+- `npm run rag:evaluate` rebuilds the RAG index and fails if required source
+  citations or expected terms are missing from the regression set.
 - `npm run build:release` creates the public static package without installing
   local tool middleware. `npm run build:local-tools` creates the private preview
   bundle used only for local APES/LPC/Duelyst/repair workflows.
@@ -108,6 +128,16 @@ suite exercises the production bundle rather than the Vite dev transform path.
   and `/__local/` references anywhere in emitted text assets, Windows absolute
   paths, private manifest names, private asset-root names, and missing manifest
   assets.
+- Release validation also rejects blocked executable/script/private files and
+  shipped LPC catalog entries without `license_status: "covered"`.
+- AI provider secrets are handled by an in-memory vault. Persisted provider
+  configuration is sanitized so session secret status, direct browser calls,
+  and secret-looking notes do not land in storage or exported JSON.
+- AI Studio replies can cite RAG context and propose tool actions, but tool
+  execution requires explicit user approval.
+- Local proxy, Aseprite bridge, and PixelLab bridge routes are loopback-only,
+  token-gated, body-limited, path-allowlisted where applicable, and write
+  redacted audit records.
 - `npm run index:assets` preserves the checked-in fallback
   `public/data/manifests/characters.json` when scanning ignored in-repo assets
   or external asset roots. Local scans write `characters.local.json` unless
@@ -157,7 +187,7 @@ suite exercises the production bundle rather than the Vite dev transform path.
   after a production build. APES Lab also exposes the local fine-tune manifest
   prep and Duelyst job-batch prep scripts through this path, then loads prepared
   Duelyst job configs into the visible APES queue.
-- `npm run release:check` now includes a production-preview local-tool smoke
+- `npm run release:check` includes a production-preview local-tool smoke
   that verifies `/__local/health`, `/__local/asset-tools`, and
   `/__local/apes-tools` are reachable from a built app served with Vite preview.
 - Vite preview now serves app-root-only `/@fs/...` files so local preview can

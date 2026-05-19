@@ -124,7 +124,9 @@ Placeholder APES fallback is only for development. If it is enabled, release exp
 
 ## AI And RAG
 
-Run `npm run rag:index` to build the local AI knowledge index. APES Lab uses that index to attach project, APES, LPC, provider, and release-review context to generation jobs. Generated output remains blocked from release until reviewed.
+Run `npm run rag:index` to build the local AI knowledge index, or `npm run rag:evaluate` to rebuild it and score the regression query set. APES Lab and AI Studio use that index to attach project, APES, LPC, provider, license, and release-review context to generation jobs and chat replies. Generated output remains blocked from release until reviewed.
+
+AI Studio can propose tool actions, but privileged work is approval-gated. Direct provider calls are routed through a trusted loopback proxy or backend; browser-entered provider secrets are held only in volatile memory and are never written to localStorage, sessionStorage, exports, generated manifests, logs, release bundles, or git.
 
 ### 7. Handle Missing Animations
 
@@ -196,13 +198,16 @@ The token is ignored by public release builds.
 Run this before handoff:
 
 ```powershell
-npm run release:check
+npm run production:check
 ```
 
 It runs:
 
 - lint
 - source hygiene
+- secret scanning
+- license audit generation
+- RAG evaluation
 - tool tests
 - release build
 - release package validation
@@ -231,6 +236,12 @@ npm run build
 npm run build:release
 npm run build:local-tools
 npm run release:check
+npm run production:check
+npm run security:scan
+npm run license:audit
+npm run rag:evaluate
+npm run test:performance
+npm run test:memory
 npm run test:browser
 npm run test:browser:all
 npm run test:private-assets
@@ -322,6 +333,10 @@ Useful docs:
 - `docs/apes-lpc-intake.md`
 - `docs/release-readiness.md`
 - `docs/browser-checks.md`
+- `docs/production-security-model.md`
+- `docs/local-bridge-threat-model.md`
+- `docs/asset-license-audit.md`
+- `docs/rebuild-spec.md`
 
 The latest verified private batch had 57 successful Duelyst APES jobs and 3 sprite-specific APES segmentation rejects. Failed outputs are surfaced in APES inventory instead of crashing the batch.
 
@@ -334,6 +349,8 @@ The latest verified private batch had 57 successful Duelyst APES jobs and 3 spri
 - `/__local/` references
 - Windows absolute paths
 - private asset-root names
+- blocked executable or script files
+- LPC catalog or inventory entries without `license_status: "covered"`
 - missing manifest assets
 
 This scan covers emitted `.html`, `.js`, `.css`, `.json`, `.svg`, `.txt`, and `.map` files.
@@ -387,19 +404,22 @@ Stop the old preview server or kill the process listening on `127.0.0.1:4173`, t
 Latest release tag:
 
 ```text
-release-2026-05-18
+production-readiness-2026-05-19
 ```
 
 Latest certified commit:
 
 ```text
-7cef154a4 Complete release plan coverage
+7363392b3 Add production readiness gates
 ```
 
 Verified gates:
 
-- GitHub Actions on `main`: green
-- `npm run release:check`: green
-- `npm run test:browser:all`: 54 tests across Chromium, Firefox, and WebKit
-- `npm run test:private-assets`: green on the private-asset machine
-- release UI smoke: green
+- `npm run production:check`: green
+- `npm run test:tools`: 80 tests
+- `npm run test:browser`: 21 Chromium tests
+- `npm run test:memory`: green
+- `npm run security:scan`: green
+- `npm run license:audit`: 655 covered LPC catalog entries, 0 missing
+- `npm run rag:evaluate`: 3/3 evaluation queries passed
+- GitHub Actions will run the production gate and security workflow after this branch is pushed.

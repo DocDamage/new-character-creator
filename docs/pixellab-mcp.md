@@ -20,7 +20,14 @@ PixelLab publishes an MCP server at:
 }
 ```
 
-Do not commit real PixelLab API tokens. Add the server through the local Codex/assistant MCP configuration so generated assets can be imported into the app as reviewed parts or rendered animation frames.
+Do not commit real PixelLab API tokens. Add the server through the local Codex/assistant MCP configuration, a trusted local proxy, or another backend outside the public static app. Browser-entered secrets are session-only, redacted from saved provider config, and must never be written to storage, exports, logs, release bundles, or git.
+
+The app-side PixelLab bridge is intentionally guarded:
+
+- endpoint URLs must be loopback when called through local tools
+- POST requests require the generated local tool token
+- tool actions should be proposed in AI Studio and explicitly approved
+- audit logs are redacted before writing JSONL records
 
 ## Suggested missing-animation workflow
 
@@ -29,11 +36,22 @@ Do not commit real PixelLab API tokens. Add the server through the local Codex/a
 3. If the borrowed base does not preserve the character identity well enough, send the static character/reference frame plus the borrowed-motion frame sequence to PixelLab.
 4. Use PixelLab for animation generation or animation-to-animation cleanup.
 5. Import the returned PNG frames/spritesheet through the Part Library or layer bundle route, then review alignment before packaging.
+6. Keep generated outputs release-blocked until review is approved.
 
 ## Relevant PixelLab capabilities
 
 - MCP/Vibe Coding tools: character creation, `animate_character`, tilesets, and isometric tiles.
 - Browser/API workflows: 4/8 directional animated characters, sprite-sheet export, text animation, skeleton animation, animation-to-animation, inpainting, and rotation.
+
+## Verification
+
+Relevant local checks:
+
+```powershell
+npm run rag:evaluate
+node --test tests/tools/pixellab-bridge.test.mjs
+npm run production:check
+```
 
 References:
 

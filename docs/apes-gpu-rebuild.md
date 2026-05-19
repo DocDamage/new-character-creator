@@ -140,6 +140,7 @@ npm run lint
 npm run test:tools
 npm run build
 npm run test:browser
+npm run production:check
 ```
 
 The browser harness also exercises the current LPC runtime path: grouped
@@ -148,6 +149,14 @@ selection in Fast Creator. That coverage does not require the GPU APES
 environment, but it is a useful companion check after rebuilding the local asset
 tooling because LPC previews and APES staged assets both depend on the same
 project-local Vite file serving rules.
+
+## Production Boundary
+
+The GPU APES environment, private Duelyst staging, and local APES bridge are
+development-only tooling. They are not shipped in the public static package.
+Production readiness is measured by `npm run production:check`, which includes
+secret scanning, license audit generation, RAG evaluation, release validation,
+preview local-tool smoke coverage, and browser regression.
 
 ## Private Duelyst And Fine-Tune Prep
 
