@@ -1,8 +1,8 @@
 import { existsSync, readFileSync } from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { PNG } from 'pngjs'
 import { buildLpcCharacterManifests } from '../src/lpcCharacters.ts'
+import { alphaMaskHash, alphaOverlapRatio, alphaStats, readPngFile, rectInsideImage } from './png-alpha-utils.js'
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const defaultInventoryPath = path.join(repoRoot, 'data', 'lpc', 'lpc_asset_inventory.json')
@@ -157,69 +157,13 @@ function readCachedPng(cache, browserPath) {
   const filePath = path.join(repoRoot, browserPath.replace(/^\/assets\//, 'assets/'))
   const cached = cache.get(filePath)
   if (cached) return cached
-  const png = PNG.sync.read(readFileSync(filePath))
+  const png = readPngFile(filePath)
   cache.set(filePath, png)
   return png
 }
 
 function sourceRect(frame) {
   return frame.source_rect ?? { x: 0, y: 0, w: 64, h: 64 }
-}
-
-function rectInsideImage(rect, png) {
-  return rect.x >= 0 && rect.y >= 0 && rect.w > 0 && rect.h > 0 && rect.x + rect.w <= png.width && rect.y + rect.h <= png.height
-}
-
-function alphaStats(png, rect) {
-  let opaquePixels = 0
-  let minX = Number.POSITIVE_INFINITY
-  let minY = Number.POSITIVE_INFINITY
-  let maxX = Number.NEGATIVE_INFINITY
-  let maxY = Number.NEGATIVE_INFINITY
-  for (let y = rect.y; y < rect.y + rect.h; y += 1) {
-    for (let x = rect.x; x < rect.x + rect.w; x += 1) {
-      if (png.data[(y * png.width + x) * 4 + 3] > 0) {
-        opaquePixels += 1
-        minX = Math.min(minX, x - rect.x)
-        minY = Math.min(minY, y - rect.y)
-        maxX = Math.max(maxX, x - rect.x)
-        maxY = Math.max(maxY, y - rect.y)
-      }
-    }
-  }
-  return {
-    opaquePixels,
-    bounds: opaquePixels > 0 ? { x: minX, y: minY, w: maxX - minX + 1, h: maxY - minY + 1 } : null,
-  }
-}
-
-function alphaMaskHash(png, rect) {
-  let hash = 2166136261
-  for (let y = 0; y < rect.h; y += 1) {
-    for (let x = 0; x < rect.w; x += 1) {
-      const opaque = png.data[((rect.y + y) * png.width + rect.x + x) * 4 + 3] > 0 ? 1 : 0
-      hash ^= opaque
-      hash = Math.imul(hash, 16777619)
-    }
-  }
-  return hash >>> 0
-}
-
-function alphaOverlapRatio(partPng, partRect, basePng, baseRect) {
-  let partPixels = 0
-  let overlappingPixels = 0
-  const width = Math.min(partRect.w, baseRect.w)
-  const height = Math.min(partRect.h, baseRect.h)
-  for (let y = 0; y < height; y += 1) {
-    for (let x = 0; x < width; x += 1) {
-      const partOpaque = partPng.data[((partRect.y + y) * partPng.width + partRect.x + x) * 4 + 3] > 0
-      if (!partOpaque) continue
-      partPixels += 1
-      const baseOpaque = basePng.data[((baseRect.y + y) * basePng.width + baseRect.x + x) * 4 + 3] > 0
-      if (baseOpaque) overlappingPixels += 1
-    }
-  }
-  return partPixels > 0 ? overlappingPixels / partPixels : 1
 }
 
 function commonAnimations(left, right) {

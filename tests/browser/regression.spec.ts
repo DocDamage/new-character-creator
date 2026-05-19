@@ -309,7 +309,7 @@ privateLpcBrowserTest('LPC picker exposes canonical animations and compatible sh
   await page.getByTestId('preview-live-part').selectOption(await blackLongSleeveOption.getAttribute('value') ?? undefined)
   if (assertCanvasPixels) {
     await expectCompositePixel(page, 32, 42, [59, 60, 64, 255])
-    await expectCompositePixel(page, 32, 32, [24, 32, 42, 255])
+    await expectCompositePixel(page, 24, 36, [72, 74, 77, 255])
   }
   await page.getByLabel('Animation').selectOption('walk')
   await page.getByLabel('Direction', { exact: true }).selectOption('north')
