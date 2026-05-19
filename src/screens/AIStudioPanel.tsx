@@ -72,6 +72,32 @@ export function AIStudioPanel({
     const request = draft.trim()
     if (!request || sending) return
     const userMessage = makeAiStudioMessage('user', request)
+    const approvalTarget = isApprovalShortcut(request) ? findLatestPendingTool(messages) : null
+    if (approvalTarget) {
+      setDraft('')
+      setSending(true)
+      try {
+        const result = await executeToolProposal(approvalTarget.proposal)
+        setMessages([
+          ...messages.map((message) => message.message_id === approvalTarget.messageId
+            ? applyApprovedToolResult(message, approvalTarget.proposal.proposal_id, result)
+            : message),
+          userMessage,
+        ])
+      } finally {
+        setSending(false)
+      }
+      return
+    }
+    if (isApprovalShortcut(request)) {
+      setMessages([
+        ...messages,
+        userMessage,
+        makeAiStudioMessage('assistant', 'There is no pending approval card to run. Ask for a PixelLab prompt, PixelLab handoff, or PixelLab setup first, then approve the specific card that appears.'),
+      ])
+      setDraft('')
+      return
+    }
     const fallbackMessage = buildAiAgentReply({
       request,
       selectedCharacter,
@@ -136,9 +162,23 @@ export function AIStudioPanel({
   }
 
   async function approveTool(messageId: string, proposal: AiToolProposal) {
+    const result = await executeToolProposal(proposal)
+    setMessages(messages.map((message) => message.message_id === messageId
+      ? applyApprovedToolResult(message, proposal.proposal_id, result)
+      : message))
+  }
+
+  async function executeToolProposal(proposal: AiToolProposal) {
     let result = 'Approved and sent to the matching app action.'
     if (proposal.tool_id === 'create_apes_job') createApesJob()
-    if (proposal.tool_id === 'queue_pixellab_generation') createGenerationJobsFromQueue()
+    if (proposal.tool_id === 'queue_pixellab_generation') {
+      if (activitySnapshot.queues.missing_animation && activitySnapshot.queues.missing_animation.issue_count > 0) {
+        createGenerationJobsFromQueue()
+        result = 'Queued PixelLab/manual generation handoff jobs from the current missing-animation queue.'
+      } else {
+        result = `No missing-animation queue is active for this exact context, so there was nothing to queue. PixelLab prompt you can use now: ${prepareGenerationPrompt(activitySnapshot, 'pixellab')}`
+      }
+    }
     if (proposal.tool_id === 'export_handoff') downloadGenerationManifest()
     if (proposal.tool_id === 'activate_rag') {
       await activateRag(proposal.input.mode === 'load' ? 'load' : 'rebuild')
@@ -229,11 +269,11 @@ export function AIStudioPanel({
     }
     if (proposal.tool_id === 'configure_pixellab_bridge' || proposal.tool_id === 'configure_aseprite_bridge') {
       openSettings()
-      result = 'Opened Settings so you can finish the bridge connection with local values.'
+      result = proposal.tool_id === 'configure_pixellab_bridge'
+        ? 'Opened Settings so you can enable PixelLab defaults and run the PixelLab bridge check. Direct PixelLab calls require a local-tools session; GitHub Pages can still prepare prompts and handoff JSON.'
+        : 'Opened Settings so you can finish the bridge connection with local values.'
     }
-    setMessages(messages.map((message) => message.message_id === messageId
-      ? applyApprovedToolResult(message, proposal.proposal_id, result)
-      : message))
+    return result
   }
 
   async function runLocalRagToolAction(action: string, input: Record<string, unknown> = {}) {
@@ -369,6 +409,18 @@ export function AIStudioPanel({
 
 function isCreatorPanelId(value: unknown): value is CreatorPanelId {
   return typeof value === 'string' && ['fast', 'workstation', 'library', 'batch', 'audit', 'ai', 'apes', 'exports', 'settings'].includes(value)
+}
+
+function isApprovalShortcut(request: string) {
+  return /^(approve|approved|yes|ok|okay|run it|do it|confirm|send it|queue it)$/i.test(request.trim())
+}
+
+function findLatestPendingTool(messages: AiStudioMessage[]) {
+  for (const message of [...messages].reverse()) {
+    const proposal = (message.tool_proposals ?? []).find((candidate) => candidate.status === 'pending')
+    if (proposal) return { messageId: message.message_id, proposal }
+  }
+  return null
 }
 
 function mergeToolProposals(localProposals: AiToolProposal[], providerProposals: AiToolProposal[]) {

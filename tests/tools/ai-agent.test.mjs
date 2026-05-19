@@ -142,6 +142,29 @@ test('AI agent proposes bridge setup and source ingestion tools from setup reque
   assert.ok(toolIds.includes('fetch_web_rag_sources'))
 })
 
+test('AI agent keeps PixelLab requests actionable in static handoff mode', () => {
+  const reply = buildAiAgentReply({
+    request: 'I want to use PixelLab for this character',
+    selectedCharacter: character,
+    recipe: null,
+    ragIndex: null,
+    providers: [makeProvider('google', 'Google Gemini', 'google', true)],
+    tools: {
+      aseprite: { enabled: false, executable_path: '', bridge_url: '', script_folder: '' },
+      pixellab: { enabled: false, endpoint_url: '', mcp_server_url: '', preferred_model: '' },
+      local_llm: { enabled: false, endpoint_url: '', provider: 'ollama', model: '' },
+    },
+    lpcPublished: true,
+    localToolsAvailable: false,
+  })
+
+  const toolIds = reply.tool_proposals.map((proposal) => proposal.tool_id)
+  assert.ok(toolIds.includes('prepare_generation_prompt'))
+  assert.ok(toolIds.includes('queue_pixellab_generation'))
+  assert.ok(toolIds.includes('configure_pixellab_bridge'))
+  assert.match(reply.content, /Pending approvals:/)
+})
+
 test('AI agent includes live activity context when answering current-work questions', () => {
   const reply = buildAiAgentReply({
     request: 'What am I doing right now and why is export blocked?',

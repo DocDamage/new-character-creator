@@ -83,14 +83,23 @@ test('AI Studio exposes live context and approval-gated assistant tools', async 
   await expect(page.getByText('Live context')).toBeVisible()
   await expect(page.getByText(/RAG brain/i)).toBeVisible()
 
+  await page.getByTestId('ai-chat-input').fill('approve')
+  await page.getByTestId('ai-chat-send').click()
+  await expect(page.getByTestId('ai-chat-log')).toContainText('There is no pending approval card to run')
+
   await page.getByTestId('ai-chat-input').fill('what am i doing right now and what should i do next')
   await page.getByTestId('ai-chat-send').click()
 
   const inspectCard = page.locator('.tool-approval-card').filter({ hasText: 'Inspect live context' }).first()
   await expect(inspectCard).toBeVisible()
-  await expect(page.locator('.tool-approval-card').filter({ hasText: 'Suggest next action' }).first()).toBeVisible()
-  await inspectCard.getByRole('button', { name: 'Approve' }).click()
+  const nextActionCard = page.locator('.tool-approval-card').filter({ hasText: 'Suggest next action' }).first()
+  await expect(nextActionCard).toBeVisible()
+  await page.getByTestId('ai-chat-input').fill('approve')
+  await expect(page.getByTestId('ai-chat-send')).toBeEnabled()
+  await page.getByTestId('ai-chat-send').click()
   await expect(inspectCard).toContainText(/Live context|warnings|Recent/i)
+  await nextActionCard.getByRole('button', { name: 'Approve' }).click()
+  await expect(nextActionCard).toContainText('Next action:')
 })
 
 test('manual cleanup save persists after reload', async ({ page }) => {

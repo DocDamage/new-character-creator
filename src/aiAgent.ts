@@ -76,6 +76,7 @@ export function chooseAiProvider(providers: AiProviderConnection[], providerHint
 function proposeTools(options: AiAgentRequest, intent = parseAiRequestIntent(options.request)): AiToolProposal[] {
   const proposals: AiToolProposal[] = []
   const lowerRequest = options.request.toLowerCase()
+  const wantsPixellab = /\bpixellab\b/.test(lowerRequest)
   if (options.activitySnapshot && /\b(what am i|right now|current work|doing now|why .*blocked|what should i)\b/.test(lowerRequest)) {
     proposals.push(makeProposal('inspect_live_context', { include_warnings: true, include_recent_actions: true }))
   }
@@ -111,7 +112,7 @@ function proposeTools(options: AiAgentRequest, intent = parseAiRequestIntent(opt
   if (/\b(validate .*recipe|recipe validation|check .*recipe|current recipe)\b/.test(lowerRequest)) {
     proposals.push(makeProposal('validate_current_recipe', { include_release_gates: true }))
   }
-  if (/\b(generation prompt|prepare prompt|pixellab prompt|apes prompt|aseprite prompt|lpc prompt|duelyst prompt)\b/.test(lowerRequest)) {
+  if (/\b(generation prompt|prepare prompt|pixellab prompt|apes prompt|aseprite prompt|lpc prompt|duelyst prompt)\b/.test(lowerRequest) || wantsPixellab) {
     proposals.push(makeProposal('prepare_generation_prompt', { target: inferGenerationPromptTarget(lowerRequest), include_rag_context: Boolean(options.ragIndex) }))
   }
   if (/\b(rag sources?|what .*rag knows|inspect rag|rag status|citations?)\b/.test(lowerRequest)) {
@@ -162,6 +163,12 @@ function proposeTools(options: AiAgentRequest, intent = parseAiRequestIntent(opt
       }))
     }
   }
+  if (wantsPixellab && !options.tools.pixellab.enabled) {
+    proposals.push(makeProposal('configure_pixellab_bridge', {
+      endpoint_url: options.tools.pixellab.endpoint_url,
+      preferred_model: options.tools.pixellab.preferred_model,
+    }))
+  }
   if (intent.actions.includes('source_ingestion')) {
     if (/\b(scan pc|pc assets|feed (the )?rag)\b/.test(lowerRequest)) {
       proposals.push(makeProposal('scan_pc_rag_assets', { dedupe: true, include_private_sources: true }))
@@ -173,7 +180,7 @@ function proposeTools(options: AiAgentRequest, intent = parseAiRequestIntent(opt
   if (intent.actions.includes('export') && !/\b(blockers?|blocked|why .*export|explain .*export)\b/.test(lowerRequest)) {
     proposals.push(makeProposal('export_handoff', { format: intent.outputFormat ?? 'generation_manifest' }))
   }
-  return proposals
+  return dedupeProposals(proposals)
 }
 
 function inferPanel(request: string) {
@@ -215,4 +222,14 @@ function makeProposal(toolId: AiToolProposal['tool_id'], input: Record<string, u
     input,
     status: 'pending',
   }
+}
+
+function dedupeProposals(proposals: AiToolProposal[]) {
+  const seen = new Set<string>()
+  return proposals.filter((proposal) => {
+    const key = `${proposal.tool_id}:${JSON.stringify(proposal.input)}`
+    if (seen.has(key)) return false
+    seen.add(key)
+    return true
+  })
 }
