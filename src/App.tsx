@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import './App.css'
 import {
   apesAllowPlaceholderStorageKey,
@@ -55,6 +55,7 @@ import { defaultFilenameTemplate } from './filenameTemplates'
 import { buildGenerationManifest } from './generationManifest'
 import { buildGenerationJobsHandoffPayload, createGenerationJobsFromMissingAnimationQueue, generationJobBlocksRelease } from './generationJobs'
 import { buildAiGenerationContextQuery } from './aiContext'
+import { createAiSecretVault } from './aiSecretVault'
 import { buildRagContextBundle } from './ragIndex'
 import { layerBundleToExtractedParts, lpcSheetsToExtractedParts, parseLayerBundleManifest, type LpcSheetImportOptions } from './layerBundle'
 import { localToolFetch, localToolPath, publicAssetPath } from './localToolsClient'
@@ -364,7 +365,8 @@ function App() {
   const [aiProviders, setAiProviders] = useState<AiProviderConnection[]>(loadStoredAiProviderConnections)
   const [toolConnections, setToolConnections] = useState<ToolConnectionSettings>(loadStoredToolConnections)
   const [sessionSecretStatus, setSessionSecretStatusState] = useState<Record<string, boolean>>(loadSessionSecretStatus)
-  const [aiSessionSecrets, setAiSessionSecrets] = useState<Record<string, string>>({})
+  const aiSecretVaultRef = useRef(createAiSecretVault())
+  const [sessionSecretMemoryCount, setSessionSecretMemoryCount] = useState(0)
   const [aiStudioMessages, setAiStudioMessages] = useState<AiStudioMessage[]>([])
   const [generationJobs, setGenerationJobs] = useState<GenerationJob[]>(loadStoredGenerationJobs)
   const [ragIndex, setRagIndex] = useState<RagIndex | null>(null)
@@ -437,15 +439,8 @@ function App() {
   }, [setPersistenceResult])
 
   const setAiSessionSecret = useCallback((providerId: string, secret: string) => {
-    setAiSessionSecrets((current) => {
-      const next = { ...current }
-      if (secret.trim()) {
-        next[providerId] = secret
-      } else {
-        delete next[providerId]
-      }
-      return next
-    })
+    aiSecretVaultRef.current.set(providerId, secret)
+    setSessionSecretMemoryCount(aiSecretVaultRef.current.count())
     setSessionSecretStatus({
       ...sessionSecretStatus,
       [providerId]: secret.trim().length > 0,
@@ -885,7 +880,6 @@ function App() {
       return acc
     }, {})
   }, [characters])
-  const sessionSecretMemoryCount = Object.keys(aiSessionSecrets).length
 
   const batchVariants = useMemo(() => {
     if (!selectedCharacter || characters.length === 0) return []

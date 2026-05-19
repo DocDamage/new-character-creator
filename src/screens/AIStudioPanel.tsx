@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react'
-import { buildLocalAiStudioReply, makeAiStudioMessage } from '../aiWorkspace'
+import { applyApprovedToolResult, buildAiAgentReply } from '../aiAgent'
+import { makeAiStudioMessage } from '../aiWorkspace'
 import type { RagIndex } from '../ragTypes'
 import type { AiProviderConnection, AiStudioMessage, CharacterManifest, KitbashRecipe, ToolConnectionSettings } from '../types'
 
@@ -55,7 +56,7 @@ export function AIStudioPanel({
     const request = draft.trim()
     if (!request) return
     const userMessage = makeAiStudioMessage('user', request)
-    const assistantMessage = buildLocalAiStudioReply({
+    const assistantMessage = buildAiAgentReply({
       request,
       selectedCharacter,
       recipe,
@@ -67,6 +68,15 @@ export function AIStudioPanel({
     })
     setMessages([...messages, userMessage, assistantMessage])
     setDraft('')
+  }
+
+  function approveTool(messageId: string, proposalId: string, toolId: string) {
+    if (toolId === 'create_apes_job') createApesJob()
+    if (toolId === 'queue_pixellab_generation') createGenerationJobsFromQueue()
+    if (toolId === 'export_handoff') downloadGenerationManifest()
+    setMessages(messages.map((message) => message.message_id === messageId
+      ? applyApprovedToolResult(message, proposalId, 'Approved and sent to the matching app action.')
+      : message))
   }
 
   return (
@@ -107,6 +117,35 @@ export function AIStudioPanel({
               <strong>{message.role === 'user' ? 'You' : 'Assistant'}</strong>
               <pre>{message.content}</pre>
               {message.citations?.length ? <code>{message.citations.map((citation) => `${citation.title}: ${citation.uri}`).join('\n')}</code> : null}
+              {message.tool_proposals?.length ? (
+                <div className="tool-approval-list">
+                  {message.tool_proposals.map((proposal) => (
+                    <article key={proposal.proposal_id} className={`tool-approval-card ${proposal.status}`}>
+                      <strong>{proposal.label}</strong>
+                      <span>{proposal.permission_scope}</span>
+                      <code>{JSON.stringify(proposal.input, null, 2)}</code>
+                      {proposal.result ? <span>{proposal.result}</span> : null}
+                      <div className="status-strip">
+                        <button
+                          onClick={() => approveTool(message.message_id, proposal.proposal_id, proposal.tool_id)}
+                          disabled={proposal.status !== 'pending'}
+                        >
+                          Approve
+                        </button>
+                        <button
+                          onClick={() => setMessages(messages.map((item) => item.message_id === message.message_id ? {
+                            ...item,
+                            tool_proposals: item.tool_proposals?.map((candidate) => candidate.proposal_id === proposal.proposal_id ? { ...candidate, status: 'rejected' } : candidate),
+                          } : item))}
+                          disabled={proposal.status !== 'pending'}
+                        >
+                          Reject
+                        </button>
+                      </div>
+                    </article>
+                  ))}
+                </div>
+              ) : null}
             </article>
           ))}
         </div>

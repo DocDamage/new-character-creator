@@ -812,6 +812,14 @@ test('harvest workflows are exposed and produce usable app artifacts', async ({ 
   await expect(page.getByText(/alpha bounds/i)).toBeVisible({ timeout: 30_000 })
 })
 
+test('production readiness surfaces security and license status', async ({ page }) => {
+  await page.getByTestId('nav-settings').click()
+  await expect(page.getByText(/volatile secret/i)).toBeVisible()
+  await expect(page.getByText('npm run production:check')).toBeVisible()
+  await page.getByTestId('nav-audit').click()
+  await expect(page.getByText('License readiness')).toBeVisible()
+})
+
 test('LPC inventory browser can filter, select, label, and import sheets', async ({ page }) => {
   const qaPng = await readFile(path.join(repoRoot, 'public', 'data', 'qa', 'apes_harness_job', 'parts', 'head.png'))
   const lpcInventory = {

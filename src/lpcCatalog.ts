@@ -48,6 +48,11 @@ export type LpcCatalogItem = {
   animations: string[]
   preview: { row: number; column: number; x_offset: number; y_offset: number }
   match_body_color: boolean
+  license_file?: string
+  license_scope?: string
+  license_status?: string
+  license_text_hash?: string
+  source_folder?: string
   recolors: LpcRecolor[]
   layers: LpcCatalogLayer[]
   credits: LpcCredit[]

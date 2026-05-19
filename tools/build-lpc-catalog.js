@@ -1,5 +1,6 @@
 import fs from 'node:fs'
 import path from 'node:path'
+import crypto from 'node:crypto'
 import { execFileSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
 
@@ -129,6 +130,38 @@ function readLocalLicenseSummary(assetRoot) {
   }
 }
 
+function readAssetLicenseCoverage(assetRoot) {
+  if (!assetRoot || !fs.existsSync(assetRoot)) {
+    return {
+      license_file: '',
+      license_scope: 'none',
+      license_text_hash: '',
+      license_status: 'missing',
+      source_folder: '',
+    }
+  }
+  const licenseFiles = listFiles(assetRoot)
+    .filter((filePath) => path.basename(filePath).toLowerCase() === 'license.txt')
+  const firstLicense = licenseFiles[0]
+  if (!firstLicense) {
+    return {
+      license_file: '',
+      license_scope: 'none',
+      license_text_hash: '',
+      license_status: 'missing',
+      source_folder: '',
+    }
+  }
+  const text = fs.readFileSync(firstLicense, 'utf8')
+  return {
+    license_file: normalize(path.relative(appRoot, firstLicense)),
+    license_scope: 'folder',
+    license_text_hash: crypto.createHash('sha256').update(text).digest('hex'),
+    license_status: 'covered',
+    source_folder: relativePath(path.dirname(firstLicense), assetRoot),
+  }
+}
+
 function localLicenseCredits(localLicenseSummary) {
   if (!localLicenseSummary) return null
   return [{
@@ -195,6 +228,7 @@ export function buildLpcCatalog({ referenceRoot, assetRoot, generatedAt = new Da
   const creditsPath = path.join(referenceRoot, 'CREDITS.csv')
   const definitionFiles = listFiles(sheetDefinitionsRoot).filter((filePath) => filePath.endsWith('.json'))
   const localLicenseSummary = readLocalLicenseSummary(assetRoot)
+  const localLicenseCoverage = readAssetLicenseCoverage(assetRoot)
   const localCredits = localLicenseCredits(localLicenseSummary)
   const items = {}
   const aliases = {}
@@ -232,6 +266,11 @@ export function buildLpcCatalog({ referenceRoot, assetRoot, generatedAt = new Da
         y_offset: Number(definition.preview?.y_offset ?? 0),
       },
       match_body_color: Boolean(definition.match_body_color),
+      license_file: localLicenseCoverage.license_file,
+      license_scope: localLicenseCoverage.license_scope,
+      license_status: localLicenseCoverage.license_status,
+      license_text_hash: localLicenseCoverage.license_text_hash,
+      source_folder: localLicenseCoverage.source_folder,
       recolors: normalizeRecolors(definition.recolors),
       layers,
       credits: localCredits ?? normalizeCredits(definition.credits),

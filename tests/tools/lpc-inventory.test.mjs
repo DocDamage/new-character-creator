@@ -65,6 +65,57 @@ test('LPC inventory summarizes local CC0 license files as attribution optional',
   }
 })
 
+test('LPC inventory attaches nearest folder license metadata', async () => {
+  const root = await mkdtemp(path.join(tmpdir(), 'pixel-creator-lpc-nearest-license-'))
+  try {
+    const assetRoot = path.join(root, 'lpc assets')
+    const outPath = path.join(root, 'inventory.json')
+    await mkdir(path.join(assetRoot, 'Randoms'), { recursive: true })
+    await writeFile(path.join(assetRoot, 'Randoms', 'license.txt'), 'License: CC-BY-SA-3.0\nAuthor: LPC contributors\n', 'utf8')
+    await writeFile(path.join(assetRoot, 'Randoms', 'man_white.png'), makePngHeader(576, 256))
+
+    const result = spawnSync(process.execPath, [inventoryPath, '--asset-root', assetRoot, '--out', outPath], {
+      cwd: repoRoot,
+      encoding: 'utf8',
+    })
+
+    assert.equal(result.status, 0, result.stderr || result.stdout)
+    const inventory = JSON.parse(await readFile(outPath, 'utf8'))
+    const randomBase = inventory.assets.find((asset) => asset.relative_path.endsWith('Randoms/man_white.png'))
+    assert.ok(randomBase)
+    assert.equal(randomBase.license_file.endsWith('Randoms/license.txt'), true)
+    assert.equal(randomBase.license_scope, 'folder')
+    assert.equal(randomBase.license_status, 'covered')
+    assert.match(randomBase.license_text_hash, /^[a-f0-9]{64}$/)
+  } finally {
+    await rm(root, { recursive: true, force: true })
+  }
+})
+
+test('LPC inventory reports missing license metadata as a blocker', async () => {
+  const root = await mkdtemp(path.join(tmpdir(), 'pixel-creator-lpc-missing-license-'))
+  try {
+    const assetRoot = path.join(root, 'lpc assets')
+    const outPath = path.join(root, 'inventory.json')
+    await mkdir(path.join(assetRoot, 'Unlicensed'), { recursive: true })
+    await writeFile(path.join(assetRoot, 'Unlicensed', 'item.png'), makePngHeader(576, 256))
+
+    const result = spawnSync(process.execPath, [inventoryPath, '--asset-root', assetRoot, '--out', outPath], {
+      cwd: repoRoot,
+      encoding: 'utf8',
+    })
+
+    assert.equal(result.status, 0, result.stderr || result.stdout)
+    const inventory = JSON.parse(await readFile(outPath, 'utf8'))
+    const item = inventory.assets.find((asset) => asset.relative_path.endsWith('Unlicensed/item.png'))
+    assert.ok(item)
+    assert.equal(item.license_status, 'missing')
+    assert.ok(inventory.findings.some((finding) => finding.kind === 'missing_license'))
+  } finally {
+    await rm(root, { recursive: true, force: true })
+  }
+})
+
 function makePngHeader(width, height) {
   const buffer = Buffer.alloc(24)
   buffer[0] = 0x89

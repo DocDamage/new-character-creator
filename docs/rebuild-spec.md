@@ -39,8 +39,14 @@ npm run build:release
 npm run build:local-tools
 npm run preview -- --host 127.0.0.1 --port 4173 --strictPort
 npm run release:check
+npm run production:check
+npm run security:scan
+npm run license:audit
+npm run rag:evaluate
 npm run test:tools
 npm run test:browser
+npm run test:performance
+npm run test:memory
 npm run test:browser:all
 npm run test:private-assets
 npm run validate:release-package
@@ -54,6 +60,7 @@ npm run repair:manifest-paths
 npm run lpc:inventory
 npm run lpc:catalog
 npm run rag:index
+npm run rag:evaluate
 npm run export:character
 npm run duelyst:private-manifest -- --stage-count 64
 npm run qa:apes-harness
@@ -216,6 +223,9 @@ Required behavior:
 - Set and persist APES Python path.
 - Toggle and persist APES placeholder mode with visible release warning.
 - Show APES preflight summary and local-tool availability.
+- Show enabled providers, volatile secret count, local proxy status, Aseprite bridge status, PixelLab status, local LLM status, APES bridge status, and the production check command.
+- Accept provider configuration without persisting raw provider secrets.
+- Clear session-only secrets and keep stored provider config redacted.
 
 ## 4. Domain Model
 
@@ -439,8 +449,21 @@ LPC rendering must:
 - Surface oversize/custom-animation warnings under standard 64x64 export profiles.
 - Preserve z-order from catalog layers.
 - Include selected upstream credits in credits report and full package manifest.
+- Preserve per-asset license provenance from inventory/catalog records:
+  `license_file`, `license_scope`, `license_status`, `license_text_hash`, and
+  `source_folder`.
+- Treat missing shipped license coverage as a release blocker.
 
 ### AI, RAG, And Training
+
+Provider and secret boundary:
+
+- Provider connections may include capability metadata and route constraints.
+- OpenAI-compatible, Anthropic, Gemini, Mistral, Groq, OpenRouter, PixelLab, and other remote providers require a trusted local proxy/backend for direct calls.
+- Ollama and LM Studio may use loopback local endpoints, but public static builds must not depend on hidden browser secrets.
+- Raw provider secrets live only in an in-memory vault for the current page session.
+- Persisted provider config must set `secret_session_set: false`, `direct_browser_calls: false`, and `local_proxy_required: true`.
+- Redaction helpers must remove key-shaped strings from notes, logs, handoffs, audit records, and generated manifests.
 
 RAG index format:
 
@@ -455,6 +478,22 @@ type RagIndex = {
 }
 ```
 
+Each chunk must include stable `chunk_id`, `content_hash`,
+`token_estimate`, `trust_level`, `license_tags`, lexical terms, source ID, URI,
+title, text, and metadata.
+
+The rebuild must also provide `data/rag/eval_queries.json` and
+`tools/evaluate-rag-index.js`. `npm run rag:evaluate` must fail when required
+source citations or required terms are missing.
+
+AI Studio messages:
+
+- Chat transcript supports user and assistant messages.
+- Assistant messages can include RAG citations.
+- Assistant messages can include pending tool proposals.
+- Tool proposals must show input, permission scope, status, and result/failure.
+- Tool proposals execute only after explicit user approval.
+
 Generation jobs must:
 
 - Be created from missing-animation queue items.
@@ -463,6 +502,13 @@ Generation jobs must:
 - Export as `pixel_creator_generation_jobs_handoff`.
 - Block release until review gate is approved.
 - Never auto-select generated outputs.
+
+Tool registry:
+
+- Tools have IDs, labels, permission scopes, and JSON-like input schemas.
+- Required first-class tool proposals include APES job creation, PixelLab
+  generation queueing, and export handoff.
+- Rejected or failed tools must leave visible recovery text.
 
 Training inbox drafts and approved records must preserve source kind, source names, goal, animation, directions, frame layout, frame size, export profile, source-family compatibility, validation findings, review state, and provenance.
 
@@ -479,6 +525,9 @@ pixel_creator_apes_allow_placeholder
 pixel_creator_apes_preflight
 pixel_creator_apes_jobs
 pixel_creator_ai_provider_config
+pixel_creator_ai_provider_connections
+pixel_creator_ai_tool_connections
+pixel_creator_ai_session_secret_status
 pixel_creator_generation_jobs
 pixel_creator_apes_harness_generated_at
 pixel_creator_variation_presets
@@ -497,6 +546,10 @@ large asset threshold: 16384 characters
 ```
 
 Storage failures must not crash the UI. Reads fall back to safe defaults. Writes return success/failure and surface warnings per storage key so one successful write does not hide another failed write.
+
+`pixel_creator_ai_session_secret_status` may only store boolean armed-state
+metadata. It must never store raw secrets. The raw secret vault is volatile
+memory only and is cleared by page/session lifetime or explicit clear actions.
 
 ## 6. Rendering Rules
 
@@ -780,7 +833,10 @@ Tool/unit tests must cover:
 - Layer-bundle validation.
 - Generation jobs and handoff payloads.
 - Missing-animation queue.
-- RAG index.
+- RAG index and RAG evaluation.
+- AI agent/tool proposal registry and secret-vault serialization.
+- Local proxy, Aseprite bridge, PixelLab bridge, and redacted audit log helpers.
+- Secret scanner and license audit scanner.
 - Training library classification/approval.
 - App persistence fallbacks.
 - Export credits report.
@@ -811,9 +867,13 @@ A rebuild is complete when all items below are true:
 - APES placeholder mode visibly blocks release exports.
 - Generated AI outputs cannot ship until reviewed.
 - LPC catalog selections render, persist, produce credits, and expose missing/oversize warnings.
+- Shipped LPC assets and catalog entries have covered license metadata.
+- Secret scan, license audit, and RAG evaluation pass.
+- AI Studio chat shows provider/RAG/tool status and approval-gated tool proposals.
+- Local proxy, Aseprite, and PixelLab bridge routes are loopback-only, token-gated, path/body validated, and audit logged.
 - Full package ZIP contains rendered frames, sheets, engine metadata, reusable parts, package manifest, and credits report.
 - Release validator rejects private/local references.
-- `npm run release:check` passes.
+- `npm run production:check` passes.
 - Browser regression passes in Chromium, with cross-browser suite available.
 - Optional private-asset tests pass on a machine with private Duelyst/LPC/sprite assets.
 
@@ -1103,8 +1163,12 @@ AI generation is optional and must stay review-gated.
 
 RAG index builder:
 
-- Gather project docs, README, release docs, APES notes, LPC summaries, manifests, APES inventory, training records, and generation jobs when present.
-- Chunk into documents with source ID, source type, title, URI, text, token estimate, terms, and metadata.
+- Gather project docs, README, release docs, APES notes, LPC summaries,
+  license audit, PixelLab docs, manifests, APES inventory, training records,
+  and generation jobs when present.
+- Chunk into documents with source ID, source type, title, URI, text, stable
+  chunk ID, content hash, token estimate, trust level, license tags, terms, and
+  metadata.
 - Write `data/rag/knowledge_index.json`.
 
 RAG search:
@@ -1112,6 +1176,25 @@ RAG search:
 - Tokenize query into search terms.
 - Score chunks by matched terms and metadata filters.
 - Return context bundle with purpose, query, context text, scored chunks, matched terms, and citations.
+- Evaluate query quality with `tools/evaluate-rag-index.js`.
+- Fail production readiness when expected source families or expected terms are
+  missing from evaluation bundles.
+
+AI Studio:
+
+- Show chat transcript, request box, provider status, RAG status, tool status,
+  citations, pending tool approvals, and failed-action recovery text.
+- Produce local assistant replies that cite RAG context when available.
+- Propose tool actions instead of silently mutating app state.
+- Apply approved tool results back into the transcript.
+
+Secret vault:
+
+- Store raw secrets only in an in-memory `Map`.
+- Snapshot only boolean provider armed state.
+- Redact key-shaped strings before storage/export/logging.
+- Serialize provider config with direct browser calls disabled and proxy
+  required.
 
 Generation job creation:
 
@@ -1119,7 +1202,8 @@ Generation job creation:
 - One job per queue item.
 - Job ID format should be deterministic enough to inspect: `gen_{character}_{timestamp}_{index}_{slug}`.
 - Prompt includes item name/ID, layer, variant, body, target animation, status, first affected frames, warnings, and pixel constraints.
-- Provider defaults to PixelLab manual handoff.
+- Provider defaults to manual/local handoff unless a session-only or local
+  endpoint provider is armed.
 - If provider is unconfigured, status is `handoff_ready`.
 - Each job has one output placeholder with `release_blocked: true`, `auto_selected: false`, and `selected_part_id: null`.
 - Review gate starts `blocked`, required, release-blocking, and not auto-selected.
@@ -1143,6 +1227,8 @@ Acceptance criteria:
 - Release export remains blocked until generation job review gates are approved.
 - RAG absence does not block job creation; it only reduces context.
 - Training library records survive reload and can be included in RAG index.
+- Typed sentinel secrets do not appear in localStorage, sessionStorage,
+  downloads, visible DOM after clearing, dist, logs, or generated manifests.
 
 ### Phase 9: Export System
 
@@ -1379,7 +1465,11 @@ The original file layout is a useful decomposition target. A rewrite does not ne
 
 - `animationSource`: compatible motion-source selection and recipe animation coverage.
 - `aiContext`: prompt/query construction for RAG.
+- `aiAgent`: provider routing, RAG citation packing, tool proposal creation, and approved tool result application.
 - `aiOutputIntake`: generated output import and validation if implemented.
+- `aiSecretVault`: volatile secret storage, redaction, and safe provider config serialization.
+- `aiToolRegistry`: app tool definitions with permission scopes.
+- `aiToolSchemas`: JSON-like schemas for AI tool inputs and outputs.
 - `apesReportValidation`: strict APES JSON validation.
 - `creatorCockpit`: export target profiles, recipe readiness, reviewed-part filtering.
 - `creditsReport`: selected part and LPC catalog attribution report.
@@ -1402,6 +1492,7 @@ The original file layout is a useful decomposition target. A rewrite does not ne
 - `maskTools`: mask array algorithms.
 - `missingAnimationQueue`: catalog draw record gap aggregation.
 - `partAssetStore`: IndexedDB image/mask storage.
+- `performanceBudget`: shared load/search/render/export/cache budget constants.
 - `ragIndex`: local search and context bundle builder.
 - `sourceAnalysis`: alpha bounds, floor, pivot analysis for source images.
 - `sourceFamilyRegistry`: mode/source-family compatibility matrix.
@@ -1413,14 +1504,22 @@ The original file layout is a useful decomposition target. A rewrite does not ne
 - `tools/index-assets.js`: scan sprite asset root and build character manifests.
 - `tools/repair-manifest-paths.js`: fix manifest paths for moved asset roots.
 - `tools/build-lpc-local-inventory.js`: scan local LPC dump.
-- `tools/build-lpc-catalog.js`: build catalog from upstream LPC definitions.
-- `tools/build-rag-index.js`: build knowledge index.
+- `tools/build-lpc-catalog.js`: build catalog from upstream LPC definitions and preserve license coverage metadata.
+- `tools/build-rag-index.js`: build knowledge index with stable chunk IDs, content hashes, trust levels, and license tags.
+- `tools/evaluate-rag-index.js`: score RAG regression queries for citation and term coverage.
 - `tools/export-character.js`: create checked release export inputs.
 - `tools/build-duelyst-private-manifest.js`: inspect unitypackage and stage candidate frames.
 - `tools/localToolsServer.ts`: Vite middleware for private local routes.
+- `tools/localProxyProviders.ts`: validate and normalize trusted local proxy provider requests.
+- `tools/asepriteBridge.ts`: validate Aseprite bridge commands and project-relative paths.
+- `tools/pixellabBridge.ts`: validate PixelLab loopback requests and normalize generated output metadata.
+- `tools/toolAuditLog.ts`: append redacted JSONL audit records for privileged tool calls.
 - `tools/check-preview-local-tools.js`: smoke test built local-tools preview.
 - `tools/check-source-hygiene.js`: fail if private/generated folders are tracked.
-- `tools/validate-release-package.js`: scan dist for private leaks and missing assets.
+- `tools/scan-secrets.js`: scan source/docs/data/public/dist for provider-looking secrets.
+- `tools/audit-licenses.js`: regenerate `docs/asset-license-audit.md` and fail on missing shipped license coverage.
+- `tools/validate-release-package.js`: scan dist for private leaks, blocked files, missing assets, and missing LPC license coverage.
+- `tools/run-memory-smoke.js`: execute the Playwright performance/memory smoke.
 - `tools/run-browser-matrix.js`: cross-browser Playwright runner.
 - `tools/run-private-asset-tests.js`: private asset test wrapper.
 
@@ -1785,6 +1884,9 @@ Never ship these in public release:
 - `/@fs/` paths
 - `/__local/` paths
 - `.local-tools-token`
+- raw provider API keys
+- redacted audit source material that still contains key-shaped strings
+- blocked executables or scripts such as `.exe`, `.ps1`, `.bat`, or `.cmd`
 
 Local server hardening:
 
@@ -1795,12 +1897,22 @@ Local server hardening:
 - Python path must be validated before execution.
 - Report loading must restrict basename to `apes_report.json`.
 - `/@fs/` must be limited to project-approved directories only.
+- AI proxy and bridge endpoints must require the same loopback, same-origin,
+  token, and body-size controls as APES/local asset mutations.
+- Aseprite bridge requests must validate executable path and project-relative
+  input/output paths.
+- PixelLab bridge requests must validate loopback endpoint settings.
+- Privileged tool calls must write redacted audit records.
 
 Release validation:
 
 - Scan `.html`, `.js`, `.css`, `.json`, `.svg`, `.txt`, and `.map`.
 - Reject private manifest names, private asset root names, Windows drive paths, `/@fs/`, `/__local/`.
 - Verify every manifest asset referenced in release output exists in `dist`.
+- Reject blocked executable/script/private files in `dist`.
+- Reject shipped LPC catalog entries without `license_status: "covered"`.
+- Run `npm run security:scan`, `npm run license:audit`, and
+  `npm run rag:evaluate` before calling a release production ready.
 
 ## 20. Test Plan By Slice
 
@@ -1829,8 +1941,14 @@ Write tests for:
 - LPC inventory fixture detects grid and non-grid sheets.
 - LPC catalog fixture preserves credits and aliases.
 - RAG index builder emits documents/chunks with source metadata.
+- RAG evaluator fails when expected citations or expected terms are missing.
 - Release validator rejects private/local references.
 - Source hygiene rejects tracked generated/private paths.
+- Secret scanner flags provider-looking keys and ignores redacted placeholders.
+- License audit reports covered and missing counts.
+- Local proxy rejects non-loopback local provider routes.
+- Aseprite and PixelLab bridge validators reject traversal/remote endpoints.
+- Tool audit logging redacts secret-looking values.
 
 ### Browser Tests
 
@@ -1853,8 +1971,15 @@ Required UI tests:
 - APES: QA harness generate/import/clear, invalid JSON rejection, local server unavailable state.
 - APES inventory: failed outputs displayed from fixture.
 - AI: missing-animation queue, generation job creation, handoff download, release blocker visible.
+- AI Studio: chat replies, provider/RAG/tool status, citations when available,
+  approval-gated tool proposals, and no persisted raw secrets.
+- Settings: volatile secret count, local proxy status, production check command,
+  and bridge health controls.
+- Asset Audit: license readiness and missing-license status.
 - Exports: all JSON downloads parse, ZIP entries present, SpriteFrames contains rendered frame references, blocked export disabled when placeholder/generation/LPC credit blockers active.
 - Settings: local setup bundle download, APES Python path persistence, placeholder toggle persistence.
+- Performance: large catalog browsing keeps image cache at or below the shared
+  image-cache budget.
 
 ### Private Asset Tests
 
@@ -1883,7 +2008,8 @@ These are the places a rewrite is most likely to accidentally lose important beh
 - Do not drop selected-outside-filter picker behavior; otherwise users will think selections vanished.
 - Do not make failed APES outputs disappear; failed content results are part of the workflow.
 - Do not use browser dev mode checks to detect local tools; probe `/__local/health`.
-- Do not make release package validation optional.
+- Do not make release package validation, secret scanning, license auditing, RAG
+  evaluation, or browser regression optional for production readiness.
 
 ## 22. Definition Of "100% Rewritten"
 
@@ -1894,4 +2020,13 @@ A rewrite is not feature-complete because it can display sprites and export PNGs
 3. Private user audits Duelyst assets, stages a character, opens it in Workstation, prepares APES jobs, runs/summarizes outputs, and imports only valid APES reports.
 4. LPC user builds inventory/catalog, selects a mannequin, chooses catalog items, sees credit readiness and oversize warnings, persists recipe, renders previews, exports full package, and receives a release block if credits need review.
 5. AI handoff user builds a catalog-backed recipe with missing animation layers, creates RAG-enriched generation jobs, downloads handoff JSON, and remains blocked from release until reviewed outputs are approved.
-6. Release engineer runs `npm run release:check` and gets a public `dist` with no private manifests, no local-tool URLs, no absolute private paths, and no missing manifest assets.
+6. AI Studio user asks for a plan, receives cited context and pending tool
+   approvals, approves only the intended actions, and sees results/failures in
+   the transcript.
+7. Security reviewer types a sentinel provider key, clears it, and confirms it
+   does not appear in browser storage, downloads, generated manifests, dist,
+   logs, or git.
+8. Release engineer runs `npm run production:check` and gets a public `dist`
+   with no private manifests, no local-tool URLs, no absolute private paths, no
+   raw provider keys, no blocked files, no missing manifest assets, and no
+   shipped LPC catalog entries without covered license metadata.

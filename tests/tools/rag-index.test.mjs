@@ -12,7 +12,7 @@ import {
 } from '../../src/ragIndex.ts'
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..')
-const ragOutputPath = path.join(repoRoot, 'data', 'rag', 'knowledge_index.json')
+const ragOutputPath = path.join(repoRoot, 'test-results', 'rag-index-test', 'knowledge_index.json')
 
 test('RAG index retrieves project context by query terms', () => {
   const index = buildRagIndex([
@@ -70,7 +70,7 @@ test('RAG context bundle caps chunks and records citations', () => {
 test('RAG index CLI writes a local knowledge index', () => {
   rmSync(ragOutputPath, { force: true })
 
-  const result = spawnSync(process.execPath, ['tools/build-rag-index.js', '--limit-docs', '4'], {
+  const result = spawnSync(process.execPath, ['tools/build-rag-index.js', '--limit-docs', '4', '--out', ragOutputPath], {
     cwd: repoRoot,
     encoding: 'utf8',
   })
