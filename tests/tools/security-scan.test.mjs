@@ -11,3 +11,8 @@ test('secret scanner flags provider-looking keys', () => {
 test('secret scanner ignores redacted placeholders', () => {
   assert.deepEqual(scanTextForSecrets('Authorization: [redacted]'), [])
 })
+
+test('secret scanner ignores safe provider code identifiers', () => {
+  assert.deepEqual(scanTextForSecrets('getAiSessionSecret: (providerId: string) => string | null'), [])
+  assert.deepEqual(scanTextForSecrets('const apiKey = optionalStringField(payload.apiKey ?? payload.api_key)'), [])
+})

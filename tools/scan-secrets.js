@@ -30,7 +30,10 @@ export function scanTextForSecrets(text) {
 }
 
 function isKnownSafeMatch(value) {
-  return value.includes('sk-editor-part-s') || value.includes('Token = readFile')
+  return value.includes('sk-editor-part-s') ||
+    value.includes('Token = readFile') ||
+    value.includes('Secret: getAiSes') ||
+    value.includes('apiKey = optiona')
 }
 
 function main() {
