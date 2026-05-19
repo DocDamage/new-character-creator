@@ -1,6 +1,6 @@
-import { humanoid64Preset } from './presets'
+import { humanoid64Preset } from './presets.ts'
 import type { CharacterManifest, ExtractedPart, KitbashRecipe, PartLabel, Rect } from './types'
-import { getCharacterLabelValue, isLpcExtractedPart } from './lpcPartCompatibility'
+import { getCharacterLabelValue, isLpcExtractedPart } from './lpcPartCompatibility.ts'
 
 const replacementLabels: Record<PartLabel, PartLabel[]> = {
   shadow: [],
@@ -37,7 +37,7 @@ export function buildLpcReplacementRegions(
     const sourceCharacter = characters.find((character) => character.character_id === layer.source_character)
     const isReplacement = sourcePart
       ? isLpcExtractedPart(sourcePart)
-      : sourceCharacter ? getCharacterLabelValue(sourceCharacter, 'lpc_role') === 'part' : false
+      : sourceCharacter ? isLpcBodyReplacementSource(sourceCharacter) : false
     if (!isReplacement) continue
 
     for (const label of replacementLabels[layer.label] ?? [layer.label]) {
@@ -45,4 +45,10 @@ export function buildLpcReplacementRegions(
     }
   }
   return regions
+}
+
+function isLpcBodyReplacementSource(character: CharacterManifest) {
+  if (getCharacterLabelValue(character, 'lpc_role') !== 'part') return false
+  const lpcPath = getCharacterLabelValue(character, 'lpc_path').replaceAll('\\', '/').toLowerCase()
+  return lpcPath.includes('/body/')
 }
