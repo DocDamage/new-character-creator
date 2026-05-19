@@ -2362,28 +2362,34 @@ function App() {
         { url: publicAssetPath(`data/manifests/${['duelyst', 'private', 'json'].join('.')}`), label: 'private manifest' },
         { url: publicAssetPath('data/manifests/duelyst.json'), label: 'public manifest' },
       ]
-      let response: Response | null = null
+      let payload: DuelystPackageAudit | null = null
       let label = ''
       for (const candidate of manifestCandidates) {
         const candidateResponse = await fetch(candidate.url, { signal, cache: 'no-store' })
         if (signal?.aborted) return
         if (candidateResponse.status === 404) continue
-        response = candidateResponse
+        if (!candidateResponse.ok) {
+          if (candidate.label === 'private manifest') continue
+          throw new Error(`${candidate.label} request failed with status ${candidateResponse.status}`)
+        }
+        try {
+          payload = await candidateResponse.json() as DuelystPackageAudit
+        } catch (error) {
+          if (candidate.label === 'private manifest') continue
+          throw new Error(`${candidate.label} did not return usable JSON. ${error instanceof Error ? error.message : String(error)}`, { cause: error })
+        }
         label = candidate.label
         break
       }
       if (signal?.aborted) return
-      if (!response) {
+      if (!payload) {
         setDuelystStatus('No Duelyst manifest found yet. Run the local audit or `npm run duelyst:private-manifest -- --stage-count 64`, then `npm run duelyst:public-manifest` for a public Pages bundle.')
         return
       }
-      if (!response.ok) {
-        throw new Error(`${label} request failed with status ${response.status}`)
-      }
 
-      const payload = normalizeDuelystAudit(await response.json() as DuelystPackageAudit)
-      setDuelystAudit(payload)
-      setDuelystStatus(`${payload.summary} Loaded from ${label}; staged entries are available in the picker and workstation.`)
+      const audit = normalizeDuelystAudit(payload)
+      setDuelystAudit(audit)
+      setDuelystStatus(`${audit.summary} Loaded from ${label}; staged entries are available in the picker and workstation.`)
     } catch (error) {
       if (signal?.aborted || (error instanceof DOMException && error.name === 'AbortError')) return
       setDuelystStatus(`Duelyst manifest could not be loaded. ${error instanceof Error ? error.message : String(error)}`)
