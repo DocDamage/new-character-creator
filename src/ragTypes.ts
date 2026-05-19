@@ -3,11 +3,14 @@ export type RagSourceType =
   | 'readme'
   | 'lpc_catalog'
   | 'asset_manifest'
+  | 'duelyst_manifest'
   | 'apes_inventory'
   | 'training_record'
   | 'generation_job'
   | 'license_audit'
   | 'security_doc'
+  | 'office_doc'
+  | 'visual_reference'
 
 export type RagSourceDocument = {
   source_id: string
