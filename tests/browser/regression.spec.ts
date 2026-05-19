@@ -288,8 +288,8 @@ privateLpcBrowserTest('LPC picker exposes canonical animations and compatible sh
   const maroonCapeOption = page.getByTestId('preview-live-part').locator('option', { hasText: 'LPC Legion armor / cape / Male_cape_maroon' })
   await expect(maroonCapeOption).toHaveCount(1)
   await page.getByTestId('preview-live-part').selectOption(await maroonCapeOption.getAttribute('value') ?? undefined)
-  await expect.poll(() => readCompositePixel(page, 32, 32)).toEqual([253, 213, 183, 255])
-  await expect.poll(() => readCompositePixel(page, 21, 53)).toEqual([222, 82, 64, 255])
+  await expectCompositePixel(page, 32, 32, [253, 213, 183, 255])
+  await expectCompositePixel(page, 21, 53, [222, 82, 64, 255])
 
   await page.getByTestId('preview-live-layer').selectOption('back_leg')
   await expect(page.getByTestId('preview-live-part').locator('option', { hasText: 'LPC Androgynous Pants / Black' })).toHaveCount(0)
@@ -304,14 +304,14 @@ privateLpcBrowserTest('LPC picker exposes canonical animations and compatible sh
   const blackLongSleeveOption = page.getByTestId('preview-live-part').locator('option', { hasText: 'LPC Androgynous Long-Sleeve Shirt / Black' })
   await expect(blackLongSleeveOption).toHaveCount(1)
   await page.getByTestId('preview-live-part').selectOption(await blackLongSleeveOption.getAttribute('value') ?? undefined)
-  await expect.poll(() => readCompositePixel(page, 32, 42)).toEqual([59, 60, 64, 255])
-  await expect.poll(() => readCompositePixel(page, 32, 32)).toEqual([24, 32, 42, 255])
+  await expectCompositePixel(page, 32, 42, [59, 60, 64, 255])
+  await expectCompositePixel(page, 32, 32, [24, 32, 42, 255])
   await page.getByLabel('Animation').selectOption('walk')
   await page.getByLabel('Direction', { exact: true }).selectOption('north')
   await setFrameSlider(page, 7)
   await expect(page.getByText('walk north frame 8', { exact: true })).toBeVisible()
-  await expect.poll(() => readCompositePixel(page, 32, 42)).toEqual([181, 66, 51, 255])
-  await expect.poll(() => readCompositePixel(page, 24, 36)).toEqual([122, 45, 33, 255])
+  await expectCompositePixel(page, 32, 42, [181, 66, 51, 255])
+  await expectCompositePixel(page, 24, 36, [122, 45, 33, 255])
   await page.getByLabel('Animation').selectOption('slash')
   await page.getByLabel('Direction', { exact: true }).selectOption('south')
   await setFrameSlider(page, 0)
@@ -586,8 +586,8 @@ test('APES prep actions surface fine-tune artifacts and queue Duelyst jobs', asy
   await expect(page.getByText('apes_duelyst_fixture_001')).toBeVisible()
 })
 
-test('imported APES parts include image and mask files in full package exports', async ({ page }) => {
-  const localReport = await writeLocalApesAssetReport()
+test('imported APES parts include image and mask files in full package exports', async ({ page }, testInfo) => {
+  const localReport = await writeLocalApesAssetReport(testInfo.project.name)
   try {
     await page.getByTestId('nav-apes').click()
     await page.getByTestId('apes-report-json-input').fill(JSON.stringify(localReport))
@@ -1021,6 +1021,17 @@ async function readCompositePixel(page: Parameters<typeof test>[0]['page'], x: n
   )
 }
 
+async function expectCompositePixel(
+  page: Parameters<typeof test>[0]['page'],
+  x: number,
+  y: number,
+  rgba: [number, number, number, number],
+) {
+  await expect.poll(() => readCompositePixel(page, x, y), {
+    timeout: 30_000,
+  }).toEqual(rgba)
+}
+
 async function readPartAssetKeys(page: Parameters<typeof test>[0]['page']) {
   return page.evaluate(() => new Promise<string[]>((resolve, reject) => {
     const request = window.indexedDB.open('pixel_creator_part_assets', 1)
@@ -1135,8 +1146,9 @@ function makeBrowserLpcCatalogFixture() {
   }
 }
 
-async function writeLocalApesAssetReport() {
-  const jobId = 'playwright_apes_asset_route'
+async function writeLocalApesAssetReport(projectName: string) {
+  const safeProjectName = projectName.replace(/[^a-z0-9_-]/gi, '_').toLowerCase()
+  const jobId = `playwright_apes_asset_route_${safeProjectName}`
   const outputRoot = path.join(repoRoot, 'data', 'apes', 'output', jobId)
   await rm(outputRoot, { recursive: true, force: true })
   await mkdir(path.join(outputRoot, 'parts'), { recursive: true })

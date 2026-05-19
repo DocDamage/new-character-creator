@@ -1,0 +1,20 @@
+[
+  {
+    "query_id": "license_randoms",
+    "query": "Which license covers assets moved into the Randoms folder?",
+    "expected_source_ids": ["docs/asset-license-audit.md", "data/lpc/lpc_catalog.json"],
+    "expected_terms": ["Randoms", "license"]
+  },
+  {
+    "query_id": "pixellab_missing_animation",
+    "query": "How should the app generate a missing animation with PixelLab?",
+    "expected_source_ids": ["docs/pixellab-mcp.md", "docs/ai-rag-system.md"],
+    "expected_terms": ["PixelLab", "missing-animation"]
+  },
+  {
+    "query_id": "secret_policy",
+    "query": "Can provider API keys be stored in the browser or release bundle?",
+    "expected_source_ids": ["docs/ai-rag-system.md", "docs/release-readiness.md"],
+    "expected_terms": ["session-only", "redacted", "local proxy"]
+  }
+]

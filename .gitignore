@@ -21,7 +21,8 @@ dist-ssr
 output/
 data/apes/
 data/cache/
-data/rag/
+data/rag/*
+!data/rag/eval_queries.json
 data/training/
 data/exports/*/exports/
 data/exports/*/rendered/
