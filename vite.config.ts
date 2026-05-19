@@ -10,6 +10,15 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const appRoot = __dirname
 const localToolsTokenPath = path.resolve(appRoot, '.local-tools-token')
 
+function getBasePath() {
+  if (process.env.VITE_BASE_PATH) return process.env.VITE_BASE_PATH
+  if (process.env.GITHUB_PAGES === 'true' && process.env.GITHUB_REPOSITORY) {
+    const repoName = process.env.GITHUB_REPOSITORY.split('/').at(-1)
+    return repoName ? `/${repoName}/` : '/'
+  }
+  return '/'
+}
+
 function getLocalToolsToken() {
   if (process.env.PIXEL_CREATOR_LOCAL_TOOLS_TOKEN) {
     return process.env.PIXEL_CREATOR_LOCAL_TOOLS_TOKEN
@@ -149,6 +158,7 @@ export default defineConfig(({ mode }) => {
   const localToolsToken = getLocalToolsToken()
   const includeLocalTools = mode !== 'release'
   return {
+  base: getBasePath(),
   plugins: [
     react(),
     ...(includeLocalTools ? [createLocalAssetToolsPlugin(appRoot, { sessionToken: localToolsToken })] : []),

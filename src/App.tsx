@@ -49,7 +49,7 @@ import { buildGenerationJobsHandoffPayload, createGenerationJobsFromMissingAnima
 import { buildAiGenerationContextQuery } from './aiContext'
 import { buildRagContextBundle } from './ragIndex'
 import { layerBundleToExtractedParts, lpcSheetsToExtractedParts, parseLayerBundleManifest, type LpcSheetImportOptions } from './layerBundle'
-import { localToolFetch, localToolPath } from './localToolsClient'
+import { localToolFetch, localToolPath, publicAssetPath } from './localToolsClient'
 import { canUseLpcPartForAnimation, getCharacterLabelValue, isLpcExtractedPart, isLpcMannequin, isLpcPartSourceForLayer, isLpcSourceCharacterId, isPartCompatibleWithMannequin } from './lpcPartCompatibility'
 import { buildManualMaskPart } from './manualParts'
 import { buildLpcCharacterManifests } from './lpcCharacters'
@@ -188,14 +188,13 @@ function toBrowserAssetUrl(assetPath: string | undefined) {
     return assetPath
   }
   if (assetPath.startsWith(localToolPath(''))) return assetPath
-  if (assetPath.startsWith('/')) return assetPath
   const normalized = assetPath.replaceAll('\\', '/')
   const apesOutputMarker = 'data/apes/output/'
   const apesOutputIndex = normalized.indexOf(apesOutputMarker)
   if (apesOutputIndex >= 0) {
     return localToolPath(`apes-output/${normalized.slice(apesOutputIndex + apesOutputMarker.length)}`)
   }
-  return `/${normalized}`
+  return publicAssetPath(normalized)
 }
 
 function isLocalApesOutputPath(assetPath: string | undefined) {
@@ -283,6 +282,51 @@ function fileNameFromAssetPath(assetPath: string | undefined, fallback: string) 
   if (!assetPath) return fallback
   const normalized = assetPath.replaceAll('\\', '/')
   return normalized.split('/').filter(Boolean).at(-1) ?? fallback
+}
+
+function normalizeManifestAssetUrls(manifest: AssetManifest): AssetManifest {
+  return {
+    ...manifest,
+    characters: manifest.characters.map((character) => ({
+      ...character,
+      source_folder: publicAssetPath(character.source_folder),
+      representative_frame: publicAssetPath(character.representative_frame),
+      rotation_preview_paths: character.rotation_preview_paths.map((item) => ({
+        ...item,
+        path: publicAssetPath(item.path),
+      })),
+      directions: Object.fromEntries(
+        Object.entries(character.directions).map(([directionName, animations]) => [
+          directionName,
+          Object.fromEntries(
+            Object.entries(animations ?? {}).map(([animationName, record]) => [
+              animationName,
+              {
+                ...record,
+                frames: record.frames.map((frame) => ({
+                  ...frame,
+                  path: publicAssetPath(frame.path),
+                })),
+              },
+            ]),
+          ),
+        ]),
+      ) as CharacterManifest['directions'],
+      animations: character.animations.map((animationEntry) => ({
+        ...animationEntry,
+        directions: Object.fromEntries(
+          Object.entries(animationEntry.directions).map(([directionName, frames]) => [
+            directionName,
+            (frames ?? []).map((frame) => ({
+              ...frame,
+              path: publicAssetPath(frame.path),
+            })),
+          ]),
+        ) as CharacterManifest['animations'][number]['directions'],
+        preview_gifs: animationEntry.preview_gifs.map(publicAssetPath),
+      })),
+    })),
+  }
 }
 
 function App() {
@@ -374,8 +418,8 @@ function App() {
 
   async function fetchManifest(signal?: AbortSignal) {
     const manifestUrls = import.meta.env.DEV
-      ? [`/data/manifests/${['characters', 'local', 'json'].join('.')}`, '/data/manifests/characters.json']
-      : ['/data/manifests/characters.json']
+      ? [publicAssetPath(`data/manifests/${['characters', 'local', 'json'].join('.')}`), publicAssetPath('data/manifests/characters.json')]
+      : [publicAssetPath('data/manifests/characters.json')]
 
     let lastStatus: number | null = null
     for (const [index, manifestUrl] of manifestUrls.entries()) {
@@ -390,7 +434,7 @@ function App() {
           if (!parsed.characters || !Array.isArray(parsed.characters)) {
             throw new Error('Manifest payload is missing a characters array.')
           }
-          return parsed
+          return normalizeManifestAssetUrls(parsed)
         } catch (error) {
           const looksLikeHtml = contentType.includes('text/html') || responseText.trimStart().startsWith('<!DOCTYPE html') || responseText.trimStart().startsWith('<html')
           if (looksLikeHtml && !isLastManifestUrl) {
@@ -477,7 +521,7 @@ function App() {
 
   useEffect(() => {
     const controller = new AbortController()
-    fetch('/data/lpc/lpc_asset_inventory.json', { signal: controller.signal, cache: 'no-store' })
+    fetch(publicAssetPath('data/lpc/lpc_asset_inventory.json'), { signal: controller.signal, cache: 'no-store' })
       .then(async (response) => {
         if (!response.ok) return
         const payload = await response.json() as LpcAssetInventory
@@ -496,7 +540,7 @@ function App() {
 
   useEffect(() => {
     const controller = new AbortController()
-    fetch('/data/rag/knowledge_index.json', { signal: controller.signal, cache: 'no-store' })
+    fetch(publicAssetPath('data/rag/knowledge_index.json'), { signal: controller.signal, cache: 'no-store' })
       .then(async (response) => {
         if (!response.ok) return
         const payload = await response.json() as RagIndex
@@ -513,7 +557,7 @@ function App() {
 
   useEffect(() => {
     const controller = new AbortController()
-    fetch('/data/lpc/lpc_catalog.json', { signal: controller.signal, cache: 'no-store' })
+    fetch(publicAssetPath('data/lpc/lpc_catalog.json'), { signal: controller.signal, cache: 'no-store' })
       .then(async (response) => {
         if (!response.ok) return
         const payload = await response.json() as LpcCatalog
@@ -1473,7 +1517,7 @@ function App() {
 
   async function loadApesQaHarnessReport() {
     try {
-      const response = await fetch('/data/qa/apes_report_harness.json')
+      const response = await fetch(publicAssetPath('data/qa/apes_report_harness.json'))
       if (!response.ok) {
         throw new Error(`QA harness report request failed with status ${response.status}`)
       }
@@ -2174,7 +2218,7 @@ function App() {
   async function loadPrivateDuelystManifest(signal?: AbortSignal) {
     setDuelystBusy(true)
     try {
-      const response = await fetch(`/data/manifests/${['duelyst', 'private', 'json'].join('.')}`, { signal, cache: 'no-store' })
+      const response = await fetch(publicAssetPath(`data/manifests/${['duelyst', 'private', 'json'].join('.')}`), { signal, cache: 'no-store' })
       if (signal?.aborted) return
       if (response.status === 404) {
         setDuelystStatus('No private Duelyst manifest found yet. Run the local audit or `npm run duelyst:private-manifest -- --stage-count 64`.')
