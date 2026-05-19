@@ -5,6 +5,8 @@ import type { AiProviderConnection, CharacterManifest, KitbashRecipe } from './t
 import type { RagIndex } from './ragTypes.ts'
 import { buildRagContextBundle } from './ragIndex.ts'
 import { aiToolRegistry } from './aiToolRegistry.ts'
+import type { AiToolProposal } from './aiToolRegistry.ts'
+import { summarizeAiActivitySnapshot, type AiActivitySnapshot } from './aiActivityContext.ts'
 
 export type AiProviderCallOptions = {
   request: string
@@ -13,11 +15,13 @@ export type AiProviderCallOptions = {
   ragIndex: RagIndex | null
   providers: AiProviderConnection[]
   getSessionSecret: (providerId: string) => string | null
+  activitySnapshot?: AiActivitySnapshot
 }
 
 export type AiProviderCallResult = {
   provider: AiProviderConnection
   content: string
+  toolProposals: AiToolProposal[]
 }
 
 export async function requestAiProviderReply(options: AiProviderCallOptions): Promise<AiProviderCallResult | null> {
@@ -29,7 +33,7 @@ export async function requestAiProviderReply(options: AiProviderCallOptions): Pr
 
   const ragBundle = options.ragIndex
     ? buildRagContextBundle(options.ragIndex, {
-      query: `${options.request} ${summarizeAiIntent(intent)} ${options.selectedCharacter.display_name} ${options.recipe?.recipe_mode ?? ''}`,
+      query: `${options.request} ${summarizeAiIntent(intent)} ${options.selectedCharacter.display_name} ${options.recipe?.recipe_mode ?? ''} ${options.activitySnapshot ? summarizeAiActivitySnapshot(options.activitySnapshot) : ''}`,
       purpose: 'generation_prompt',
       limit: 5,
     })
@@ -63,6 +67,7 @@ export async function requestAiProviderReply(options: AiProviderCallOptions): Pr
             `Intent: ${summarizeAiIntent(intent)}`,
             `Character: ${options.selectedCharacter.display_name} (${options.selectedCharacter.character_id})`,
             `Recipe: ${options.recipe?.character_id ?? 'none'} / ${options.recipe?.recipe_mode ?? 'none'} / ${options.recipe?.source_family ?? 'none'}`,
+            options.activitySnapshot ? `Live activity snapshot:\n${JSON.stringify(options.activitySnapshot, null, 2)}` : 'Live activity snapshot: unavailable.',
             ragBundle?.context_text ? `Context:\n${ragBundle.context_text}` : 'Context: no RAG context loaded.',
           ].join('\n\n'),
         },
@@ -76,5 +81,53 @@ export async function requestAiProviderReply(options: AiProviderCallOptions): Pr
   return {
     provider,
     content: payload.content?.trim() || 'Provider returned an empty response.',
+    toolProposals: parseProviderToolProposals((payload as { tool_proposals?: unknown }).tool_proposals ?? extractToolProposalJson(payload.content ?? '')),
   }
+}
+
+export function parseProviderToolProposals(value: unknown): AiToolProposal[] {
+  if (!Array.isArray(value)) return []
+  return value.flatMap((item, index) => {
+    if (!item || typeof item !== 'object') return []
+    const candidate = item as { tool_id?: unknown; input?: unknown }
+    if (typeof candidate.tool_id !== 'string') return []
+    const definition = aiToolRegistry.find((tool) => tool.tool_id === candidate.tool_id)
+    if (!definition) return []
+    const input = candidate.input && typeof candidate.input === 'object' && !Array.isArray(candidate.input)
+      ? candidate.input as Record<string, unknown>
+      : {}
+    if (!matchesSchema(input, definition.input_schema)) return []
+    return [{
+      proposal_id: `provider_tool_${Date.now()}_${index}`,
+      tool_id: definition.tool_id,
+      label: definition.label,
+      permission_scope: definition.permission_scope,
+      input,
+      status: 'pending' as const,
+    }]
+  })
+}
+
+function extractToolProposalJson(content: string) {
+  const match = content.match(/```(?:json)?\s*([\s\S]*?)```/i)
+  const raw = match?.[1] ?? content
+  try {
+    const parsed = JSON.parse(raw)
+    return Array.isArray(parsed) ? parsed : (parsed && typeof parsed === 'object' ? (parsed as { tool_proposals?: unknown }).tool_proposals : null)
+  } catch {
+    return null
+  }
+}
+
+function matchesSchema(input: Record<string, unknown>, schema: { properties?: Record<string, { enum?: string[] }>; required?: string[]; additionalProperties?: boolean }) {
+  for (const key of schema.required ?? []) {
+    if (!(key in input)) return false
+  }
+  const properties = schema.properties ?? {}
+  if (schema.additionalProperties === false && Object.keys(input).some((key) => !(key in properties))) return false
+  return Object.entries(input).every(([key, value]) => {
+    const field = properties[key]
+    if (!field?.enum) return true
+    return typeof value === 'string' && field.enum.includes(value)
+  })
 }

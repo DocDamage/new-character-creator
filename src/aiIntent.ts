@@ -1,7 +1,7 @@
 import type { AnimationName, PartLabel } from './types.ts'
 
 export type AiRequestIntent = {
-  actions: Array<'plan' | 'segment' | 'generate' | 'export' | 'review' | 'rag_search' | 'cleanup'>
+  actions: Array<'plan' | 'segment' | 'generate' | 'export' | 'review' | 'rag_search' | 'cleanup' | 'inspect' | 'compatibility' | 'audit' | 'bridge_setup' | 'source_ingestion'>
   providerHint?: 'openai' | 'anthropic' | 'google' | 'mistral' | 'groq' | 'openrouter' | 'ollama' | 'lm_studio' | 'pixellab' | 'local'
   outputFormat?: 'aseprite_reference' | 'generation_manifest' | 'full_package'
   animations: AnimationName[]
@@ -39,6 +39,11 @@ export function parseAiRequestIntent(request: string): AiRequestIntent {
   if (/\b(review|validate|qa|check|approve)\b/.test(normalized)) actions.add('review')
   if (/\b(rag|cite|context|docs?)\b/.test(normalized)) actions.add('rag_search')
   if (/\b(cleanup|clean up|polish|fix)\b/.test(normalized)) actions.add('cleanup')
+  if (/\b(inspect|summarize|current recipe|selected character|recipe|what am i|right now|current work|doing now)\b/.test(normalized)) actions.add('inspect')
+  if (/\b(lpc|compatib|alignment|align|layer order|layering|layer)\b/.test(normalized)) actions.add('compatibility')
+  if (/\b(audit|matrix|exhaustive|every combination|render matrix)\b/.test(normalized)) actions.add('audit')
+  if (/\b(hook up|hooking up|connect|configure|setup|bridge)\b/.test(normalized)) actions.add('bridge_setup')
+  if (/\b(scan pc|pc assets|web rag|fetch web|download sources|source ingestion|feed (the )?rag)\b/.test(normalized)) actions.add('source_ingestion')
   if (actions.size === 0) actions.add('plan')
 
   return {

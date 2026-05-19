@@ -302,15 +302,38 @@ async function handleRagToolRequest(req: IncomingMessage, res: ServerResponse, a
   const action = typeof (body as { action?: unknown }).action === 'string' ? (body as { action: string }).action : 'load'
   const outputPath = path.resolve(appRoot, 'data', 'rag', 'knowledge_index.json')
   try {
-    if (action === 'rebuild' || !fs.existsSync(outputPath)) {
-      const result = spawnSync(process.execPath, ['tools/build-rag-index.js'], {
-        cwd: appRoot,
-        encoding: 'utf8',
-        timeout: 120_000,
+    if (action === 'scan-pc') {
+      runNodeTool(appRoot, ['tools/scan-pc-rag-assets.js'], 180_000)
+      runNodeTool(appRoot, ['tools/build-rag-index.js'], 120_000)
+    } else if (action === 'fetch-web') {
+      runNodeTool(appRoot, ['tools/fetch-rag-web-sources.js'], 180_000)
+      runNodeTool(appRoot, ['tools/build-rag-index.js'], 120_000)
+    } else if (action === 'render-matrix-audit') {
+      runNodeTool(appRoot, ['tools/audit-lpc-render-matrix.js'], 180_000)
+      if (!fs.existsSync(outputPath)) runNodeTool(appRoot, ['tools/build-rag-index.js'], 120_000)
+    } else if (action === 'search-assets') {
+      const query = typeof body.query === 'string' ? body.query : ''
+      const result = searchLocalAssetInventory(appRoot, query, typeof body.limit === 'number' ? body.limit : 8)
+      await appendToolAuditRecord(path.resolve(appRoot, 'data', 'local-tools', 'audit.jsonl'), {
+        route: '/__local/rag-tools',
+        action,
+        query,
+        result_count: result.length,
       })
-      if (result.status !== 0) {
-        throw new Error((result.stderr || result.stdout || 'RAG build failed.').trim())
-      }
+      sendJson(res, 200, { ok: true, action, message: result.length ? result.join('\n') : 'No matching local asset inventory entries found.' })
+      return
+    } else if (action === 'project-check') {
+      const check = typeof body.check === 'string' ? body.check : 'lint'
+      const message = runProjectCheck(appRoot, check)
+      await appendToolAuditRecord(path.resolve(appRoot, 'data', 'local-tools', 'audit.jsonl'), {
+        route: '/__local/rag-tools',
+        action,
+        check,
+      })
+      sendJson(res, 200, { ok: true, action, message })
+      return
+    } else if (action === 'rebuild' || action === 'build-index' || !fs.existsSync(outputPath)) {
+      runNodeTool(appRoot, ['tools/build-rag-index.js'], 120_000)
     }
     const index = JSON.parse(fs.readFileSync(outputPath, 'utf8'))
     await appendToolAuditRecord(path.resolve(appRoot, 'data', 'local-tools', 'audit.jsonl'), {
@@ -318,10 +341,63 @@ async function handleRagToolRequest(req: IncomingMessage, res: ServerResponse, a
       action,
       chunk_count: index.chunk_count ?? null,
     })
-    sendJson(res, 200, { ok: true, action, index })
+    sendJson(res, 200, { ok: true, action, index, message: describeRagToolResult(action, index) })
   } catch (error) {
     sendJson(res, 400, { error: error instanceof Error ? error.message : String(error) })
   }
+}
+
+function searchLocalAssetInventory(appRoot: string, query: string, limit: number) {
+  const inventoryPath = path.resolve(appRoot, 'docs', 'rag-sources', 'private', 'pc-asset-inventory.md')
+  if (!fs.existsSync(inventoryPath)) return []
+  const terms = query.toLowerCase().split(/[^a-z0-9]+/).filter((term) => term.length >= 3 && !['asset', 'assets', 'search', 'find', 'look'].includes(term))
+  if (terms.length === 0) return []
+  return fs.readFileSync(inventoryPath, 'utf8')
+    .split(/\r?\n/)
+    .filter((line) => line.startsWith('- ') && terms.some((term) => line.toLowerCase().includes(term)))
+    .slice(0, Math.max(1, Math.min(25, limit)))
+}
+
+function runProjectCheck(appRoot: string, check: string) {
+  if (check === 'source_hygiene') {
+    runNodeTool(appRoot, ['tools/check-source-hygiene.js'], 120_000)
+    return 'Source hygiene check passed.'
+  }
+  if (check === 'rag_hosted_check') {
+    runNodeTool(appRoot, ['tools/check-hosted-rag-index.js'], 120_000)
+    return 'Hosted RAG index check passed.'
+  }
+  if (check === 'ai_tools_tests') {
+    runNodeTool(appRoot, ['--test', 'tests/tools/ai-agent.test.mjs', 'tests/tools/ai-activity-context.test.mjs', 'tests/tools/ai-provider-client.test.mjs'], 120_000)
+    return 'AI tool/context tests passed.'
+  }
+  if (check === 'release_build') {
+    runNodeTool(appRoot, [path.resolve(appRoot, 'node_modules', 'typescript', 'bin', 'tsc'), '-b'], 180_000)
+    runNodeTool(appRoot, [path.resolve(appRoot, 'node_modules', 'vite', 'bin', 'vite.js'), 'build', '--mode', 'release'], 180_000)
+    return 'Release build passed.'
+  }
+  runNodeTool(appRoot, [path.resolve(appRoot, 'node_modules', 'eslint', 'bin', 'eslint.js'), '.'], 120_000)
+  return 'Lint passed.'
+}
+
+function runNodeTool(appRoot: string, args: string[], timeout: number) {
+  const result = spawnSync(process.execPath, args, {
+    cwd: appRoot,
+    encoding: 'utf8',
+    timeout,
+  })
+  if (result.status !== 0) {
+    throw new Error((result.stderr || result.stdout || `${args[0]} failed.`).trim())
+  }
+}
+
+function describeRagToolResult(action: string, index: { chunk_count?: unknown; document_count?: unknown }) {
+  const documentCount = typeof index.document_count === 'number' ? index.document_count : 0
+  const chunkCount = typeof index.chunk_count === 'number' ? index.chunk_count : 0
+  if (action === 'scan-pc') return `PC asset scan completed and rebuilt RAG with ${chunkCount} chunk(s) from ${documentCount} source document(s).`
+  if (action === 'fetch-web') return `Web RAG source fetch completed and rebuilt RAG with ${chunkCount} chunk(s) from ${documentCount} source document(s).`
+  if (action === 'render-matrix-audit') return 'LPC render matrix audit completed.'
+  return `RAG index ready with ${chunkCount} chunk(s) from ${documentCount} source document(s).`
 }
 
 async function handleAsepriteBridgeRequest(req: IncomingMessage, res: ServerResponse, appRoot: string) {

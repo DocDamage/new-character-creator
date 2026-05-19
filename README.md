@@ -17,6 +17,12 @@ npm install
 npm run dev -- --host 127.0.0.1 --port 8002 --strictPort
 ```
 
+For Windows automation, launch Vite through Node instead of PowerShell `Start-Process` plus `npm`:
+
+```bash
+node tools/local-vite-server.js dev --host 127.0.0.1 --port 8002 --strictPort
+```
+
 Open:
 
 ```text
@@ -124,9 +130,9 @@ Placeholder APES fallback is only for development. If it is enabled, release exp
 
 ## AI And RAG
 
-Run `npm run rag:index` to build the AI knowledge indexes, or `npm run rag:evaluate` to rebuild them and score the regression query set. The command writes the full local index to `data/rag/knowledge_index.json` and a public-safe hosted index to `public/data/rag/knowledge_index.json`, so AI Studio's `Activate RAG` button works in both local-tools previews and static hosted builds. APES Lab and AI Studio use that index to attach project, APES, LPC, provider, license, Duelyst, and release-review context to generation jobs and chat replies. Generated output remains blocked from release until reviewed.
+Run `npm run rag:index` to build the AI knowledge indexes, or `npm run rag:evaluate` to rebuild them and score the regression query set. The command writes the full local index to `data/rag/knowledge_index.json` and a public-safe hosted index to `public/data/rag/knowledge_index.json`, so AI Studio's `Activate RAG` button works in both local-tools previews and static hosted builds. APES Lab and AI Studio use that index to attach project, APES, LPC, provider, license, Duelyst, and release-review context to generation jobs and chat replies. `npm run rag:hosted-check` validates the GitHub Pages index before publishing. Generated output remains blocked from release until reviewed.
 
-AI Studio can propose tool actions, but privileged work is approval-gated. Direct provider calls are routed through a trusted loopback proxy or backend; browser-entered provider secrets are held only in volatile memory and are never written to localStorage, sessionStorage, exports, generated manifests, logs, release bundles, or git. Settings includes one-click defaults and live checks for Aseprite, PixelLab, and local LLM loopback bridges.
+AI Studio can answer questions about the current work from a compact live activity snapshot: active screen, selected character, frame geometry, layer, recipe readiness, release blockers, RAG mode, tool status, warnings, recent activity, and recent tool results. It can propose tool actions, but privileged work is approval-gated. Provider-suggested tools are schema-validated before they become approval cards. Direct provider calls are routed through a trusted loopback proxy or backend; browser-entered provider secrets are held only in volatile memory and are never written to localStorage, sessionStorage, exports, generated manifests, logs, release bundles, or git. Settings includes one-click defaults and live checks for Aseprite, PixelLab, and local LLM loopback bridges.
 
 ### 7. Handle Missing Animations
 
@@ -182,7 +188,7 @@ Use this on your own machine when APES, Duelyst, LPC, repair, or reindex actions
 
 ```powershell
 npm run build:local-tools
-npm run preview -- --host 127.0.0.1 --port 4173 --strictPort
+node tools/local-vite-server.js preview --host 127.0.0.1 --port 4173 --strictPort
 ```
 
 Local tool POST requests require:
@@ -217,6 +223,7 @@ It runs:
 - secret scanning
 - license audit generation
 - RAG evaluation
+- hosted RAG validation
 - tool tests
 - release build
 - release package validation
@@ -249,6 +256,7 @@ npm run production:check
 npm run security:scan
 npm run license:audit
 npm run rag:evaluate
+npm run rag:hosted-check
 npm run test:performance
 npm run test:memory
 npm run test:browser
@@ -263,6 +271,10 @@ Asset and APES commands:
 npm run index:assets
 npm run lpc:inventory
 npm run lpc:catalog
+npm run rag:index
+npm run rag:scan-pc
+npm run rag:fetch-web
+npm run rag:hosted-check
 npm run duelyst:private-manifest -- --stage-count 64
 npm run qa:apes-harness
 npm run apes:prepare-finetune
@@ -390,7 +402,7 @@ or:
 
 ```powershell
 npm run build:local-tools
-npm run preview -- --host 127.0.0.1 --port 4173 --strictPort
+node tools/local-vite-server.js preview --host 127.0.0.1 --port 4173 --strictPort
 ```
 
 ### Release export is blocked
@@ -427,10 +439,11 @@ Latest certified commit:
 Verified gates:
 
 - `npm run production:check`: green
-- `npm run test:tools`: 80 tests
-- `npm run test:browser`: 21 Chromium tests
+- `npm run test:tools`: 121 tests
+- `npm run test:browser`: 23 Chromium tests
 - `npm run test:memory`: green
 - `npm run security:scan`: green
 - `npm run license:audit`: 655 covered LPC catalog entries, 0 missing
 - `npm run rag:evaluate`: 3/3 evaluation queries passed
+- `npm run rag:hosted-check`: green public-safe GitHub Pages index
 - GitHub Actions will run the production gate and security workflow after this branch is pushed.

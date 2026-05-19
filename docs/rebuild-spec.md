@@ -42,7 +42,10 @@ npm run release:check
 npm run production:check
 npm run security:scan
 npm run license:audit
+npm run rag:hosted-check
 npm run rag:evaluate
+npm run rag:scan-pc
+npm run rag:fetch-web
 npm run test:tools
 npm run test:browser
 npm run test:performance
@@ -61,6 +64,7 @@ npm run lpc:inventory
 npm run lpc:catalog
 npm run rag:index
 npm run rag:evaluate
+npm run rag:hosted-check
 npm run export:character
 npm run duelyst:private-manifest -- --stage-count 64
 npm run qa:apes-harness
@@ -491,6 +495,12 @@ source citations or required terms are missing.
 - `data/rag/knowledge_index.json`: full local index for local-tools sessions.
 - `public/data/rag/knowledge_index.json`: public-safe hosted index for the static app's `Activate RAG` flow.
 
+The hosted index must be validated by `npm run rag:hosted-check` before any
+GitHub Pages release. The check must fail when the public index is missing,
+empty, malformed, stale, or generated with an incompatible Vite base path.
+GitHub Pages can load and search only this public-safe index; PC scans, web
+fetches, and full-index rebuilds remain local-only or CI-time actions.
+
 AI Studio messages:
 
 - Chat transcript supports user and assistant messages.
@@ -499,6 +509,19 @@ AI Studio messages:
 - Tool proposals must show input, permission scope, status, and result/failure.
 - Tool proposals execute only after explicit user approval.
 - AI Studio must be able to activate RAG from the UI. Hosted builds load the public index; local-tools builds may load or rebuild the full local index.
+- Provider-suggested tool calls must be parsed from structured payloads or JSON
+  snippets, validated against the registered tool schema, deduplicated with
+  deterministic fallback proposals, and then shown as normal approval cards.
+- The assistant must receive a compact live activity snapshot covering current
+  screen, source pack, selected character, borrowed motion source, animation,
+  direction, frame index, source rectangle, canvas size, frame geometry, selected
+  layer, selected part/source part, recipe readiness, selected layers, export
+  targets, generation blockers, missing-animation queue, RAG source mode, local
+  tool capabilities, bridge status, warnings, recent activity, and recent tool
+  history.
+- AI Studio must provide a visible "ask about blockers" style affordance when
+  live context includes warnings. That action may prefill chat but must not run
+  privileged tools.
 
 Generation jobs must:
 
@@ -513,9 +536,22 @@ Tool registry:
 
 - Tools have IDs, labels, permission scopes, and JSON-like input schemas.
 - Required first-class tool proposals include APES job creation, PixelLab
-  generation queueing, RAG activation, and export handoff.
+  generation queueing, RAG activation, RAG search, current recipe inspection,
+  live-context inspection, export blocker explanation, layer-stack inspection,
+  sprite-alignment diagnosis, next-action suggestion, asset search, panel
+  navigation, current-frame/base comparison, recipe validation, generation
+  prompt preparation, RAG source inspection, project checks, LPC compatibility
+  checks, LPC render-matrix audits, bridge configuration, PC asset scanning,
+  web source fetching, and export handoff.
+- Tool permission scopes must distinguish static-safe reads, local tools,
+  knowledge mutations, generation queues, and downloads.
+- Static-safe tools must work on GitHub Pages using already-loaded app state or
+  the hosted RAG index. Local-only tools must require loopback local middleware
+  and explicit approval.
 - Rejected or failed tools must leave visible recovery text.
 - Settings must expose default-and-check controls for Aseprite, PixelLab, and local LLM loopback connections so those tools can be made available to AI Studio on request.
+- Generation prompt tools must support PixelLab, APES, Aseprite, LPC, and
+  Duelyst profiles while preserving review-gate language.
 
 Training inbox drafts and approved records must preserve source kind, source names, goal, animation, directions, frame layout, frame size, export profile, source-family compatibility, validation findings, review state, and provenance.
 
@@ -1473,9 +1509,11 @@ The original file layout is a useful decomposition target. A rewrite does not ne
 - `animationSource`: compatible motion-source selection and recipe animation coverage.
 - `aiContext`: prompt/query construction for RAG.
 - `aiAgent`: provider routing, RAG citation packing, tool proposal creation, and approved tool result application.
+- `aiActivityContext`: compact live activity snapshots for AI Studio, including current screen, frame geometry, source rect, layer, recipe readiness, queues, RAG source mode, tool capabilities, bridge status, warnings, recent activity, and tool history.
+- `aiProviderClient`: local-proxy provider calls, live-context prompt packing, provider tool proposal parsing, and schema validation.
 - `aiOutputIntake`: generated output import and validation if implemented.
 - `aiSecretVault`: volatile secret storage, redaction, and safe provider config serialization.
-- `aiToolRegistry`: app tool definitions with permission scopes.
+- `aiToolRegistry`: app tool definitions with permission scopes. Static-safe tools cover hosted RAG search, current recipe inspection, and LPC compatibility checks. Local-only tools cover APES jobs, bridge setup, RAG source ingestion, and render matrix audits behind explicit approvals.
 - `aiToolSchemas`: JSON-like schemas for AI tool inputs and outputs.
 - `apesReportValidation`: strict APES JSON validation.
 - `creatorCockpit`: export target profiles, recipe readiness, reviewed-part filtering.
@@ -1501,6 +1539,7 @@ The original file layout is a useful decomposition target. A rewrite does not ne
 - `partAssetStore`: IndexedDB image/mask storage.
 - `performanceBudget`: shared load/search/render/export/cache budget constants.
 - `ragIndex`: local search and context bundle builder.
+- `ragHealth`: validates the public-safe hosted RAG index used by GitHub Pages and powers `npm run rag:hosted-check`.
 - `sourceAnalysis`: alpha bounds, floor, pivot analysis for source images.
 - `sourceFamilyRegistry`: mode/source-family compatibility matrix.
 - `trainingLibrary`: draft classification, approval, export/train eligibility.
@@ -1514,6 +1553,8 @@ The original file layout is a useful decomposition target. A rewrite does not ne
 - `tools/build-lpc-catalog.js`: build catalog from upstream LPC definitions and preserve license coverage metadata.
 - `tools/build-rag-index.js`: build knowledge index with stable chunk IDs, content hashes, trust levels, and license tags.
 - `tools/evaluate-rag-index.js`: score RAG regression queries for citation and term coverage.
+- `tools/check-hosted-rag-index.js`: validate the GitHub Pages public-safe index before release.
+- `tools/localViteLauncher.js`, `tools/local-vite-server.js`, and `tools/build-and-preview.js`: start Vite dev/preview and browser-test web servers through direct Node/Vite entrypoints instead of PowerShell, npm, or npx shims.
 - `tools/export-character.js`: create checked release export inputs.
 - `tools/build-duelyst-private-manifest.js`: inspect unitypackage and stage candidate frames.
 - `tools/localToolsServer.ts`: Vite middleware for private local routes.
@@ -1963,8 +2004,8 @@ Use production preview for browser regression where possible:
 
 ```powershell
 npm run build
-npx vite preview --host 127.0.0.1 --port 4173 --strictPort
-npx playwright test
+node tools/local-vite-server.js preview --host 127.0.0.1 --port 4173 --strictPort
+node node_modules/@playwright/test/cli.js test
 ```
 
 Required UI tests:

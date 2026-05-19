@@ -174,6 +174,14 @@ The public index is intentionally narrower than the local index.
 
 Public source specs include curated docs and public manifests only. Optional private, visual, and office folders are not included in the public source list by default.
 
+GitHub Pages loads only the public-safe hosted index at:
+
+```txt
+public/data/rag/knowledge_index.json
+```
+
+Static hosted builds can search that file, but they cannot create it. Run `npm run rag:index` after local PC scans or web fetches, then run `npm run rag:hosted-check` before publishing. The hosted check fails when the public index is missing, empty, malformed, or stale.
+
 ## Build Commands
 
 Build the local and public indexes:
@@ -234,6 +242,18 @@ Evaluate RAG quality:
 ```bash
 npm run rag:evaluate
 ```
+
+Validate the GitHub Pages hosted index:
+
+```bash
+npm run rag:hosted-check
+```
+
+AI Studio exposes source ingestion as approval-gated local-only tool proposals:
+
+- `scan_pc_rag_assets` runs the local PC asset scanner, deduplicates candidates, and rebuilds RAG.
+- `fetch_web_rag_sources` fetches curated public web references and rebuilds RAG.
+- `rag_search` is static-safe and can search the already-loaded hosted index with citations on GitHub Pages.
 
 Run the tool tests:
 

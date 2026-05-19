@@ -15,6 +15,7 @@
     "rag:fetch-web": "node tools/fetch-rag-web-sources.js",
     "rag:scan-pc": "node tools/scan-pc-rag-assets.js",
     "rag:evaluate": "npm run rag:index && node tools/evaluate-rag-index.js",
+    "rag:hosted-check": "node tools/check-hosted-rag-index.js",
     "export:character": "node tools/export-character.js",
     "duelyst:private-manifest": "node tools/build-duelyst-private-manifest.js",
     "duelyst:public-manifest": "node tools/build-duelyst-public-manifest.js",
@@ -41,7 +42,7 @@
     "build:release": "tsc -b && vite build --mode release",
     "build:local-tools": "tsc -b && vite build --mode local-tools",
     "release:check": "npm run lint && npm run check:source-hygiene && npm run test:tools && npm run build:release && npm run validate:release-package && npm run test:preview-tools && npm run test:browser",
-    "production:check": "npm run lint && npm run check:source-hygiene && npm run security:scan && npm run license:audit && npm run rag:evaluate && npm run test:tools && npm run build:release && npm run validate:release-package && npm run test:preview-tools && npm run test:browser",
+    "production:check": "npm run lint && npm run check:source-hygiene && npm run security:scan && npm run license:audit && npm run rag:evaluate && npm run rag:hosted-check && npm run test:tools && npm run build:release && npm run validate:release-package && npm run test:preview-tools && npm run test:browser",
     "lint": "eslint .",
     "preview": "vite preview"
   },

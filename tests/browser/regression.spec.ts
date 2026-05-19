@@ -78,6 +78,21 @@ test.beforeEach(async ({ page }) => {
   expect(startupConsoleErrors, 'startup should not emit console errors').toEqual([])
 })
 
+test('AI Studio exposes live context and approval-gated assistant tools', async ({ page }) => {
+  await page.getByTestId('nav-ai').click()
+  await expect(page.getByText('Live context')).toBeVisible()
+  await expect(page.getByText(/RAG brain/i)).toBeVisible()
+
+  await page.getByTestId('ai-chat-input').fill('what am i doing right now and what should i do next')
+  await page.getByTestId('ai-chat-send').click()
+
+  const inspectCard = page.locator('.tool-approval-card').filter({ hasText: 'Inspect live context' }).first()
+  await expect(inspectCard).toBeVisible()
+  await expect(page.locator('.tool-approval-card').filter({ hasText: 'Suggest next action' }).first()).toBeVisible()
+  await inspectCard.getByRole('button', { name: 'Approve' }).click()
+  await expect(inspectCard).toContainText(/Live context|warnings|Recent/i)
+})
+
 test('manual cleanup save persists after reload', async ({ page }) => {
   await page.getByTestId('nav-workstation').click()
   await page.getByRole('button', { name: 'Pause' }).click()
@@ -697,7 +712,7 @@ test('AI Studio chat and provider vault are surfaced without persisting secrets'
   await page.getByTestId('ai-chat-send').click()
   await expect(page.getByTestId('ai-chat-log')).toContainText('Draft a cleanup plan')
   await expect(page.getByTestId('ai-chat-log')).toContainText('Recommended next actions')
-  await expect(page.getByTestId('ai-chat-log')).toContainText('Activate RAG')
+  await expect(page.getByTestId('ai-chat-log')).toContainText('Search RAG')
 
   await page.getByRole('button', { name: 'Open Settings' }).click()
   await expect(page.getByTestId('ai-provider-vault')).toBeVisible()

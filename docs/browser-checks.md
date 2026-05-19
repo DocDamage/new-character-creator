@@ -11,6 +11,15 @@ npm run build:local-tools
 npm run preview -- --host 127.0.0.1 --port 4173 --strictPort
 ```
 
+For Codex/automation on Windows, do not start Vite through PowerShell `Start-Process` with `npm`.
+That can resolve the PowerShell npm shim and open a `.ps1` file instead of running the server.
+Use the direct Node launcher instead:
+
+```bash
+node tools/local-vite-server.js dev --host 127.0.0.1 --port 8002 --strictPort
+node tools/local-vite-server.js preview --host 127.0.0.1 --port 4173 --strictPort
+```
+
 Open `http://127.0.0.1:8002/`.
 
 If you want the automated smoke pass instead of stepping through the UI manually, run:
@@ -19,10 +28,10 @@ If you want the automated smoke pass instead of stepping through the UI manually
 npm run test:browser
 ```
 
-That harness covers export/package downloads, standalone Godot SpriteFrames resources, credits/provenance report export, manual mask save persistence, recipe save/load, creator cockpit filtering/export-target persistence, Part Library bulk review actions, fake APES-part prevention, APES QA harness generation/import, APES fine-tune prep and Duelyst job-batch queueing, APES local-output image/mask package assets, Duelyst audit behavior, LPC inventory browse/select/label/import, LPC source picker canonical animations and compatible sheet parts, catalog-backed LPC selections, rendered-frame export, upstream credit readiness, right-click LPC source details, missing-animation queue visibility, oversize/custom-animation warnings, placeholder-mode manifest provenance, paged large Part Library imports, page-scoped visible export/review actions, and the portable local setup bundle download from `Settings`.
+That harness covers export/package downloads, standalone Godot SpriteFrames resources, credits/provenance report export, manual mask save persistence, recipe save/load, creator cockpit filtering/export-target persistence, Part Library bulk review actions, fake APES-part prevention, APES QA harness generation/import, APES fine-tune prep and Duelyst job-batch queueing, APES local-output image/mask package assets, Duelyst audit behavior, LPC inventory browse/select/label/import, LPC source picker canonical animations and compatible sheet parts, catalog-backed LPC selections, rendered-frame export, upstream credit readiness, right-click LPC source details, missing-animation queue visibility, oversize/custom-animation warnings, placeholder-mode manifest provenance, paged large Part Library imports, page-scoped visible export/review actions, AI Studio live-context/tool approvals, and the portable local setup bundle download from `Settings`.
 
 - APES Lab shows AI Knowledge/RAG status and generation jobs include cited context when a local index is available.
-- AI Studio shows provider/RAG/tool status, chat replies, RAG citations when loaded, and approval-gated tool proposal cards.
+- AI Studio shows provider/RAG/tool status, live context, chat replies, RAG citations when loaded, and approval-gated tool proposal cards.
 - Settings shows volatile secret count, local proxy status, bridge health actions, and the production check command.
 - Asset Audit shows license readiness, missing-license counts, and blocked release findings.
 
@@ -59,7 +68,7 @@ Latest verified automated run:
 - `npm run test:browser:all` optional cross-browser coverage, previously 54 Chromium/Firefox/WebKit tests
 - `npm run test:private-assets` optional/private-machine only
 - latest local LPC render matrix audit checked 16,117,644 catalog resolver records, 94,492 unique source geometries, and reported 0 source/destination geometry issues
-- latest production gate passed with lint, source hygiene, secret scan, license audit, RAG evaluation, 80 tool tests, public release build/package validation, tokenized preview local-tool smoke, and 21 Chromium browser tests
+- latest production gate passed with lint, source hygiene, secret scan, license audit, RAG evaluation, hosted RAG validation, 121 tool tests, public release build/package validation, tokenized preview local-tool smoke, and 23 Chromium browser tests
 
 Latest verified local app state:
 

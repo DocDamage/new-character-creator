@@ -56,7 +56,9 @@ import { buildGenerationManifest } from './generationManifest'
 import { buildGenerationJobsHandoffPayload, createGenerationJobsFromMissingAnimationQueue, generationJobBlocksRelease } from './generationJobs'
 import { buildAiGenerationContextQuery } from './aiContext'
 import { createAiSecretVault } from './aiSecretVault'
+import { buildAiActivitySnapshot } from './aiActivityContext'
 import { buildRagContextBundle } from './ragIndex'
+import { describeRagIndexHealth, validateHostedRagIndex } from './ragHealth'
 import { layerBundleToExtractedParts, lpcSheetsToExtractedParts, parseLayerBundleManifest, type LpcSheetImportOptions } from './layerBundle'
 import { localToolFetch, localToolPath, publicAssetPath } from './localToolsClient'
 import { canUseLpcPartForAnimation, getCharacterLabelValue, isLpcExtractedPart, isLpcMannequin, isLpcPartSourceForLayer, isLpcSourceCharacterId, isPartCompatibleWithMannequin } from './lpcPartCompatibility'
@@ -416,6 +418,7 @@ function App() {
   const [duelystApesJobBatch, setDuelystApesJobBatch] = useState<DuelystApesJobBatch | null>(null)
   const [apesHarnessGeneratedAt, setApesHarnessGeneratedAt] = useState(() => loadStoredString(apesHarnessGeneratedAtStorageKey))
   const [localToolsAvailable, setLocalToolsAvailable] = useState(false)
+  const [recentActivity, setRecentActivity] = useState<string[]>([])
   const [variationPresets, setVariationPresets] = useState<VariationPreset[]>(loadStoredVariationPresets)
   const [activeVariationPresetId, setActiveVariationPresetId] = useState('')
   const [filenameTemplate, setFilenameTemplate] = useState(() => loadStoredString(filenameTemplateStorageKey, defaultFilenameTemplate))
@@ -583,9 +586,12 @@ function App() {
       .then(async (response) => {
         if (!response.ok) return
         const payload = await response.json() as RagIndex
-        if (payload?.format === 'pixel_creator_rag_index') {
+        const health = validateHostedRagIndex(payload)
+        if (health.ready && payload?.format === 'pixel_creator_rag_index') {
           setRagIndex(payload)
-          setRagStatus(`RAG index loaded with ${payload.chunk_count} knowledge chunk(s).`)
+          setRagStatus(describeRagIndexHealth(health))
+        } else if (health.severity === 'error') {
+          setRagStatus(describeRagIndexHealth(health))
         }
       })
       .catch(() => {})
@@ -615,9 +621,10 @@ function App() {
       const response = await fetch(publicAssetPath('data/rag/knowledge_index.json'), { cache: 'no-store' })
       if (!response.ok) throw new Error('Hosted RAG index is not available.')
       const payload = await response.json() as RagIndex
-      if (payload?.format !== 'pixel_creator_rag_index') throw new Error('Hosted RAG index has an unexpected format.')
+      const health = validateHostedRagIndex(payload)
+      if (!health.ready || payload?.format !== 'pixel_creator_rag_index') throw new Error(describeRagIndexHealth(health))
       setRagIndex(payload)
-      setRagStatus(`RAG active with ${payload.chunk_count} knowledge chunk(s) from hosted data.`)
+      setRagStatus(`RAG active from hosted data. ${describeRagIndexHealth(health)}`)
     } catch (error) {
       setRagStatus(`RAG activation failed: ${error instanceof Error ? error.message : String(error)}`)
     }
@@ -787,6 +794,33 @@ function App() {
       : [],
     [exportTargetProfile, generationJobs, recipe, selectedCharacter],
   )
+  const currentMissingAnimationQueue = useMemo(() => {
+    if (!lpcCatalog || !recipe || !selectedCharacter || recipeMode !== 'lpc_character') return null
+    try {
+      const consumedItemIds = new Set(
+        generationJobs
+          .filter((job) => (
+            job.recipe_id === recipe.character_id &&
+            job.character_id === selectedCharacter.character_id &&
+            job.target_profile === exportTargetProfile
+          ))
+          .flatMap((job) => job.source_queue_item_ids),
+      )
+      return filterMissingAnimationQueue(
+        buildMissingAnimationQueue({
+          catalog: lpcCatalog,
+          recipe,
+          bodyType: inferLpcBodyTypeForCharacter(selectedCharacter),
+          animations: apesAnimations.length > 0 ? apesAnimations : selectedCharacter.animation_names,
+          directions: apesDirections.length > 0 ? apesDirections : availableDirections,
+          frameRange: apesFrameRange,
+        }),
+        consumedItemIds,
+      )
+    } catch {
+      return null
+    }
+  }, [apesAnimations, apesDirections, apesFrameRange, availableDirections, exportTargetProfile, generationJobs, lpcCatalog, recipe, recipeMode, selectedCharacter])
   const previewLibraryPartOptions = useMemo(
     () => partLibrary
       .filter((part) => part.label === selectedRegion && isPartCompatibleWithMannequin(part, selectedCharacter))
@@ -812,6 +846,119 @@ function App() {
         canUseLpcPartForAnimation(previewSelectedSourceCharacter, selectedRegion, animation)
       ? `source:${selectedParts[selectedRegion]}`
       : ''
+
+  useEffect(() => {
+    if (!selectedCharacter) return
+    const nextEntry = `${screenLabel(screen)}: ${selectedCharacter.display_name}, ${animation}/${direction}, layer ${selectedRegion}`
+    setRecentActivity((current) => current[0] === nextEntry ? current : [nextEntry, ...current].slice(0, 8))
+  }, [animation, direction, screen, selectedCharacter, selectedRegion])
+
+  const aiToolHistory = useMemo(() => aiStudioMessages
+    .flatMap((message) => message.tool_proposals ?? [])
+    .filter((proposal) => proposal.status !== 'pending')
+    .slice(-8)
+    .map((proposal) => ({
+      tool_id: proposal.tool_id,
+      status: proposal.status,
+      result: proposal.result ?? '',
+    })), [aiStudioMessages])
+
+  const aiActivitySnapshot = useMemo(() => selectedCharacter ? buildAiActivitySnapshot({
+    screen,
+    screenLabel: screenLabel(screen),
+    sourcePackFilter,
+    recipeMode,
+    selectedCharacter,
+    animationSourceCharacter,
+    currentAnimation: animation,
+    currentDirection: direction,
+    currentFrameIndex: frameIndex,
+    currentFrameCount: frames.length,
+    currentFrameSourceRect: frame?.source_rect ?? null,
+    currentFrameCanvasSize: frameCharacter?.canvas_size ?? selectedCharacter.canvas_size,
+    playing,
+    selectedLayer: selectedRegion,
+    selectedPartId: selectedPartIds[selectedRegion] ?? null,
+    selectedSourcePartId: selectedParts[selectedRegion] ?? null,
+    selectedPartOptionCount: previewLibraryPartOptions.length + previewLpcPartOptions.length,
+    recipe,
+    recipeReadiness,
+    missingAnimationQueueSummary: currentMissingAnimationQueue?.summary ?? null,
+    generationJobCount: generationJobs.length,
+    releaseBlockerCount: currentGenerationReleaseBlockers.length,
+    ragStatus,
+    ragIndex,
+    ragSourceMode: ragIndex ? (localToolsAvailable ? 'local_full' : 'hosted_public') : 'not_loaded',
+    localToolsAvailable,
+    localToolCapabilities: [
+      'scan_pc_rag_assets',
+      'fetch_web_rag_sources',
+      'search_assets',
+      'lint',
+      'source_hygiene',
+      'rag_hosted_check',
+      'ai_tools_tests',
+      'release_build',
+      'lpc_render_matrix_audit',
+    ],
+    lpcPublished: Boolean(lpcInventory),
+    toolStatus: {
+      aseprite: toolConnections.aseprite.enabled ? 'connected' : 'export_package',
+      pixellab: toolConnections.pixellab.enabled ? 'connected' : 'not_connected',
+      local_llm: toolConnections.local_llm.enabled ? 'connected' : 'not_connected',
+    },
+    visibleStatuses: {
+      manifest: manifestStatus === 'ready' ? '' : manifestError || manifestStatus,
+      part_library: partLibraryStatus,
+      apes: apesBridgeStatus,
+      export: exportStatus,
+      lpc: lpcStatus,
+      duelyst: duelystStatus,
+      settings: settingsStatus,
+      persistence: persistenceWarning,
+    },
+    recentActions: recentActivity,
+    toolHistory: aiToolHistory,
+  }) : null, [
+    aiToolHistory,
+    animation,
+    animationSourceCharacter,
+    apesBridgeStatus,
+    currentGenerationReleaseBlockers.length,
+    currentMissingAnimationQueue?.summary,
+    direction,
+    duelystStatus,
+    exportStatus,
+    frame?.source_rect,
+    frameCharacter?.canvas_size,
+    frameIndex,
+    frames.length,
+    generationJobs.length,
+    lpcInventory,
+    lpcStatus,
+    localToolsAvailable,
+    manifestError,
+    manifestStatus,
+    partLibraryStatus,
+    persistenceWarning,
+    playing,
+    previewLibraryPartOptions.length,
+    previewLpcPartOptions.length,
+    ragIndex,
+    ragStatus,
+    recentActivity,
+    recipe,
+    recipeMode,
+    recipeReadiness,
+    screen,
+    selectedCharacter,
+    selectedPartIds,
+    selectedParts,
+    selectedRegion,
+    settingsStatus,
+    sourcePackFilter,
+    toolConnections,
+  ])
 
   function selectPreviewPart(value: string) {
     const [kind, id] = value.split(':', 2)
@@ -2772,12 +2919,14 @@ function App() {
               setMessages={setAiStudioMessages}
               lpcPublished={Boolean(lpcInventory)}
               localToolsAvailable={localToolsAvailable}
+              activitySnapshot={aiActivitySnapshot!}
               createApesJob={createApesJob}
               createGenerationJobsFromQueue={createGenerationJobsFromCurrentMissingQueue}
               downloadGenerationManifest={downloadGenerationManifest}
               openSettings={() => setScreen('settings')}
               openApesLab={() => setScreen('apes')}
               openExports={() => setScreen('exports')}
+              openPanel={(panel) => setScreen(panel)}
               getAiSessionSecret={(providerId) => aiSecretVaultRef.current.get(providerId)}
               activateRag={activateRag}
             />

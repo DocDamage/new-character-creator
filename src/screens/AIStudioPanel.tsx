@@ -1,9 +1,15 @@
 import { useMemo, useState } from 'react'
 import { applyApprovedToolResult, buildAiAgentReply } from '../aiAgent'
 import { requestAiProviderReply } from '../aiProviderClient'
+import { summarizeAiActivitySnapshot, type AiActivitySnapshot } from '../aiActivityContext'
+import type { AiToolProposal } from '../aiToolRegistry'
 import { makeAiStudioMessage } from '../aiWorkspace'
+import { localToolFetch, localToolPath } from '../localToolsClient'
+import { buildRagContextBundle } from '../ragIndex'
 import type { RagIndex } from '../ragTypes'
 import type { AiProviderConnection, AiStudioMessage, CharacterManifest, KitbashRecipe, ToolConnectionSettings } from '../types'
+
+type CreatorPanelId = 'fast' | 'workstation' | 'library' | 'batch' | 'audit' | 'ai' | 'apes' | 'exports' | 'settings'
 
 type AIStudioPanelProps = {
   selectedCharacter: CharacterManifest
@@ -16,12 +22,14 @@ type AIStudioPanelProps = {
   setMessages: (messages: AiStudioMessage[]) => void
   lpcPublished: boolean
   localToolsAvailable: boolean
+  activitySnapshot: AiActivitySnapshot
   createApesJob: () => void
   createGenerationJobsFromQueue: () => void
   downloadGenerationManifest: () => void
   openSettings: () => void
   openApesLab: () => void
   openExports: () => void
+  openPanel: (panel: CreatorPanelId) => void
   getAiSessionSecret: (providerId: string) => string | null
   activateRag: (mode?: 'load' | 'rebuild') => Promise<void>
 }
@@ -37,12 +45,14 @@ export function AIStudioPanel({
   setMessages,
   lpcPublished,
   localToolsAvailable,
+  activitySnapshot,
   createApesJob,
   createGenerationJobsFromQueue,
   downloadGenerationManifest,
   openSettings,
   openApesLab,
   openExports,
+  openPanel,
   getAiSessionSecret,
   activateRag,
 }: AIStudioPanelProps) {
@@ -71,6 +81,7 @@ export function AIStudioPanel({
       tools,
       lpcPublished,
       localToolsAvailable,
+      activitySnapshot,
     })
     const nextMessages = [...messages, userMessage]
     setMessages(nextMessages)
@@ -85,6 +96,7 @@ export function AIStudioPanel({
             ragIndex,
             providers,
             getSessionSecret: getAiSessionSecret,
+            activitySnapshot,
           })
         : null
       setMessages([
@@ -92,10 +104,13 @@ export function AIStudioPanel({
         providerReply
           ? {
               ...fallbackMessage,
+              tool_hints: mergeToolHints(fallbackMessage.tool_hints, providerReply.toolProposals),
+              tool_proposals: mergeToolProposals(fallbackMessage.tool_proposals ?? [], providerReply.toolProposals),
               content: [
                 `Provider reply from ${providerReply.provider.name}:`,
                 '',
                 providerReply.content,
+                providerReply.toolProposals.length ? `\nProvider proposed ${providerReply.toolProposals.length} approval-gated tool call(s). Review them below before anything runs.` : '',
                 '',
                 'Deterministic guardrails:',
                 fallbackMessage.content,
@@ -120,14 +135,121 @@ export function AIStudioPanel({
     }
   }
 
-  function approveTool(messageId: string, proposalId: string, toolId: string) {
-    if (toolId === 'create_apes_job') createApesJob()
-    if (toolId === 'queue_pixellab_generation') createGenerationJobsFromQueue()
-    if (toolId === 'export_handoff') downloadGenerationManifest()
-    if (toolId === 'activate_rag') void activateRag('rebuild')
+  async function approveTool(messageId: string, proposal: AiToolProposal) {
+    let result = 'Approved and sent to the matching app action.'
+    if (proposal.tool_id === 'create_apes_job') createApesJob()
+    if (proposal.tool_id === 'queue_pixellab_generation') createGenerationJobsFromQueue()
+    if (proposal.tool_id === 'export_handoff') downloadGenerationManifest()
+    if (proposal.tool_id === 'activate_rag') {
+      await activateRag(proposal.input.mode === 'load' ? 'load' : 'rebuild')
+      result = 'RAG activation requested.'
+    }
+    if (proposal.tool_id === 'rag_search') {
+      if (!ragIndex) {
+        await activateRag('load')
+        result = 'RAG load requested. Re-approve search after the index is active.'
+      } else {
+        const bundle = buildRagContextBundle(ragIndex, {
+          query: typeof proposal.input.query === 'string' ? proposal.input.query : draft,
+          purpose: 'review_guidance',
+          limit: typeof proposal.input.limit === 'number' ? proposal.input.limit : 5,
+        })
+        result = bundle.citations.length > 0
+          ? `Found ${bundle.citations.length} cited result(s): ${bundle.citations.map((citation) => citation.title).join(', ')}.`
+          : 'No matching RAG citations were found for this request.'
+      }
+    }
+    if (proposal.tool_id === 'inspect_current_recipe') {
+      result = [
+        summarizeAiActivitySnapshot(activitySnapshot),
+        recipe
+          ? `Recipe for ${recipe.character_id} uses ${recipe.layers.length} layer(s), covers ${recipe.animation_coverage.join(', ') || 'no animations'}, and targets ${recipe.export_targets.join(', ') || 'no exports yet'}.`
+        : `Selected character ${selectedCharacter.display_name} has no active recipe.`,
+      ].join(' ')
+    }
+    if (proposal.tool_id === 'inspect_live_context') {
+      result = [
+        summarizeAiActivitySnapshot(activitySnapshot),
+        activitySnapshot.warnings.length ? `Warnings: ${activitySnapshot.warnings.join(' | ')}.` : 'No live-context warnings are currently reported.',
+        activitySnapshot.recent_actions.length ? `Recent: ${activitySnapshot.recent_actions.join(' | ')}.` : '',
+      ].filter(Boolean).join(' ')
+    }
+    if (proposal.tool_id === 'explain_export_blockers') {
+      result = explainExportBlockers(activitySnapshot)
+    }
+    if (proposal.tool_id === 'inspect_layer_stack') {
+      result = inspectLayerStack(activitySnapshot, recipe)
+    }
+    if (proposal.tool_id === 'diagnose_sprite_alignment') {
+      result = diagnoseSpriteAlignment(activitySnapshot)
+    }
+    if (proposal.tool_id === 'suggest_next_action') {
+      result = suggestNextAction(activitySnapshot)
+    }
+    if (proposal.tool_id === 'open_relevant_panel') {
+      const panel = isCreatorPanelId(proposal.input.panel) ? proposal.input.panel : 'ai'
+      openPanel(panel)
+      result = `Opened ${panel === 'ai' ? 'AI Studio' : panel}.`
+    }
+    if (proposal.tool_id === 'compare_current_frame_to_base') {
+      result = `Current frame comparison context: ${activitySnapshot.frame.animation}/${activitySnapshot.frame.direction} frame ${activitySnapshot.frame.frame_number} of ${activitySnapshot.frame.frame_count || 'unknown'} on ${activitySnapshot.source.selected_character_name}. Selected layer ${activitySnapshot.layer.selected_layer}; selected part ${activitySnapshot.layer.selected_part_id ?? activitySnapshot.layer.selected_source_part_id ?? 'source/base'}. Use the alignment diagnostic if the composite appears offset.`
+    }
+    if (proposal.tool_id === 'validate_current_recipe') {
+      result = activitySnapshot.recipe
+        ? `Recipe validation: ${activitySnapshot.recipe.readiness_summary}. Release: ${activitySnapshot.release.blocker_summary}. Missing-animation queue: ${activitySnapshot.queues.missing_animation ? `${activitySnapshot.queues.missing_animation.issue_count} issue(s), ${activitySnapshot.queues.missing_animation.affected_frame_count} affected frame(s)` : 'no active issue summary'}.`
+        : 'No active recipe is available to validate.'
+    }
+    if (proposal.tool_id === 'prepare_generation_prompt') {
+      result = prepareGenerationPrompt(activitySnapshot, typeof proposal.input.target === 'string' ? proposal.input.target : undefined)
+    }
+    if (proposal.tool_id === 'inspect_rag_sources') {
+      result = ragIndex
+        ? `RAG is loaded with ${ragIndex.document_count} source document(s), ${ragIndex.chunk_count} chunk(s), generated ${ragIndex.generated_at}. Mode: ${activitySnapshot.knowledge.source_mode}. Confidence: ${describeRagConfidence(activitySnapshot.knowledge.source_mode)}.`
+        : `RAG is not loaded. Status: ${ragStatus}`
+    }
+    if (proposal.tool_id === 'check_lpc_compatibility') {
+      result = recipe
+        ? `Compatibility check prepared for ${recipe.layers.length} recipe layer(s). Use APES Lab or Part Library for layer-level fixes.`
+        : 'No active recipe is available for LPC compatibility checking.'
+    }
+    if (proposal.tool_id === 'search_assets') {
+      result = await runLocalRagToolAction('search-assets', proposal.input)
+    }
+    if (proposal.tool_id === 'run_project_check') {
+      result = await runLocalRagToolAction('project-check', proposal.input)
+    }
+    if (proposal.tool_id === 'run_lpc_render_matrix_audit') {
+      result = await runLocalRagToolAction('render-matrix-audit')
+    }
+    if (proposal.tool_id === 'scan_pc_rag_assets') {
+      result = await runLocalRagToolAction('scan-pc')
+    }
+    if (proposal.tool_id === 'fetch_web_rag_sources') {
+      result = await runLocalRagToolAction('fetch-web')
+    }
+    if (proposal.tool_id === 'configure_pixellab_bridge' || proposal.tool_id === 'configure_aseprite_bridge') {
+      openSettings()
+      result = 'Opened Settings so you can finish the bridge connection with local values.'
+    }
     setMessages(messages.map((message) => message.message_id === messageId
-      ? applyApprovedToolResult(message, proposalId, 'Approved and sent to the matching app action.')
+      ? applyApprovedToolResult(message, proposal.proposal_id, result)
       : message))
+  }
+
+  async function runLocalRagToolAction(action: string, input: Record<string, unknown> = {}) {
+    if (!localToolsAvailable) return `This tool requires the local tool server; GitHub Pages can only use static-safe AI tools. Recovery: use the local preview/dev server started through tools/local-vite-server.js, then try the approval again.`
+    try {
+      const response = await localToolFetch(localToolPath('rag-tools'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action, ...input }),
+      })
+      const payload = await response.json().catch(() => null) as { ok?: boolean; message?: string; error?: string } | null
+      if (!response.ok || !payload?.ok) return `${payload?.error ?? 'Local tool action failed.'} Recovery: check Settings bridge status, then run the lighter project check or RAG source inspection before retrying ${action}.`
+      return payload.message ?? 'Local tool action completed.'
+    } catch (error) {
+      return `${error instanceof Error ? error.message : String(error)} Recovery: verify the local tool server is reachable and retry from AI Studio or Settings.`
+    }
   }
 
   return (
@@ -158,6 +280,18 @@ export function AIStudioPanel({
           <strong>Tool access</strong>
           <code>{toolList.join('\n')}</code>
         </article>
+        <article className="settings-card">
+          <strong>Live context</strong>
+          <span>{summarizeAiActivitySnapshot(activitySnapshot)}</span>
+          {activitySnapshot.warnings.length ? <code>{activitySnapshot.warnings.join('\n')}</code> : null}
+          {activitySnapshot.warnings.length ? (
+            <div className="status-strip">
+              <button type="button" onClick={() => setDraft(`Explain these current blockers and tell me the next concrete fix: ${activitySnapshot.warnings.join('; ')}`)}>
+                Ask about blockers
+              </button>
+            </div>
+          ) : null}
+        </article>
       </div>
 
       <div className="ai-chat-shell">
@@ -182,7 +316,7 @@ export function AIStudioPanel({
                       {proposal.result ? <span>{proposal.result}</span> : null}
                       <div className="status-strip">
                         <button
-                          onClick={() => approveTool(message.message_id, proposal.proposal_id, proposal.tool_id)}
+                          onClick={() => void approveTool(message.message_id, proposal)}
                           disabled={proposal.status !== 'pending'}
                         >
                           Approve
@@ -231,4 +365,87 @@ export function AIStudioPanel({
       </div>
     </section>
   )
+}
+
+function isCreatorPanelId(value: unknown): value is CreatorPanelId {
+  return typeof value === 'string' && ['fast', 'workstation', 'library', 'batch', 'audit', 'ai', 'apes', 'exports', 'settings'].includes(value)
+}
+
+function mergeToolProposals(localProposals: AiToolProposal[], providerProposals: AiToolProposal[]) {
+  const seen = new Set(localProposals.map((proposal) => `${proposal.tool_id}:${JSON.stringify(proposal.input)}`))
+  return [
+    ...localProposals,
+    ...providerProposals.filter((proposal) => {
+      const key = `${proposal.tool_id}:${JSON.stringify(proposal.input)}`
+      if (seen.has(key)) return false
+      seen.add(key)
+      return true
+    }),
+  ]
+}
+
+function mergeToolHints(localHints: string[] | undefined, providerProposals: AiToolProposal[]) {
+  return Array.from(new Set([
+    ...(localHints ?? []),
+    ...providerProposals.map((proposal) => `${proposal.permission_scope}:${proposal.tool_id}`),
+  ]))
+}
+
+function describeRagConfidence(mode: AiActivitySnapshot['knowledge']['source_mode']) {
+  if (mode === 'local_full') return 'highest available in-app confidence because private/local sources and local tools can participate.'
+  if (mode === 'hosted_public') return 'public-safe confidence from the GitHub Pages index; private PC sources are not included.'
+  return 'no retrieval confidence yet because no index is loaded.'
+}
+
+function explainExportBlockers(snapshot: AiActivitySnapshot) {
+  const warnings = snapshot.warnings.length ? ` Warnings: ${snapshot.warnings.join(' | ')}.` : ''
+  return snapshot.release.blocker_count > 0 || snapshot.recipe?.readiness_state !== 'ready'
+    ? `Export is not clean yet. ${snapshot.release.blocker_summary}. Recipe: ${snapshot.recipe?.readiness_summary ?? 'no active recipe'}.${warnings} Fix reviewed parts, generation-job review gates, and missing animation issues before final export.`
+    : 'No live export blockers are currently reported. Confirm credits and target profile before packaging.'
+}
+
+function inspectLayerStack(snapshot: AiActivitySnapshot, recipe: KitbashRecipe | null) {
+  const layers = recipe?.layers.map((layer, index) => `${index + 1}. ${layer.label}: ${layer.source_part_id ? `part ${layer.source_part_id}` : `source ${layer.source_character}`}${layer.visible ? '' : ' hidden'}${layer.locked ? ' locked' : ''}`).join('\n') ?? 'No active recipe layer stack.'
+  return `Selected layer: ${snapshot.layer.selected_layer}. Options: ${snapshot.layer.option_count}. Stack:\n${layers}`
+}
+
+function diagnoseSpriteAlignment(snapshot: AiActivitySnapshot) {
+  return [
+    `Alignment context: ${snapshot.frame.animation}/${snapshot.frame.direction} frame ${snapshot.frame.frame_number} of ${snapshot.frame.frame_count || 'unknown'}.`,
+    `Layer ${snapshot.layer.selected_layer}; selected part ${snapshot.layer.selected_part_id ?? snapshot.layer.selected_source_part_id ?? 'source/base'}; ${snapshot.layer.option_count} option(s).`,
+    snapshot.queues.missing_animation ? `Missing/unsupported animation issues: ${snapshot.queues.missing_animation.issue_count}, affected frames: ${snapshot.queues.missing_animation.affected_frame_count}.` : 'No missing-animation queue summary is active.',
+    snapshot.warnings.length ? `Warnings: ${snapshot.warnings.join(' | ')}.` : 'No live warnings reported.',
+  ].join(' ')
+}
+
+function suggestNextAction(snapshot: AiActivitySnapshot) {
+  if (snapshot.release.blocker_count > 0) return `Next action: resolve release blockers first. ${snapshot.release.blocker_summary}`
+  if (snapshot.queues.missing_animation && snapshot.queues.missing_animation.issue_count > 0) return `Next action: open APES Lab and queue/review ${snapshot.queues.missing_animation.issue_count} missing-animation issue(s).`
+  if (snapshot.recipe?.readiness_state && snapshot.recipe.readiness_state !== 'ready') return `Next action: review selected parts until recipe readiness is ready. ${snapshot.recipe.readiness_summary}`
+  if (!snapshot.knowledge.rag_loaded) return 'Next action: activate RAG so AI answers can cite project context.'
+  return 'Next action: export a small reviewed package and inspect the result before broad batch generation.'
+}
+
+function prepareGenerationPrompt(snapshot: AiActivitySnapshot, requestedTarget = 'pixellab') {
+  const target = requestedTarget.toLowerCase()
+  const shared = [
+    `${snapshot.source.selected_character_name}; ${snapshot.frame.animation}/${snapshot.frame.direction}; frame ${snapshot.frame.frame_number}; layer ${snapshot.layer.selected_layer}.`,
+    `Canvas ${snapshot.render_evidence.canvas_size?.width ?? 64}x${snapshot.render_evidence.canvas_size?.height ?? 64}; source rect ${snapshot.render_evidence.source_rect ? `${snapshot.render_evidence.source_rect.x},${snapshot.render_evidence.source_rect.y},${snapshot.render_evidence.source_rect.w},${snapshot.render_evidence.source_rect.h}` : 'unknown'}; geometry ${snapshot.render_evidence.frame_geometry}.`,
+    `Preserve RPG sprite proportions, clean alpha, stable floor contact, readable silhouette, and reusable layer boundaries.`,
+    snapshot.queues.missing_animation ? `Cover missing/unsupported animation queue: ${snapshot.queues.missing_animation.issue_count} issue(s), ${snapshot.queues.missing_animation.affected_frame_count} affected frame(s).` : '',
+    `Return candidates for manual review; do not imply release approval.`,
+  ].filter(Boolean)
+  if (target.includes('aseprite')) {
+    return [`Aseprite cleanup brief: keep existing frame registration and layer names intact.`, ...shared, `Deliver edit notes for onion-skin comparison and per-layer cleanup.`].join(' ')
+  }
+  if (target.includes('apes')) {
+    return [`APES segmentation brief: isolate only the requested layer with connected masks and transparent background.`, ...shared, `Prefer conservative masks over hallucinated edges.`].join(' ')
+  }
+  if (target.includes('lpc')) {
+    return [`LPC part-generation brief: match LPC body alignment, z-order expectations, and animation-sheet cadence.`, ...shared, `Avoid body pixels unless the selected layer is a body/base layer.`].join(' ')
+  }
+  if (target.includes('duelyst')) {
+    return [`Duelyst source-cleanup brief: preserve source identity while normalizing to the current app frame and review gates.`, ...shared, `Separate costume/equipment from body wherever possible.`].join(' ')
+  }
+  return [`PixelLab generation brief: create pixel-art sprite content that can be imported as a reviewed layer candidate.`, ...shared].join(' ')
 }
