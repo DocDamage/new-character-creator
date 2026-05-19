@@ -67,6 +67,34 @@ test('RAG context bundle caps chunks and records citations', () => {
   assert.match(bundle.context_text, /manual review/)
 })
 
+test('RAG index ignores generic stop words when ranking large web sources', () => {
+  const index = buildRagIndex([
+    {
+      source_id: 'docs/rag-sources/private/web-sources.md',
+      source_type: 'doc',
+      title: 'web sources',
+      uri: 'docs/rag-sources/private/web-sources.md',
+      text: 'Which of the assets moved into the folder belongs in this long generic documentation page? '.repeat(20),
+      metadata: {},
+    },
+    {
+      source_id: 'data/lpc/lpc_catalog.json',
+      source_type: 'lpc_catalog',
+      title: 'Local LPC Catalog',
+      uri: 'data/lpc/lpc_catalog.json',
+      text: 'Randoms folder assets use catalog license metadata and attribution coverage.',
+      metadata: { workflow: 'lpc' },
+    },
+  ], { generatedAt: '2026-05-18T12:00:00.000Z' })
+
+  const results = queryRagIndex(index, {
+    query: 'Which license covers assets moved into the Randoms folder?',
+    limit: 1,
+  })
+
+  assert.equal(results[0].chunk.source_id, 'data/lpc/lpc_catalog.json')
+})
+
 test('RAG index CLI writes a local knowledge index', () => {
   rmSync(ragOutputPath, { force: true })
 

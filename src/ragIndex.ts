@@ -2,6 +2,35 @@ import type { RagChunk, RagContextBundle, RagIndex, RagQuery, RagSearchResult, R
 
 const defaultChunkCharLimit = 900
 const defaultQueryLimit = 6
+const stopTerms = new Set([
+  'about',
+  'after',
+  'all',
+  'also',
+  'and',
+  'any',
+  'are',
+  'can',
+  'for',
+  'from',
+  'has',
+  'have',
+  'how',
+  'into',
+  'not',
+  'the',
+  'this',
+  'that',
+  'use',
+  'was',
+  'what',
+  'when',
+  'where',
+  'which',
+  'who',
+  'why',
+  'with',
+])
 
 export function buildRagIndex(documents: RagSourceDocument[], options: { generatedAt?: string } = {}): RagIndex {
   const chunks = documents.flatMap((document) => chunkDocument(document))
@@ -121,7 +150,7 @@ function normalizeTerms(value: string) {
     value
       .toLowerCase()
       .split(/[^a-z0-9]+/)
-      .filter((term) => term.length >= 3),
+      .filter((term) => term.length >= 3 && !stopTerms.has(term)),
   ))
 }
 

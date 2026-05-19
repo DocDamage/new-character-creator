@@ -51,6 +51,74 @@
       "notes": "Useful for APES terminology and method context."
     },
     {
+      "id": "godot-2d-sprite-animation",
+      "title": "Godot 2D Sprite Animation",
+      "url": "https://docs.godotengine.org/en/4.5/tutorials/2d/2d_sprite_animation.html",
+      "crawl": false,
+      "max_pages": 1,
+      "license": "Official documentation. Keep in private RAG unless reviewed for redistribution.",
+      "notes": "Useful for Godot AnimatedSprite2D and sprite-sheet import/export workflow context."
+    },
+    {
+      "id": "godot-animatedsprite2d",
+      "title": "Godot AnimatedSprite2D Reference",
+      "url": "https://docs.godotengine.org/en/4.4/classes/class_animatedsprite2d.html",
+      "crawl": false,
+      "max_pages": 1,
+      "license": "Official documentation. Keep in private RAG unless reviewed for redistribution.",
+      "notes": "Useful for exported animation playback, frame selection, autoplay, and SpriteFrames binding."
+    },
+    {
+      "id": "godot-spriteframes",
+      "title": "Godot SpriteFrames Reference",
+      "url": "https://docs.godotengine.org/en/latest/classes/class_spriteframes.html",
+      "crawl": false,
+      "max_pages": 1,
+      "license": "Official documentation. Keep in private RAG unless reviewed for redistribution.",
+      "notes": "Useful for generated .tres SpriteFrames resources, animation names, FPS, loops, and frame durations."
+    },
+    {
+      "id": "godot-atlastexture",
+      "title": "Godot AtlasTexture Reference",
+      "url": "https://docs.godotengine.org/en/stable/classes/class_atlastexture.html",
+      "crawl": false,
+      "max_pages": 1,
+      "license": "Official documentation. Keep in private RAG unless reviewed for redistribution.",
+      "notes": "Useful for atlas region exports, frame cropping, margin handling, and render-call optimization context."
+    },
+    {
+      "id": "godot-resource",
+      "title": "Godot Resource Reference",
+      "url": "https://docs.godotengine.org/en/stable/classes/class_resource.html",
+      "crawl": false,
+      "max_pages": 1,
+      "license": "Official documentation. Keep in private RAG unless reviewed for redistribution.",
+      "notes": "Useful for .tres resource metadata, local-to-scene behavior, and exported resource safety."
+    },
+    {
+      "id": "texturepacker-docs",
+      "title": "TexturePacker Documentation",
+      "url": "https://www.codeandweb.com/texturepacker/documentation",
+      "crawl": true,
+      "max_pages": 8,
+      "allow_patterns": [
+        "/texturepacker/documentation",
+        "/texturepacker/documentation/texture-settings",
+        "/texturepacker/knowledgebase/why-should-i-use-a-data-format"
+      ],
+      "license": "Official documentation. Keep in private RAG unless reviewed for redistribution.",
+      "notes": "Useful for atlas JSON import/export compatibility and packed sprite-sheet metadata."
+    },
+    {
+      "id": "lpc-faq",
+      "title": "Liberated Pixel Cup FAQ",
+      "url": "https://lpc.opengameart.org/content/faq",
+      "crawl": false,
+      "max_pages": 1,
+      "license": "OpenGameArt/LPC documentation. Treat as licensing guidance metadata; review before redistribution.",
+      "notes": "Useful for attribution, license notices, copyright notices, and LPC export readiness checks."
+    },
+    {
       "id": "opengameart-lpc-search",
       "title": "OpenGameArt LPC Search",
       "url": "https://opengameart.org/art-search-advanced?keys=LPC&field_art_type_tid%5B%5D=9&sort_by=count&sort_order=DESC",

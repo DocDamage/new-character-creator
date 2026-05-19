@@ -218,6 +218,11 @@ data/rag/web-source-manifest.json
 Fetched web text stays private by default. Promote only reviewed summaries or
 properly licensed material into public docs.
 
+Current curated web source groups cover Aseprite CLI/sprite-sheet workflow,
+PixelLab docs, LPC generator and attribution context, APES research context,
+Godot SpriteFrames/AnimatedSprite2D/resource export behavior, TexturePacker
+atlas metadata, and OpenGameArt LPC discovery metadata.
+
 Useful overrides:
 
 ```bash
