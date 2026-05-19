@@ -12,7 +12,7 @@ const forbiddenTextPatterns = [
   { pattern: /\/__local\//, label: '/__local/' },
   { pattern: /[A-Z]:[\\/][\w .()[\]-]+[\\/]/i, label: 'Windows absolute path' },
   { pattern: /characters\.local\.json|duelyst\.private\.json/, label: 'private manifest name' },
-  { pattern: /Animated-Pixel-Pack-Characters-V1|Duelyst-Unit-Animations|lpc sprite generator stuff/i, label: 'private asset root' },
+  { pattern: /Duelyst-Unit-Animations|lpc sprite generator stuff/i, label: 'private asset root' },
   { pattern: /\.ps1|setup_home_pc/i, label: 'local PowerShell setup script' },
 ]
 

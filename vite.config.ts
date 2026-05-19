@@ -45,8 +45,25 @@ function releasePackagePlugin() {
         fs.rmSync(path.resolve(manifestRoot, manifestName), { force: true })
       }
 
-      writeBundledReleaseManifest(distRoot)
+      if (!releaseManifestAssetsAvailable(distRoot)) {
+        writeBundledReleaseManifest(distRoot)
+      }
     },
+  }
+}
+
+function releaseManifestAssetsAvailable(distRoot: string) {
+  const manifestPath = path.resolve(distRoot, 'data', 'manifests', 'characters.json')
+  if (!fs.existsSync(manifestPath)) return false
+  try {
+    const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'))
+    for (const assetPath of collectManifestAssetPaths(manifest)) {
+      const resolved = resolveDistPublicPath(distRoot, assetPath)
+      if (!resolved || !fs.existsSync(resolved)) return false
+    }
+    return true
+  } catch {
+    return false
   }
 }
 
@@ -151,6 +168,49 @@ function listPngFiles(folder: string) {
     .filter((entry) => entry.isFile() && entry.name.toLowerCase().endsWith('.png'))
     .map((entry) => entry.name)
     .sort((left, right) => left.localeCompare(right, undefined, { numeric: true }))
+}
+
+function collectManifestAssetPaths(manifest: Record<string, unknown>) {
+  const paths = new Set<string>()
+  const characters = Array.isArray(manifest.characters) ? manifest.characters : []
+  for (const character of characters) {
+    if (!character || typeof character !== 'object') continue
+    addManifestPath(paths, (character as { representative_frame?: unknown }).representative_frame)
+    const rotationPaths = (character as { rotation_preview_paths?: unknown }).rotation_preview_paths
+    if (Array.isArray(rotationPaths)) {
+      for (const item of rotationPaths) {
+        if (item && typeof item === 'object') addManifestPath(paths, (item as { path?: unknown }).path)
+      }
+    }
+    const animations = (character as { animations?: unknown }).animations
+    if (!Array.isArray(animations)) continue
+    for (const animation of animations) {
+      if (!animation || typeof animation !== 'object') continue
+      const directions = (animation as { directions?: unknown }).directions
+      if (!directions || typeof directions !== 'object') continue
+      for (const frames of Object.values(directions)) {
+        if (!Array.isArray(frames)) continue
+        for (const frame of frames) {
+          if (frame && typeof frame === 'object') addManifestPath(paths, (frame as { path?: unknown }).path)
+        }
+      }
+    }
+  }
+  return Array.from(paths)
+}
+
+function addManifestPath(paths: Set<string>, value: unknown) {
+  if (typeof value === 'string' && value.trim()) {
+    paths.add(value.trim())
+  }
+}
+
+function resolveDistPublicPath(distRoot: string, assetPath: string) {
+  if (!assetPath.startsWith('/')) return null
+  const resolved = path.resolve(distRoot, `.${assetPath}`)
+  const relative = path.relative(distRoot, resolved)
+  if (relative.startsWith('..') || path.isAbsolute(relative)) return null
+  return resolved
 }
 
 // https://vite.dev/config/

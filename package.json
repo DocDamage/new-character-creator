@@ -12,6 +12,7 @@
     "rag:index": "node tools/build-rag-index.js",
     "export:character": "node tools/export-character.js",
     "duelyst:private-manifest": "node tools/build-duelyst-private-manifest.js",
+    "duelyst:public-manifest": "node tools/build-duelyst-public-manifest.js",
     "apes:prepare-finetune": "micromamba run -n apes-gpu-modern python tools/apes_bridge/prepare_finetune_data.py",
     "apes:prepare-duelyst-jobs": "micromamba run -n apes-gpu-modern python tools/apes_bridge/prepare_duelyst_apes_jobs.py",
     "apes:run-duelyst-jobs": "micromamba run -n apes-gpu-modern python tools/apes_bridge/prepare_duelyst_apes_jobs.py --run",

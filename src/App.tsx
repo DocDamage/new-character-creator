@@ -2218,22 +2218,35 @@ function App() {
   async function loadPrivateDuelystManifest(signal?: AbortSignal) {
     setDuelystBusy(true)
     try {
-      const response = await fetch(publicAssetPath(`data/manifests/${['duelyst', 'private', 'json'].join('.')}`), { signal, cache: 'no-store' })
+      const manifestCandidates = [
+        { url: publicAssetPath(`data/manifests/${['duelyst', 'private', 'json'].join('.')}`), label: 'private manifest' },
+        { url: publicAssetPath('data/manifests/duelyst.json'), label: 'public manifest' },
+      ]
+      let response: Response | null = null
+      let label = ''
+      for (const candidate of manifestCandidates) {
+        const candidateResponse = await fetch(candidate.url, { signal, cache: 'no-store' })
+        if (signal?.aborted) return
+        if (candidateResponse.status === 404) continue
+        response = candidateResponse
+        label = candidate.label
+        break
+      }
       if (signal?.aborted) return
-      if (response.status === 404) {
-        setDuelystStatus('No private Duelyst manifest found yet. Run the local audit or `npm run duelyst:private-manifest -- --stage-count 64`.')
+      if (!response) {
+        setDuelystStatus('No Duelyst manifest found yet. Run the local audit or `npm run duelyst:private-manifest -- --stage-count 64`, then `npm run duelyst:public-manifest` for a public Pages bundle.')
         return
       }
       if (!response.ok) {
-        throw new Error(`Private manifest request failed with status ${response.status}`)
+        throw new Error(`${label} request failed with status ${response.status}`)
       }
 
       const payload = normalizeDuelystAudit(await response.json() as DuelystPackageAudit)
       setDuelystAudit(payload)
-      setDuelystStatus(`${payload.summary} Loaded from private manifest; staged entries are available in the picker and workstation.`)
+      setDuelystStatus(`${payload.summary} Loaded from ${label}; staged entries are available in the picker and workstation.`)
     } catch (error) {
       if (signal?.aborted || (error instanceof DOMException && error.name === 'AbortError')) return
-      setDuelystStatus(`Private Duelyst manifest could not be loaded. ${error instanceof Error ? error.message : String(error)}`)
+      setDuelystStatus(`Duelyst manifest could not be loaded. ${error instanceof Error ? error.message : String(error)}`)
     } finally {
       if (!signal?.aborted) setDuelystBusy(false)
     }
