@@ -364,6 +364,7 @@ function App() {
   const [aiProviders, setAiProviders] = useState<AiProviderConnection[]>(loadStoredAiProviderConnections)
   const [toolConnections, setToolConnections] = useState<ToolConnectionSettings>(loadStoredToolConnections)
   const [sessionSecretStatus, setSessionSecretStatusState] = useState<Record<string, boolean>>(loadSessionSecretStatus)
+  const [aiSessionSecrets, setAiSessionSecrets] = useState<Record<string, string>>({})
   const [aiStudioMessages, setAiStudioMessages] = useState<AiStudioMessage[]>([])
   const [generationJobs, setGenerationJobs] = useState<GenerationJob[]>(loadStoredGenerationJobs)
   const [ragIndex, setRagIndex] = useState<RagIndex | null>(null)
@@ -434,6 +435,22 @@ function App() {
     setSessionSecretStatusState(status)
     setPersistenceResult(aiSecretSessionStorageKey, storeSessionSecretStatus(status), 'Could not persist session AI secret status.')
   }, [setPersistenceResult])
+
+  const setAiSessionSecret = useCallback((providerId: string, secret: string) => {
+    setAiSessionSecrets((current) => {
+      const next = { ...current }
+      if (secret.trim()) {
+        next[providerId] = secret
+      } else {
+        delete next[providerId]
+      }
+      return next
+    })
+    setSessionSecretStatus({
+      ...sessionSecretStatus,
+      [providerId]: secret.trim().length > 0,
+    })
+  }, [sessionSecretStatus, setSessionSecretStatus])
 
   async function fetchManifest(signal?: AbortSignal) {
     const manifestUrls = import.meta.env.DEV
@@ -868,6 +885,7 @@ function App() {
       return acc
     }, {})
   }, [characters])
+  const sessionSecretMemoryCount = Object.keys(aiSessionSecrets).length
 
   const batchVariants = useMemo(() => {
     if (!selectedCharacter || characters.length === 0) return []
@@ -2126,10 +2144,13 @@ function App() {
       input.setAttribute('readonly', 'true')
       input.style.position = 'absolute'
       input.style.left = '-9999px'
-      document.body.appendChild(input)
-      input.select()
-      document.execCommand('copy')
-      document.body.removeChild(input)
+      try {
+        document.body.appendChild(input)
+        input.select()
+        document.execCommand('copy')
+      } finally {
+        input.remove()
+      }
       setSettingsStatus(successMessage)
     } catch (error) {
       setSettingsStatus(`Could not copy command: ${error instanceof Error ? error.message : String(error)}`)
@@ -2819,7 +2840,8 @@ function App() {
               toolConnections={toolConnections}
               setToolConnections={setToolConnections}
               sessionSecretStatus={sessionSecretStatus}
-              setSessionSecretStatus={setSessionSecretStatus}
+              sessionSecretMemoryCount={sessionSecretMemoryCount}
+              setAiSessionSecret={setAiSessionSecret}
             />
           ) : null}
         </div>

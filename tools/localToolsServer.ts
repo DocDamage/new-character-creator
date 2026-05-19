@@ -53,6 +53,7 @@ function serveLocalAssetRequest(req: IncomingMessage, res: ServerResponse, next:
   if (!requestPath?.startsWith('/assets/')) {
     return false
   }
+  if (!validateFileReadMethod(req, res)) return true
 
   const assetsRoot = path.resolve(appRoot, 'assets')
   const localPath = path.resolve(appRoot, `.${requestPath}`)
@@ -71,6 +72,7 @@ function serveLocalDataRequest(req: IncomingMessage, res: ServerResponse, next: 
   if (!requestPath?.startsWith('/data/lpc/')) {
     return false
   }
+  if (!validateFileReadMethod(req, res)) return true
 
   const lpcRoot = path.resolve(appRoot, 'data', 'lpc')
   const localPath = path.resolve(appRoot, `.${requestPath}`)
@@ -89,6 +91,7 @@ function serveLocalFsRequest(req: IncomingMessage, res: ServerResponse, next: Co
   if (!requestPath?.startsWith('/@fs/')) {
     return false
   }
+  if (!validateFileReadMethod(req, res)) return true
 
   const localPath = path.resolve(requestPath.slice('/@fs/'.length))
   if (!allowedRoots.some((root) => isPathInside(localPath, root))) {
@@ -106,6 +109,7 @@ function serveApesOutputRequest(req: IncomingMessage, res: ServerResponse, next:
   if (!requestPath?.startsWith('/__local/apes-output/')) {
     return false
   }
+  if (!validateFileReadMethod(req, res)) return true
 
   const outputRoot = path.resolve(appRoot, 'data', 'apes', 'output')
   const localPath = path.resolve(outputRoot, requestPath.slice('/__local/apes-output/'.length))
@@ -120,6 +124,11 @@ function serveApesOutputRequest(req: IncomingMessage, res: ServerResponse, next:
 }
 
 function serveFile(localPath: string, res: ServerResponse, next: Connect.NextFunction) {
+  if (isBlockedLocalFile(localPath)) {
+    res.statusCode = 403
+    res.end('Forbidden')
+    return
+  }
   fs.promises.stat(localPath).then((stats) => {
     if (!stats.isFile()) {
       next()
@@ -145,9 +154,9 @@ function serveLocalHealthRequest(req: IncomingMessage, res: ServerResponse) {
 
 function validateLoopbackRequest(req: IncomingMessage, res: ServerResponse) {
   const requestPath = getRequestPath(req.url)
-  if (!requestPath?.startsWith('/__local/') && !requestPath?.startsWith('/@fs/')) return true
-  const host = (req.headers.host ?? '').split(':')[0]?.toLowerCase()
-  if (!host || !['127.0.0.1', 'localhost', '::1', '[::1]'].includes(host)) {
+  if (!isLocalToolRoute(requestPath)) return true
+  const host = parseHostName(req.headers.host)
+  if (!host || !['127.0.0.1', 'localhost', '::1'].includes(host)) {
     sendJson(res, 403, { error: 'Local tool routes only accept loopback Host headers.' })
     return false
   }
@@ -156,6 +165,40 @@ function validateLoopbackRequest(req: IncomingMessage, res: ServerResponse) {
     return false
   }
   return true
+}
+
+function isBlockedLocalFile(localPath: string) {
+  const normalized = localPath.replaceAll('\\', '/')
+  const base = path.basename(localPath).toLowerCase()
+  return base === '.ds_store' ||
+    base.endsWith('.exe') ||
+    normalized.includes('/.git/') ||
+    normalized.includes('/__MACOSX/')
+}
+
+function isLocalToolRoute(requestPath: string | null) {
+  return Boolean(
+    requestPath?.startsWith('/__local/') ||
+    requestPath?.startsWith('/@fs/') ||
+    requestPath?.startsWith('/data/lpc/') ||
+    requestPath?.startsWith('/assets/lpc sprite generator stuff/'),
+  )
+}
+
+function parseHostName(value: string | string[] | undefined) {
+  const headerValue = Array.isArray(value) ? value[0] : value
+  if (!headerValue) return ''
+  if (headerValue.startsWith('[')) {
+    const end = headerValue.indexOf(']')
+    return end > 0 ? headerValue.slice(1, end).toLowerCase() : ''
+  }
+  return headerValue.split(':')[0]?.toLowerCase() ?? ''
+}
+
+function validateFileReadMethod(req: IncomingMessage, res: ServerResponse) {
+  if (req.method === 'GET' || req.method === 'HEAD') return true
+  sendJson(res, 405, { error: 'Method not allowed.' })
+  return false
 }
 
 function validateLocalToolMutation(req: IncomingMessage, res: ServerResponse, sessionToken: string) {
@@ -535,8 +578,19 @@ function isPathInside(childPath: string, parentPath: string) {
 
 async function readJsonBody(req: IncomingMessage) {
   const chunks: Buffer[] = []
+  let totalBytes = 0
+  const maxBytes = 4 * 1024 * 1024
   await new Promise<void>((resolve, reject) => {
-    req.on('data', (chunk: Buffer | string) => chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk)))
+    req.on('data', (chunk: Buffer | string) => {
+      const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk)
+      totalBytes += buffer.length
+      if (totalBytes > maxBytes) {
+        reject(new Error('Request body is too large.'))
+        req.destroy()
+        return
+      }
+      chunks.push(buffer)
+    })
     req.on('end', () => resolve())
     req.on('error', (error) => reject(error))
   })

@@ -1,5 +1,6 @@
 import { spawn } from 'node:child_process'
 import { existsSync, readFileSync } from 'node:fs'
+import http from 'node:http'
 import { createServer } from 'node:net'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -42,6 +43,22 @@ async function main() {
       body: JSON.stringify({ action: 'preflight', pythonPath: 'python' }),
     })
     assert(unauthorized.status === 403, `tokenless/cross-origin POST should return 403, received ${unauthorized.status}`)
+
+    const badHostLocalData = await requestStatus({
+      hostname: '127.0.0.1',
+      port,
+      path: '/data/lpc/lpc_asset_inventory.json',
+      headers: { Host: 'example.com' },
+    })
+    assert(badHostLocalData === 403, `local LPC data with non-loopback Host should return 403, received ${badHostLocalData}`)
+
+    const disallowedMethod = await fetch(`http://127.0.0.1:${port}/@fs/${path.resolve(appRoot, 'public', 'data', 'qa', 'apes_report_harness.json').replaceAll(path.sep, '/')}`, {
+      method: 'POST',
+    })
+    assert(disallowedMethod.status === 405, `local file routes should reject POST with 405, received ${disallowedMethod.status}`)
+
+    const blockedExe = await fetch(`http://127.0.0.1:${port}/assets/lpc%20sprite%20generator%20stuff/MemaoSpriteCreator-Windows/Memao%20Sprite%20Sheet%20Creator.exe`)
+    assert(blockedExe.status === 403 || blockedExe.status === 404, `local binary asset route should be blocked, received ${blockedExe.status}`)
 
     const authorized = await fetch(`http://127.0.0.1:${port}/__local/apes-tools`, {
       method: 'POST',
@@ -112,6 +129,17 @@ function waitForExit(child, timeoutMs) {
       clearTimeout(timer)
       resolve()
     })
+  })
+}
+
+function requestStatus(options) {
+  return new Promise((resolve, reject) => {
+    const request = http.request(options, (response) => {
+      response.resume()
+      response.on('end', () => resolve(response.statusCode ?? 0))
+    })
+    request.on('error', reject)
+    request.end()
   })
 }
 

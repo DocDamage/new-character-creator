@@ -24,6 +24,7 @@ type CompositeCanvasProps = {
 }
 
 const imageLoadCache = new Map<string, Promise<HTMLImageElement>>()
+const maxImageLoadCacheEntries = 256
 
 export function CompositeCanvas({
   recipe,
@@ -332,7 +333,11 @@ function drawChecker(context: CanvasRenderingContext2D, width: number, height: n
 
 function loadImage(src: string) {
   const cached = imageLoadCache.get(src)
-  if (cached) return cached
+  if (cached) {
+    imageLoadCache.delete(src)
+    imageLoadCache.set(src, cached)
+    return cached
+  }
 
   const promise = new Promise<HTMLImageElement>((resolve, reject) => {
     const image = new Image()
@@ -342,8 +347,17 @@ function loadImage(src: string) {
     image.src = src
   })
   imageLoadCache.set(src, promise)
+  trimImageLoadCache()
   promise.catch(() => {
     imageLoadCache.delete(src)
   })
   return promise
+}
+
+function trimImageLoadCache() {
+  while (imageLoadCache.size > maxImageLoadCacheEntries) {
+    const oldestKey = imageLoadCache.keys().next().value
+    if (!oldestKey) return
+    imageLoadCache.delete(oldestKey)
+  }
 }

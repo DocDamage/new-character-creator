@@ -21,7 +21,8 @@ type SettingsPanelProps = {
   toolConnections: ToolConnectionSettings
   setToolConnections: (connections: ToolConnectionSettings) => void
   sessionSecretStatus: Record<string, boolean>
-  setSessionSecretStatus: (status: Record<string, boolean>) => void
+  sessionSecretMemoryCount: number
+  setAiSessionSecret: (providerId: string, secret: string) => void
 }
 
 export function SettingsPanel({
@@ -44,7 +45,8 @@ export function SettingsPanel({
   toolConnections,
   setToolConnections,
   sessionSecretStatus,
-  setSessionSecretStatus,
+  sessionSecretMemoryCount,
+  setAiSessionSecret,
 }: SettingsPanelProps) {
   const normalizedAssetRoot = assetRootInput.trim() || manifestAssetRoot
   const manifestRootForCompare = normalizeAssetRootForCompare(manifestAssetRoot)
@@ -70,9 +72,12 @@ export function SettingsPanel({
   }
 
   function markSecretStatus(providerId: string, isSet: boolean) {
-    const nextStatus = { ...sessionSecretStatus, [providerId]: isSet }
-    setSessionSecretStatus(nextStatus)
     setAiProviders(aiProviders.map((provider) => provider.provider_id === providerId ? { ...provider, secret_session_set: isSet } : provider))
+  }
+
+  function updateSessionSecret(providerId: string, secret: string) {
+    setAiSessionSecret(providerId, secret)
+    markSecretStatus(providerId, secret.trim().length > 0)
   }
 
   return (
@@ -141,7 +146,7 @@ export function SettingsPanel({
 
       <div className="settings-card">
         <strong>AI provider vault</strong>
-        <span>{enabledProviderCount} provider(s) enabled, {armedProviderCount} session/local provider(s) armed. Secrets are never written to persisted project config, exports, release bundles, or handoff JSON.</span>
+        <span>{enabledProviderCount} provider(s) enabled, {armedProviderCount} session/local provider(s) armed, {sessionSecretMemoryCount} volatile secret(s) held in page memory. Secrets are never written to persisted project config, exports, release bundles, or handoff JSON.</span>
         <code>Use local proxies for direct calls from GitHub Pages. Browser-entered secrets are session-only and cleared when the browser session ends.</code>
       </div>
 
@@ -173,12 +178,21 @@ export function SettingsPanel({
                     data-testid={`ai-secret-${provider.provider_id}`}
                     type="password"
                     autoComplete="off"
-                    value=""
+                    defaultValue=""
                     placeholder={sessionSecretStatus[provider.provider_id] ? 'set for this session' : 'paste to arm session'}
-                    onChange={(event) => markSecretStatus(provider.provider_id, event.target.value.trim().length > 0)}
+                    onChange={(event) => updateSessionSecret(provider.provider_id, event.target.value)}
                   />
                 </label>
-                <button onClick={() => markSecretStatus(provider.provider_id, false)} disabled={!sessionSecretStatus[provider.provider_id]}>Clear</button>
+                <button
+                  onClick={(event) => {
+                    updateSessionSecret(provider.provider_id, '')
+                    const input = event.currentTarget.parentElement?.querySelector('input')
+                    if (input) input.value = ''
+                  }}
+                  disabled={!sessionSecretStatus[provider.provider_id]}
+                >
+                  Clear
+                </button>
               </div>
             ) : (
               <span>Local endpoint, no provider secret required.</span>
