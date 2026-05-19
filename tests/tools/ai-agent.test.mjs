@@ -165,6 +165,60 @@ test('AI agent keeps PixelLab requests actionable in static handoff mode', () =>
   assert.match(reply.content, /Pending approvals:/)
 })
 
+test('AI agent understands more natural app function phrasing', () => {
+  const cases = [
+    ['cut out the cloak and make a mask for it', ['create_apes_job']],
+    ['make art in pixel lab for the missing frames', ['prepare_generation_prompt', 'queue_pixellab_generation']],
+    ['download a zip bundle for aseprite', ['export_handoff']],
+    ['why can’t I export this yet', ['explain_export_blockers']],
+    ['what am I looking at right now', ['inspect_live_context']],
+    ['the feet are floating and not lined up', ['diagnose_sprite_alignment']],
+    ['what should I do next to finish this', ['suggest_next_action']],
+    ['find helmet sprites on my pc', ['search_assets']],
+    ['jump to the settings screen', ['open_relevant_panel']],
+    ['compare this frame against the base body', ['compare_current_frame_to_base']],
+    ['is this recipe ready to export', ['validate_current_recipe']],
+    ['write a prompt for aseprite cleanup', ['prepare_generation_prompt']],
+    ['what docs can you cite for this', ['rag_search', 'inspect_rag_sources']],
+    ['run a production check', ['run_project_check']],
+    ['wire up the pixel lab endpoint', ['configure_pixellab_bridge']],
+    ['scan my computer and index assets for knowledge', ['scan_pc_rag_assets']],
+    ['deep scan every combo in the render matrix', ['run_lpc_render_matrix_audit']],
+  ]
+
+  for (const [request, expectedTools] of cases) {
+    const reply = buildAiAgentReply({
+      request,
+      selectedCharacter: character,
+      recipe: {
+        character_id: 'fixture',
+        recipe_mode: 'lpc_character',
+        source_family: 'lpc',
+        base_canvas: [64, 64],
+        base_character: 'fixture',
+        layers: [{ label: 'cloak_back', source_character: 'fixture', offset: [0, 0], visible: true, locked: false, extraction_method: 'manual' }],
+        palette: { ramps: {} },
+        animation_coverage: ['walk'],
+        export_targets: ['aseprite'],
+      },
+      ragIndex: null,
+      providers: [],
+      tools: {
+        aseprite: { enabled: false, executable_path: '', bridge_url: '', script_folder: '' },
+        pixellab: { enabled: false, endpoint_url: '', mcp_server_url: '', preferred_model: '' },
+        local_llm: { enabled: false, endpoint_url: '', provider: 'ollama', model: '' },
+      },
+      lpcPublished: true,
+      localToolsAvailable: true,
+      activitySnapshot: makeActivitySnapshot(),
+    })
+    const toolIds = reply.tool_proposals.map((proposal) => proposal.tool_id)
+    for (const expected of expectedTools) {
+      assert.ok(toolIds.includes(expected), `${request} should propose ${expected}; got ${toolIds.join(', ')}`)
+    }
+  }
+})
+
 test('AI agent includes live activity context when answering current-work questions', () => {
   const reply = buildAiAgentReply({
     request: 'What am I doing right now and why is export blocked?',
@@ -331,6 +385,25 @@ test('AI agent can route to all major app panels', () => {
     assert.ok(reply.tool_proposals.some((proposal) => proposal.tool_id === 'open_relevant_panel' && proposal.input.panel === panel), `${request} should route to ${panel}`)
   }
 })
+
+function makeActivitySnapshot() {
+  return {
+    location: { screen: 'ai', screen_label: 'AI Studio', source_pack_filter: 'lpc', recipe_mode: 'lpc_character' },
+    source: { selected_character_id: 'fixture', selected_character_name: 'Fixture Hero', animation_source_id: 'fixture', animation_source_name: 'Fixture Hero', borrowed_animation_source: false },
+    frame: { animation: 'walk', direction: 'south', frame_index: 0, frame_number: 1, frame_count: 8, playing: false },
+    render_evidence: { source_rect: { x: 0, y: 0, w: 64, h: 64 }, canvas_size: { width: 64, height: 64 }, frame_geometry: 'standard_64' },
+    layer: { selected_layer: 'cloak_back', selected_part_id: null, selected_source_part_id: null, option_count: 3 },
+    recipe: { present: true, character_id: 'fixture', recipe_mode: 'lpc_character', source_family: 'lpc', layer_count: 1, selected_library_part_count: 0, selected_source_part_count: 0, selected_layers: ['cloak_back'], animation_coverage: ['walk'], export_targets: ['aseprite'], readiness_state: 'needs_review', readiness_summary: '1 selected, 0 reviewed' },
+    queues: { generation_job_count: 0, release_blocking_generation_job_count: 0, missing_animation: { issue_count: 2, missing_count: 1, unsupported_count: 1, affected_frame_count: 8 } },
+    knowledge: { rag_loaded: true, rag_status: 'ready', rag_document_count: 5, rag_chunk_count: 22, source_mode: 'local_full', local_tools_available: true, local_tool_capabilities: [], lpc_published: true },
+    tools: { aseprite: 'export_package', pixellab: 'not_connected', local_llm: 'not_connected' },
+    release: { blocker_count: 1, blocker_summary: 'Recipe readiness is needs_review.' },
+    statuses: {},
+    warnings: ['Recipe readiness is needs_review.'],
+    recent_actions: [],
+    tool_history: [],
+  }
+}
 
 function makeProvider(provider_id, name, type, secret_session_set) {
   return {

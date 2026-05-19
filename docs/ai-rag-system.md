@@ -104,6 +104,21 @@ Local-only project checks use direct Node/script paths through the local tool se
 
 AI Studio also exposes a small "Ask about blockers" affordance when the live snapshot has warnings. It simply pre-fills the chat with the relevant warning context; it does not execute tools.
 
+## Natural Language Triggers
+
+AI Studio accepts direct tool names, but it should also understand normal production language. Examples:
+
+- PixelLab/generation: "make art in PixelLab", "fill the missing frames", "draw a cloak variation", "write a PixelLab prompt".
+- APES/masks: "cut out the cloak", "isolate this part", "make a mask", "split out the helmet".
+- Export/handoff: "download a zip", "send this to Aseprite", "make a handoff", "save the package".
+- Current context: "what am I looking at?", "what am I doing right now?", "show current status".
+- Blockers/readiness: "why can't I export?", "what is stopping release?", "is this recipe ready?".
+- Alignment/layers: "the feet are floating", "this is not lined up", "wrong layer", "what is the draw order?".
+- RAG/docs: "what docs can you cite?", "look this up in the knowledge base", "what sources do we have?".
+- Local assets/RAG ingestion: "find helmet sprites on my PC", "scan my computer", "index assets", "fetch web sources".
+- Navigation/setup: "jump to Settings", "open APES Lab", "wire up PixelLab", "connect Aseprite".
+- Project checks: "run a production check", "check the build", "run lint", "test the AI tools".
+
 ## Evaluate RAG Quality
 
 Run:

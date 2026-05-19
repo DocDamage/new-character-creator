@@ -76,49 +76,49 @@ export function chooseAiProvider(providers: AiProviderConnection[], providerHint
 function proposeTools(options: AiAgentRequest, intent = parseAiRequestIntent(options.request)): AiToolProposal[] {
   const proposals: AiToolProposal[] = []
   const lowerRequest = options.request.toLowerCase()
-  const wantsPixellab = /\bpixellab\b/.test(lowerRequest)
-  if (options.activitySnapshot && /\b(what am i|right now|current work|doing now|why .*blocked|what should i)\b/.test(lowerRequest)) {
+  const wantsPixellab = /\b(pixellab|pixel lab|pixel-lab)\b/.test(lowerRequest)
+  if (options.activitySnapshot && /\b(what am i|right now|current work|doing now|why .*blocked|what should i|what now|where am i|status|state|what am i looking at|tell me about this|explain current)\b/.test(lowerRequest)) {
     proposals.push(makeProposal('inspect_live_context', { include_warnings: true, include_recent_actions: true }))
   }
-  if (/\b(export blockers?|blocked|release blockers?|why .*export)\b/.test(lowerRequest)) {
+  if (/\b(export blockers?|blocked|blocking|release blockers?|why .*export|can't export|cannot export|wont export|won't export|not ready|release gate|what is stopping)\b/.test(lowerRequest)) {
     proposals.push(makeProposal('explain_export_blockers', { include_fix_steps: true }))
   }
-  if (/\b(layer stack|layer order|z-order|z order|render order)\b/.test(lowerRequest)) {
+  if (/\b(layer stack|layer order|layers?|z-order|z order|render order|draw order|over|under|in front|behind|wrong layer|which layer|selected layer)\b/.test(lowerRequest)) {
     proposals.push(makeProposal('inspect_layer_stack', { selected_layer: options.activitySnapshot?.layer.selected_layer ?? intent.layers[0] ?? 'current', include_order: true }))
   }
-  if (/\b(align|alignment|line up|lining up|misaligned|sprite alignment)\b/.test(lowerRequest)) {
+  if (/\b(align|alignment|line up|lining up|not lined up|misaligned|sprite alignment|offset|wrong spot|wrong place|misplaced|floats?|floating|feet|floor|body mismatch|doesn't match|does not match)\b/.test(lowerRequest)) {
     proposals.push(makeProposal('diagnose_sprite_alignment', {
       animation: intent.animations[0] ?? options.activitySnapshot?.frame.animation ?? 'idle',
       direction: options.activitySnapshot?.frame.direction ?? 'south',
       layer: options.activitySnapshot?.layer.selected_layer ?? intent.layers[0] ?? 'current',
     }))
   }
-  if (/\b(next action|what should i|next step|do next)\b/.test(lowerRequest)) {
+  if (/\b(next action|what should i|next step|do next|what now|where next|what's next|whats next|recommend|suggest|guide me|help me finish)\b/.test(lowerRequest)) {
     proposals.push(makeProposal('suggest_next_action', { goal: options.request }))
   }
-  if (/\b(search assets?|find assets?|asset search|look for .*assets?|find .*assets?|search .*assets?|search .*helmets?|find .*helmets?|look for .*helmets?|search .*sheets?|find .*sheets?)\b/.test(lowerRequest)) {
+  if (/\b(search assets?|find assets?|asset search|look for .*assets?|find .*assets?|search .*assets?|browse assets?|local assets?|pc assets?|inventory|search .*helmets?|find .*helmets?|look for .*helmets?|search .*sheets?|find .*sheets?|find .*sprites?|look for .*sprites?)\b/.test(lowerRequest)) {
     proposals.push(makeProposal('search_assets', { query: options.request, limit: 8 }))
   }
-  if (/\b(open|go to|take me to|show me)\b/.test(lowerRequest) && /\b(fast creator|workstation|part library|library|batch|asset audit|audit|apes|exports?|settings|ai studio)\b/.test(lowerRequest)) {
+  if (/\b(open|go to|take me to|show me|switch to|jump to|navigate to|bring me to)\b/.test(lowerRequest) && /\b(fast creator|creator|workstation|part library|library|batch|batch generator|asset audit|audit|apes|apes lab|exports?|settings|ai studio|assistant)\b/.test(lowerRequest)) {
     proposals.push(makeProposal('open_relevant_panel', { panel: inferPanel(lowerRequest) }))
   }
-  if (/\b(compare .*base|base .*compare|current frame to base|frame .*base)\b/.test(lowerRequest)) {
+  if (/\b(compare .*base|base .*compare|current frame to base|frame .*base|against the base|original body|source frame|before and after|what changed)\b/.test(lowerRequest)) {
     proposals.push(makeProposal('compare_current_frame_to_base', {
       animation: options.activitySnapshot?.frame.animation ?? intent.animations[0] ?? 'idle',
       direction: options.activitySnapshot?.frame.direction ?? 'south',
       frame_index: options.activitySnapshot?.frame.frame_index ?? 0,
     }))
   }
-  if (/\b(validate .*recipe|recipe validation|check .*recipe|current recipe)\b/.test(lowerRequest)) {
+  if (/\b(validate .*recipe|recipe validation|check .*recipe|current recipe|is .*recipe .*ready|recipe ready|ready to export|can i export|safe to export)\b/.test(lowerRequest)) {
     proposals.push(makeProposal('validate_current_recipe', { include_release_gates: true }))
   }
-  if (/\b(generation prompt|prepare prompt|pixellab prompt|apes prompt|aseprite prompt|lpc prompt|duelyst prompt)\b/.test(lowerRequest) || wantsPixellab) {
+  if (/\b(generation prompt|prepare prompt|prompt me|write .*prompt|make .*prompt|pixellab prompt|pixel lab prompt|apes prompt|aseprite prompt|lpc prompt|duelyst prompt|brief for|instructions for)\b/.test(lowerRequest) || wantsPixellab) {
     proposals.push(makeProposal('prepare_generation_prompt', { target: inferGenerationPromptTarget(lowerRequest), include_rag_context: Boolean(options.ragIndex) }))
   }
-  if (/\b(rag sources?|what .*rag knows|inspect rag|rag status|citations?)\b/.test(lowerRequest)) {
+  if (/\b(rag sources?|source documents?|knowledge sources?|what .*rag knows|inspect rag|rag status|citations?|references?|knowledge status|what sources|what docs|what can you cite)\b/.test(lowerRequest)) {
     proposals.push(makeProposal('inspect_rag_sources', { include_private_status: options.localToolsAvailable }))
   }
-  if (/\b(run .*check|project check|run lint|lint|source hygiene|hosted rag check|release build|ai tool tests?)\b/.test(lowerRequest)) {
+  if (/\b(run .*check|project check|run lint|lint|source hygiene|hosted rag check|release build|ai tool tests?|test tools?|verify project|check build|build check|production check)\b/.test(lowerRequest)) {
     proposals.push(makeProposal('run_project_check', { check: inferProjectCheck(lowerRequest) }))
   }
   if (intent.actions.includes('rag_search') && !lowerRequest.includes('activate')) {
@@ -170,10 +170,10 @@ function proposeTools(options: AiAgentRequest, intent = parseAiRequestIntent(opt
     }))
   }
   if (intent.actions.includes('source_ingestion')) {
-    if (/\b(scan pc|pc assets|feed (the )?rag)\b/.test(lowerRequest)) {
+    if (/\b(scan pc|scan computer|scan my computer|scan my pc|pc assets|local assets|find assets|asset inventory|feed (the )?rag|feed (the )?knowledge|index assets)\b/.test(lowerRequest)) {
       proposals.push(makeProposal('scan_pc_rag_assets', { dedupe: true, include_private_sources: true }))
     }
-    if (/\b(web rag|fetch web|download sources|sources)\b/.test(lowerRequest)) {
+    if (/\b(web rag|fetch web|crawl web|download sources|add sources|source ingestion|index sources)\b/.test(lowerRequest)) {
       proposals.push(makeProposal('fetch_web_rag_sources', { source_set: 'expanded', dedupe: true }))
     }
   }
@@ -184,7 +184,7 @@ function proposeTools(options: AiAgentRequest, intent = parseAiRequestIntent(opt
 }
 
 function inferPanel(request: string) {
-  if (request.includes('fast creator')) return 'fast'
+  if (request.includes('fast creator') || /\bcreator\b/.test(request)) return 'fast'
   if (request.includes('workstation')) return 'workstation'
   if (request.includes('part library') || request.includes('library')) return 'library'
   if (request.includes('batch')) return 'batch'
@@ -206,8 +206,8 @@ function inferGenerationPromptTarget(request: string) {
 function inferProjectCheck(request: string) {
   if (request.includes('source hygiene')) return 'source_hygiene'
   if (request.includes('hosted rag') || request.includes('rag check')) return 'rag_hosted_check'
-  if (request.includes('release build') || request.includes('build')) return 'release_build'
-  if (request.includes('ai tool') || request.includes('tool tests')) return 'ai_tools_tests'
+  if (request.includes('release build') || request.includes('build') || request.includes('production check')) return 'release_build'
+  if (request.includes('ai tool') || request.includes('tool tests') || request.includes('test tools')) return 'ai_tools_tests'
   return 'lint'
 }
 
