@@ -796,6 +796,25 @@ test('harvest workflows are exposed and produce usable app artifacts', async ({ 
   await expect(page.locator('.part-library-list').getByText('playwright_bundle_head')).toBeVisible()
 
   await page.getByTestId('nav-batch').click()
+  await expect(page.getByRole('heading', { name: 'Batch Generator' })).toBeVisible()
+  const batchCards = page.locator('.variant-list article')
+  await expect(batchCards.first()).toBeVisible()
+  const cardBounds = await batchCards.evaluateAll((cards) =>
+    cards.map((card) => {
+      const rect = card.getBoundingClientRect()
+      return {
+        left: rect.left,
+        right: rect.right,
+        viewportWidth: window.innerWidth,
+      }
+    }),
+  )
+  expect(cardBounds.every((bounds) => bounds.left >= 0 && bounds.right <= bounds.viewportWidth)).toBe(true)
+  const batchManifest = await readJsonDownload<{ variants: Array<{ base: string; recipe: unknown }> }>(page, async () => {
+    await page.getByRole('button', { name: 'Download batch package manifest' }).click()
+  })
+  expect(JSON.stringify(batchManifest.variants)).not.toMatch(/duelyst|\/data\/duelyst|staged/i)
+  expect(batchManifest.variants.every((variant) => variant.base.length > 0)).toBe(true)
   await page.getByTestId('save-variation-preset').click()
   await expect(page.getByTestId('variation-preset-select')).not.toHaveValue('')
 

@@ -240,9 +240,10 @@ input {
 
 .canvas-error {
   display: block;
-  max-width: 280px;
+  max-width: 100%;
   color: var(--warning);
   font-size: 11px;
+  overflow-wrap: anywhere;
 }
 
 .topbar-actions,
@@ -810,7 +811,7 @@ input {
 }
 
 .variant-list {
-  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 1fr));
 }
 
 .variant-list article,
@@ -829,6 +830,28 @@ input {
 .apes-summary article {
   display: grid;
   gap: 4px;
+  min-width: 0;
+}
+
+.variant-list article {
+  align-content: start;
+  overflow: hidden;
+}
+
+.variant-list article > span,
+.variant-list article > small {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.variant-list .pixel-stage {
+  justify-items: center;
+  min-width: 0;
+}
+
+.variant-list .composite-stage canvas {
+  width: min(100%, 160px);
+  height: auto;
 }
 
 .audit-grid,

@@ -214,8 +214,16 @@ function isLocalApesOutputPath(assetPath: string | undefined) {
 }
 
 function getSourcePackFilter(character: CharacterManifest): SourcePackFilter {
+  const normalizedId = character.character_id.toLowerCase()
+  const normalizedSource = `${character.source_folder} ${character.representative_frame}`.replaceAll('\\', '/').toLowerCase()
   if (character.class_type === 'lpc_character' || character.character_id.startsWith('lpc-')) return 'lpc'
-  if (character.character_id.startsWith('duelyst-') || character.source_folder.includes(localToolPath('duelyst'))) return 'duelyst'
+  if (
+    normalizedId.startsWith('duelyst-') ||
+    normalizedId.startsWith('duelyst_') ||
+    normalizedSource.includes('/duelyst/') ||
+    normalizedSource.includes('data/duelyst/') ||
+    normalizedSource.includes(localToolPath('duelyst').toLowerCase())
+  ) return 'duelyst'
   return 'sprite'
 }
 
@@ -884,11 +892,26 @@ function App() {
   const batchVariants = useMemo(() => {
     if (!selectedCharacter || characters.length === 0) return []
     const random = seededRandom(batchSeed)
-    const reviewedParts = partLibrary.filter((part) => part.reviewed)
+    const batchRecipeMode = recipeMode === 'duelyst_review' ? 'sprite_kitbash' : recipeMode
+    const baseCandidates = characters.filter((character) =>
+      isMainSourceCharacter(character) &&
+      canShowCharacterInRecipeMode(character, batchRecipeMode) &&
+      getSourcePackFilter(character) !== 'duelyst',
+    )
+    const fallbackBaseCandidates = characters.filter((character) =>
+      isMainSourceCharacter(character) &&
+      canShowCharacterInRecipeMode(character, 'sprite_kitbash') &&
+      getSourcePackFilter(character) !== 'duelyst',
+    )
+    const basePool = baseCandidates.length > 0 ? baseCandidates : fallbackBaseCandidates
+    const reviewedParts = partLibrary.filter((part) =>
+      part.reviewed &&
+      (!isLpcExtractedPart(part) || batchRecipeMode === 'lpc_character'),
+    )
     const activePreset = variationPresets.find((preset) => preset.preset_id === activeVariationPresetId)
     return Array.from({ length: batchCount }, (_, index) => {
-      const presetBase = activePreset ? characters.find((character) => character.character_id === activePreset.base_character) : undefined
-      const baseCharacter = presetBase ?? characters[Math.floor(random() * characters.length)]
+      const presetBase = activePreset ? basePool.find((character) => character.character_id === activePreset.base_character) : undefined
+      const baseCharacter = presetBase ?? basePool[Math.floor(random() * basePool.length)] ?? selectedCharacter
       const parts = layerOrder.map((label) => {
         const presetPartId = activePreset?.selected_part_ids[label]
         const presetPart = presetPartId ? partLibrary.find((part) => part.part_id === presetPartId) : undefined
@@ -902,7 +925,9 @@ function App() {
           }
         }
 
-        const approvedCandidates = reviewedParts.filter((part) => part.label === label)
+        const approvedCandidates = reviewedParts.filter((part) =>
+          part.label === label && isPartCompatibleWithMannequin(part, baseCharacter),
+        )
         if (approvedCandidates.length > 0) {
           const sourcePart = approvedCandidates[Math.floor(random() * approvedCandidates.length)]
           return {
@@ -914,10 +939,9 @@ function App() {
           }
         }
 
-        const source = characters[Math.floor(random() * characters.length)]
         return {
           label,
-          source_character: source.character_id,
+          source_character: baseCharacter.character_id,
           method: apesCoreLabels.includes(label) ? 'apes' : random() > 0.5 ? 'preset_region' : 'connected_pixel',
           reviewed: false,
         }
@@ -935,19 +959,23 @@ function App() {
         base: baseCharacter.character_id,
         palette: resolvedPalette,
         parts,
-        recipe: makeRecipe(
-          baseCharacter,
-          selectedSourceParts,
-          partLibrary,
-          selectedPartIds,
-          activePreset?.layer_settings ?? {},
-          `batch_${batchSeed}_${String(index + 1).padStart(3, '0')}`,
-          resolvedPalette,
-          activePreset?.palette_rules ?? defaultPaletteRules,
-        ),
+        recipe: {
+          ...makeRecipe(
+            baseCharacter,
+            selectedSourceParts,
+            partLibrary,
+            selectedPartIds,
+            activePreset?.layer_settings ?? {},
+            `batch_${batchSeed}_${String(index + 1).padStart(3, '0')}`,
+            resolvedPalette,
+            activePreset?.palette_rules ?? defaultPaletteRules,
+          ),
+          recipe_mode: batchRecipeMode,
+          source_family: sourceFamilyForRecipeMode(batchRecipeMode),
+        },
       }
     })
-  }, [activeVariationPresetId, batchCount, batchSeed, characters, partLibrary, selectedCharacter, variationPresets])
+  }, [activeVariationPresetId, batchCount, batchSeed, characters, partLibrary, recipeMode, selectedCharacter, variationPresets])
 
   function updateRegion(key: keyof Rect, value: number) {
     setRegions((current) => ({
