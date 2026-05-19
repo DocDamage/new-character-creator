@@ -80,6 +80,31 @@ test('LPC catalog parses contiguous layers, tags, variants, credits, and custom 
   assert.ok(longsword.animations.includes('slash_oversize'))
 })
 
+test('LPC catalog prefers local CC0 license over upstream sheet-definition credits', async () => {
+  const root = await mkdtemp(path.join(tmpdir(), 'pixel-creator-lpc-local-license-'))
+  const referenceRoot = path.join(root, 'universal-lpc')
+  const assetRoot = path.join(root, 'local-lpc')
+  await mkdir(path.join(referenceRoot, 'sheet_definitions', 'torso', 'cape'), { recursive: true })
+  await mkdir(assetRoot, { recursive: true })
+  await writeFile(path.join(assetRoot, 'license.txt'), 'Public Domain Dedication (CC0 1.0)\nCredit optional.\n')
+  await writeDefinition(referenceRoot, 'torso/cape/cape_solid.json', {
+    name: 'Solid',
+    tags: ['back', 'cape'],
+    layer_1: { zPos: 85, male: 'cape/solid/female/' },
+    credits: [{ file: 'cape/solid', notes: '', authors: ['Wrong Upstream Artist'], licenses: ['OGA-BY 3.0'], urls: ['https://example.test'] }],
+    type_name: 'cape',
+  })
+
+  const catalog = buildLpcCatalog({ referenceRoot, assetRoot, generatedAt: '2026-05-18T00:00:00.000Z' })
+  const cape = catalog.items['cape:cape_solid']
+
+  assert.equal(catalog.source.credit_basis, 'local_asset_license')
+  assert.equal(catalog.source.local_asset_license.license, 'CC0 1.0')
+  assert.equal(cape.credits[0].licenses[0], 'CC0 1.0')
+  assert.deepEqual(cape.credits[0].authors, [])
+  assert.match(cape.credits[0].notes, /Attribution is optional/i)
+})
+
 async function writeDefinition(referenceRoot, relativePath, definition) {
   const filePath = path.join(referenceRoot, 'sheet_definitions', ...relativePath.split('/'))
   await mkdir(path.dirname(filePath), { recursive: true })

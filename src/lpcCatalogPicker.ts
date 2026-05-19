@@ -75,7 +75,8 @@ export function buildLpcSelectionCreditReadiness(catalog: LpcCatalog, selections
       const authors = unique(item.credits.flatMap((credit) => credit.authors))
       const licenses = unique(item.credits.flatMap((credit) => credit.licenses))
       const urls = unique(item.credits.flatMap((credit) => credit.urls))
-      const status: LpcSelectionCreditReadiness['items'][number]['status'] = item.credits.length === 0 || authors.length === 0 || licenses.length === 0
+      const attributionOptional = licenses.some((license) => /CC0|public domain/i.test(license))
+      const status: LpcSelectionCreditReadiness['items'][number]['status'] = item.credits.length === 0 || licenses.length === 0 || (!attributionOptional && authors.length === 0)
         ? 'missing'
         : item.credits.some((credit) => /review|verify|check/i.test(credit.notes))
           ? 'needs_review'

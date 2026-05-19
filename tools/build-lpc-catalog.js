@@ -103,6 +103,43 @@ function normalizeCredits(credits) {
   }))
 }
 
+function readLocalLicenseSummary(assetRoot) {
+  if (!assetRoot || !fs.existsSync(assetRoot)) return null
+  const licenseFiles = listFiles(assetRoot)
+    .filter((filePath) => path.basename(filePath).toLowerCase() === 'license.txt')
+    .map((filePath) => {
+      let text = ''
+      try {
+        text = fs.readFileSync(filePath, 'utf8')
+      } catch {
+        text = ''
+      }
+      return {
+        path: relativePath(filePath, assetRoot),
+        text,
+      }
+    })
+  const cc0Files = licenseFiles.filter((file) => /CC0\s+1\.0|Public Domain Dedication/i.test(file.text))
+  if (cc0Files.length === 0) return null
+  return {
+    license: 'CC0 1.0',
+    attribution_required: false,
+    files: cc0Files.map((file) => file.path).sort(),
+    notes: 'Local asset dump includes CC0 1.0 public domain dedication license files. Attribution is optional, not required.',
+  }
+}
+
+function localLicenseCredits(localLicenseSummary) {
+  if (!localLicenseSummary) return null
+  return [{
+    file: localLicenseSummary.files[0] ?? 'license.txt',
+    notes: localLicenseSummary.notes,
+    authors: [],
+    licenses: [localLicenseSummary.license],
+    urls: ['https://creativecommons.org/publicdomain/zero/1.0/'],
+  }]
+}
+
 function inferAnimations(definition, layers) {
   const animations = new Set(Array.isArray(definition.animations) ? definition.animations.filter((value) => typeof value === 'string') : [])
   for (const layer of layers) {
@@ -151,12 +188,14 @@ function readPaletteMetadata(referenceRoot) {
   }
 }
 
-export function buildLpcCatalog({ referenceRoot, generatedAt = new Date().toISOString() }) {
+export function buildLpcCatalog({ referenceRoot, assetRoot, generatedAt = new Date().toISOString() }) {
   const sheetDefinitionsRoot = path.join(referenceRoot, 'sheet_definitions')
   const spritesheetsRoot = path.join(referenceRoot, 'spritesheets')
   const paletteDefinitionsRoot = path.join(referenceRoot, 'palette_definitions')
   const creditsPath = path.join(referenceRoot, 'CREDITS.csv')
   const definitionFiles = listFiles(sheetDefinitionsRoot).filter((filePath) => filePath.endsWith('.json'))
+  const localLicenseSummary = readLocalLicenseSummary(assetRoot)
+  const localCredits = localLicenseCredits(localLicenseSummary)
   const items = {}
   const aliases = {}
 
@@ -195,7 +234,7 @@ export function buildLpcCatalog({ referenceRoot, generatedAt = new Date().toISOS
       match_body_color: Boolean(definition.match_body_color),
       recolors: normalizeRecolors(definition.recolors),
       layers,
-      credits: normalizeCredits(definition.credits),
+      credits: localCredits ?? normalizeCredits(definition.credits),
     }
 
     aliases[slug(relative.replace(/\.json$/i, ''))] = { item_id: itemId, path: relative }
@@ -218,6 +257,9 @@ export function buildLpcCatalog({ referenceRoot, generatedAt = new Date().toISOS
       has_sheet_definitions: fs.existsSync(sheetDefinitionsRoot),
       has_palette_definitions: fs.existsSync(paletteDefinitionsRoot),
       has_credits_csv: fs.existsSync(creditsPath),
+      local_asset_root: assetRoot && fs.existsSync(assetRoot) ? normalize(assetRoot) : null,
+      local_asset_license: localLicenseSummary,
+      credit_basis: localLicenseSummary ? 'local_asset_license' : 'upstream_sheet_definitions',
     },
     summary: {
       item_count: itemList.length,
@@ -235,13 +277,14 @@ export function buildLpcCatalog({ referenceRoot, generatedAt = new Date().toISOS
 
 function main() {
   if (cliArgs.includes('--help') || cliArgs.includes('-h')) {
-    console.log('Usage: node tools/build-lpc-catalog.js [--reference-root <path>] [--out <path>]')
+    console.log('Usage: node tools/build-lpc-catalog.js [--reference-root <path>] [--asset-root <path>] [--out <path>]')
     return
   }
 
   const referenceRoot = path.resolve(argValue('--reference-root') || process.env.PIXEL_CREATOR_LPC_REFERENCE_ROOT || path.join(appRoot, 'data', 'cache', 'universal-lpc-generator'))
+  const assetRoot = path.resolve(argValue('--asset-root') || process.env.PIXEL_CREATOR_LPC_ROOT || path.join(appRoot, 'assets', 'lpc sprite generator stuff'))
   const outPath = path.resolve(argValue('--out') || path.join(appRoot, 'data', 'lpc', 'lpc_catalog.json'))
-  const catalog = buildLpcCatalog({ referenceRoot })
+  const catalog = buildLpcCatalog({ referenceRoot, assetRoot })
   fs.mkdirSync(path.dirname(outPath), { recursive: true })
   fs.writeFileSync(outPath, `${JSON.stringify(catalog, null, 2)}\n`, 'utf8')
   console.log(`Wrote LPC catalog: ${outPath}`)

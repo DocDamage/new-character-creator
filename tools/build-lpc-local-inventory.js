@@ -126,6 +126,25 @@ function readCreditFiles(rootPath) {
     })
 }
 
+function summarizeLocalLicenses(creditFiles) {
+  const cc0Files = creditFiles.filter((file) => /CC0\s+1\.0|Public Domain Dedication/i.test(file.excerpt))
+  if (cc0Files.length === 0) return {
+    license: null,
+    attribution_required: true,
+    basis: 'unknown_or_mixed',
+    files: [],
+    notes: 'No local CC0 license file was detected. Treat credits as unresolved until source files are reviewed.',
+  }
+
+  return {
+    license: 'CC0 1.0',
+    attribution_required: false,
+    basis: 'local_license_files',
+    files: cc0Files.map((file) => file.path).sort(),
+    notes: 'Local license files state CC0 1.0 public domain dedication; attribution is optional, not required.',
+  }
+}
+
 function inspectReferenceRepo(referenceRoot) {
   if (!fs.existsSync(referenceRoot)) {
     return {
@@ -181,6 +200,7 @@ function main() {
     .filter(Boolean)
 
   const gridSheets = sheets.filter((sheet) => sheet.lpc_grid)
+  const creditFiles = readCreditFiles(assetRoot)
   const inventory = {
     format: 'pixel_creator_lpc_asset_inventory',
     generated_at: new Date().toISOString(),
@@ -189,6 +209,7 @@ function main() {
       asset_root: normalize(assetRoot),
       upstream_repo: 'https://github.com/liberatedpixelcup/Universal-LPC-Spritesheet-Character-Generator',
       upstream_reference: inspectReferenceRepo(referenceRoot),
+      local_license: null,
     },
     summary: {
       png_count: sheets.length,
@@ -198,9 +219,10 @@ function main() {
       frame_grids: countBy(gridSheets, (sheet) => `${sheet.frame_columns}x${sheet.frame_rows}`),
       credit_file_count: 0,
     },
-    credit_files: readCreditFiles(assetRoot),
+    credit_files: creditFiles,
     sheets,
   }
+  inventory.source.local_license = summarizeLocalLicenses(creditFiles)
   inventory.summary.credit_file_count = inventory.credit_files.length
 
   fs.mkdirSync(path.dirname(outPath), { recursive: true })

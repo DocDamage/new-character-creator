@@ -80,7 +80,8 @@ function buildSelectedLpcCatalogCredits(recipe: KitbashRecipe | null, lpcCatalog
       const licenses = unique(credits.flatMap((credit) => credit.licenses))
       const urls = unique(credits.flatMap((credit) => credit.urls))
       const notes = unique(credits.map((credit) => credit.notes).filter(Boolean))
-      const status: LpcCatalogCreditStatus = credits.length === 0 || authors.length === 0 || licenses.length === 0
+      const attributionOptional = licenses.some((license) => /CC0|public domain/i.test(license))
+      const status: LpcCatalogCreditStatus = credits.length === 0 || licenses.length === 0 || (!attributionOptional && authors.length === 0)
         ? 'missing'
         : credits.some((credit) => /review|verify|check/i.test(credit.notes))
           ? 'needs_review'

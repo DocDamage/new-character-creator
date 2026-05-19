@@ -116,6 +116,13 @@ export type LpcAssetInventory = {
       spritesheet_png_count?: number
       credits_csv_available?: boolean
     }
+    local_license?: {
+      license: string | null
+      attribution_required: boolean
+      basis: string
+      files: string[]
+      notes: string
+    } | null
   }
   summary: {
     png_count: number

@@ -83,6 +83,14 @@ export type LpcCatalog = {
     has_sheet_definitions: boolean
     has_palette_definitions: boolean
     has_credits_csv: boolean
+    local_asset_root?: string | null
+    local_asset_license?: {
+      license: string
+      attribution_required: boolean
+      files: string[]
+      notes: string
+    } | null
+    credit_basis?: 'local_asset_license' | 'upstream_sheet_definitions'
   }
   summary: {
     item_count: number

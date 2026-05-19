@@ -75,23 +75,38 @@ test('LPC selected-item credit readiness reports missing and review-needed credi
   ])
 })
 
-function makeCatalog() {
-  return {
-    format: 'pixel_creator_lpc_catalog',
-    version: 1,
-    generated_at: '2026-05-18T00:00:00.000Z',
-    source: {
-      repo: 'https://example.test',
-      reference_root: '/tmp/lpc',
-      commit: 'abc123',
-      has_upstream_sources: false,
-      has_spritesheets: true,
-      has_sheet_definitions: true,
-      has_palette_definitions: false,
-      has_credits_csv: true,
+test('LPC selected-item credit readiness accepts CC0 without authors', () => {
+  const catalog = makeCatalog({
+    'cape:cc0': {
+      item_id: 'cape:cc0',
+      name: 'CC0 Cape',
+      type_name: 'cape',
+      path: ['cape'],
+      tags: ['cape'],
+      required_tags: [],
+      excluded_tags: [],
+      required_body_types: ['male'],
+      variants: ['black'],
+      animations: ['walk'],
+      preview: { row: 0, column: 0, x_offset: 0, y_offset: 0 },
+      match_body_color: false,
+      recolors: [],
+      layers: [],
+      credits: [{ file: 'license.txt', notes: 'Attribution optional.', authors: [], licenses: ['CC0 1.0'], urls: [] }],
     },
-    summary: { item_count: 4, layer_count: 5, variant_count: 4, credit_count: 2, type_counts: {} },
-    items: {
+  })
+
+  const readiness = buildLpcSelectionCreditReadiness(catalog, {
+    cape: { slot_id: 'cape', item_id: 'cape:cc0', variant: 'black', type_name: 'cape', enabled: true },
+  })
+
+  assert.equal(readiness.ok_count, 1)
+  assert.equal(readiness.missing_count, 0)
+  assert.equal(readiness.release_blocking, false)
+})
+
+function makeCatalog(items = {}) {
+  const defaultItems = {
       'cape:cape_solid': {
         item_id: 'cape:cape_solid',
         name: 'Solid',
@@ -163,7 +178,23 @@ function makeCatalog() {
         ],
         credits: [{ file: 'weapon/sword/longsword', notes: '', authors: [], licenses: [], urls: [] }],
       },
+    }
+  return {
+    format: 'pixel_creator_lpc_catalog',
+    version: 1,
+    generated_at: '2026-05-18T00:00:00.000Z',
+    source: {
+      repo: 'https://example.test',
+      reference_root: '/tmp/lpc',
+      commit: 'abc123',
+      has_upstream_sources: false,
+      has_spritesheets: true,
+      has_sheet_definitions: true,
+      has_palette_definitions: false,
+      has_credits_csv: true,
     },
+    summary: { item_count: Object.keys({ ...defaultItems, ...items }).length, layer_count: 5, variant_count: 4, credit_count: 2, type_counts: {} },
+    items: { ...defaultItems, ...items },
     category_tree: { id: 'root', label: 'LPC Catalog', item_ids: [], children: [] },
     aliases: {},
     palettes: { definition_count: 0, names: [] },
