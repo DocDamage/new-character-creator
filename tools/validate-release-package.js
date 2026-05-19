@@ -86,7 +86,36 @@ function validateReleasePackage(distRoot) {
 
   failures.push(...validateLpcInventory(distRoot))
   failures.push(...validateLpcCatalog(distRoot))
+  failures.push(...validateDuelystManifest(distRoot))
   failures.push(...scanBlockedReleaseFiles(distRoot))
+
+  return failures
+}
+
+function validateDuelystManifest(distRoot) {
+  const failures = []
+  const manifestPath = path.resolve(distRoot, 'data', 'manifests', 'duelyst.json')
+  if (!fs.existsSync(manifestPath)) return failures
+
+  let manifest
+  try {
+    manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'))
+  } catch (error) {
+    return [`Public Duelyst manifest could not be parsed: ${error instanceof Error ? error.message : String(error)}`]
+  }
+
+  const assetPaths = collectDuelystManifestAssetPaths(manifest)
+  for (const assetPath of assetPaths) {
+    if (assetPath.includes('/@fs/') || assetPath.includes('/__local/') || /^[A-Z]:[\\/]/i.test(assetPath)) {
+      failures.push(`Duelyst manifest asset must be release-relative, not local: ${assetPath}`)
+      continue
+    }
+
+    const resolved = resolveDistAssetPath(distRoot, assetPath)
+    if (!resolved || !fs.existsSync(resolved)) {
+      failures.push(`Missing Duelyst manifest asset: ${assetPath}`)
+    }
+  }
 
   return failures
 }
@@ -216,6 +245,36 @@ function collectManifestAssetPaths(manifest) {
         for (const frame of frames) {
           addPath(paths, frame.path)
         }
+      }
+    }
+  }
+  return [...paths]
+}
+
+function collectDuelystManifestAssetPaths(manifest) {
+  const paths = new Set()
+  for (const candidate of manifest.candidate_units ?? []) {
+    addPath(paths, candidate.preview_url)
+    addPath(paths, candidate.staged_frame_url)
+    for (const frames of Object.values(candidate.staged_animations ?? {})) {
+      if (!Array.isArray(frames)) continue
+      for (const frame of frames) addPath(paths, frame.path)
+    }
+  }
+  for (const character of manifest.staged_manifest?.characters ?? []) {
+    addPath(paths, character.representative_frame)
+    for (const item of character.rotation_preview_paths ?? []) {
+      addPath(paths, item.path)
+    }
+    for (const animation of character.animations ?? []) {
+      for (const frames of Object.values(animation.directions ?? {})) {
+        if (!Array.isArray(frames)) continue
+        for (const frame of frames) addPath(paths, frame.path)
+      }
+    }
+    for (const animations of Object.values(character.directions ?? {})) {
+      for (const record of Object.values(animations ?? {})) {
+        for (const frame of record.frames ?? []) addPath(paths, frame.path)
       }
     }
   }

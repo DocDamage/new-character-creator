@@ -129,6 +129,54 @@ test('release validator scans every emitted text asset for private references', 
   }
 })
 
+test('release validator checks public Duelyst staged frame assets', async () => {
+  const distRoot = await mkdtemp(path.join(tmpdir(), 'pixel-creator-release-duelyst-'))
+  try {
+    await mkdir(path.join(distRoot, 'data', 'manifests'), { recursive: true })
+    await mkdir(path.join(distRoot, 'data', 'sprites', 'fixture'), { recursive: true })
+    await mkdir(path.join(distRoot, 'data', 'duelyst', 'staged', 'f6_general', 'idle'), { recursive: true })
+    await writeFile(path.join(distRoot, 'data', 'sprites', 'fixture', 'frame.png'), 'png', 'utf8')
+    await writeFile(path.join(distRoot, 'data', 'duelyst', 'staged', 'f6_general_stage.png'), 'png', 'utf8')
+    await writeFile(path.join(distRoot, 'data', 'manifests', 'characters.json'), JSON.stringify({
+      characters: [
+        {
+          character_id: 'fixture',
+          representative_frame: '/data/sprites/fixture/frame.png',
+          rotation_preview_paths: [{ path: '/data/sprites/fixture/frame.png' }],
+          animations: [{ name: 'idle', directions: { south: [{ path: '/data/sprites/fixture/frame.png' }] } }],
+        },
+      ],
+    }), 'utf8')
+    await writeFile(path.join(distRoot, 'data', 'manifests', 'duelyst.json'), JSON.stringify({
+      candidate_units: [
+        {
+          preview_url: '/data/duelyst/staged/f6_general_stage.png',
+          staged_frame_url: '/data/duelyst/staged/f6_general_stage.png',
+        },
+      ],
+      staged_manifest: {
+        characters: [
+          {
+            representative_frame: '/data/duelyst/staged/f6_general/idle/000.png',
+            rotation_preview_paths: [{ path: '/data/duelyst/staged/f6_general/idle/000.png' }],
+            animations: [{ name: 'idle', directions: { south: [{ path: '/data/duelyst/staged/f6_general/idle/000.png' }] } }],
+          },
+        ],
+      },
+    }), 'utf8')
+
+    const result = spawnSync(process.execPath, [validatorPath, '--dist', distRoot], {
+      cwd: repoRoot,
+      encoding: 'utf8',
+    })
+
+    assert.notEqual(result.status, 0)
+    assert.match(result.stderr, /Missing Duelyst manifest asset: \/data\/duelyst\/staged\/f6_general\/idle\/000\.png/)
+  } finally {
+    await rm(distRoot, { recursive: true, force: true })
+  }
+})
+
 test('release validator checks hosted LPC inventory assets and excludes binaries', async () => {
   const distRoot = await mkdtemp(path.join(tmpdir(), 'pixel-creator-release-lpc-'))
   try {

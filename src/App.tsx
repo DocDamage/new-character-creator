@@ -105,6 +105,7 @@ import {
   seededRandom,
   slugLabel,
 } from './utils'
+import { normalizeDuelystAudit } from './duelystManifest'
 
 type Screen = 'fast' | 'workstation' | 'library' | 'batch' | 'audit' | 'ai' | 'apes' | 'exports' | 'settings'
 
@@ -163,22 +164,6 @@ function sourcePackForRecipeMode(recipeMode: RecipeModeId): SourcePackFilter {
   if (recipeMode === 'lpc_character') return 'lpc'
   if (recipeMode === 'duelyst_review') return 'duelyst'
   return 'sprite'
-}
-
-function normalizeDuelystAudit(payload: DuelystPackageAudit): DuelystPackageAudit {
-  const stagedCount = payload.staged_manifest?.character_count ?? payload.staged_manifest?.characters?.length ?? 0
-  const candidateCount = payload.candidate_units?.length ?? 0
-  return {
-    ...payload,
-    candidate_units: payload.candidate_units ?? [],
-    findings: payload.findings ?? [],
-    summary: payload.summary || `Loaded ${candidateCount} Duelyst candidate sheet(s) and ${stagedCount} staged review frame(s).`,
-    staged_manifest: {
-      ...payload.staged_manifest,
-      character_count: stagedCount,
-      characters: payload.staged_manifest?.characters ?? [],
-    },
-  }
 }
 
 type ImportApesReportOptions = {
@@ -2405,7 +2390,7 @@ function App() {
         throw new Error(payload.error || payload.stderr || `Duelyst audit failed with status ${response.status}`)
       }
 
-      const duelyst = normalizeDuelystAudit(payload.duelyst)
+      const duelyst = normalizeDuelystAudit(payload.duelyst, publicAssetPath)
       setDuelystAudit(duelyst)
       setDuelystStatus(`${duelyst.summary} Staged candidates now appear in the source-character picker and can be opened directly in the workstation.`)
     } catch (error) {
@@ -2534,7 +2519,7 @@ function App() {
         return
       }
 
-      const audit = normalizeDuelystAudit(payload)
+      const audit = normalizeDuelystAudit(payload, publicAssetPath)
       setDuelystAudit(audit)
       setDuelystStatus(`${audit.summary} Loaded from ${label}; staged entries are available in the picker and workstation.`)
     } catch (error) {
