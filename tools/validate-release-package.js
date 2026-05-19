@@ -10,7 +10,7 @@ const textAssetExtensions = new Set(['.html', '.js', '.css', '.json', '.svg', '.
 const forbiddenTextPatterns = [
   { pattern: /\/@fs\//, label: '/@fs/' },
   { pattern: /\/__local\//, label: '/__local/' },
-  { pattern: /[A-Z]:[\\/][\w .()[\]-]+[\\/]/i, label: 'Windows absolute path' },
+  { pattern: /[A-Z]:[\\/](?![rn][\\/])[A-Za-z0-9_.()[\] -]+[\\/]/i, label: 'Windows absolute path' },
   { pattern: /characters\.local\.json|duelyst\.private\.json/, label: 'private manifest name' },
   { pattern: /Duelyst-Unit-Animations|lpc sprite generator stuff/i, label: 'private asset root' },
   { pattern: /\.ps1|setup_home_pc/i, label: 'local PowerShell setup script' },
@@ -81,6 +81,63 @@ function validateReleasePackage(distRoot) {
     if (!resolved || !fs.existsSync(resolved)) {
       failures.push(`Missing manifest asset: ${assetPath}`)
     }
+  }
+
+  failures.push(...validateLpcInventory(distRoot))
+
+  return failures
+}
+
+function validateLpcInventory(distRoot) {
+  const failures = []
+  const inventoryPath = path.resolve(distRoot, 'data', 'lpc', 'lpc_asset_inventory.json')
+  if (!fs.existsSync(inventoryPath)) return failures
+
+  let inventory
+  try {
+    inventory = JSON.parse(fs.readFileSync(inventoryPath, 'utf8'))
+  } catch (error) {
+    return [`LPC inventory could not be parsed: ${error instanceof Error ? error.message : String(error)}`]
+  }
+
+  const assetRoot = inventory?.source?.asset_root
+  if (assetRoot !== '/assets/lpc') {
+    failures.push(`LPC inventory asset root must be release public path /assets/lpc, got ${String(assetRoot)}`)
+  }
+  const forbiddenPaths = [
+    inventory?.source?.asset_root,
+    inventory?.source?.upstream_reference?.root,
+  ].filter(Boolean).join('\n')
+  if (/\/@fs\/|\/__local\/|[A-Z]:[\\/]|lpc sprite generator stuff/i.test(forbiddenPaths)) {
+    failures.push('LPC inventory contains a local/private source root.')
+  }
+
+  const sheets = Array.isArray(inventory?.sheets) ? inventory.sheets : []
+  if (sheets.length === 0) {
+    failures.push('LPC inventory is present but has no sheets.')
+    return failures
+  }
+
+  for (const sheet of sheets.slice(0, 25)) {
+    if (!sheet || typeof sheet.path !== 'string') continue
+    const publicPath = `/assets/lpc/${sheet.path.replaceAll('\\', '/')}`
+    const resolved = resolveDistAssetPath(distRoot, publicPath)
+    if (!resolved || !fs.existsSync(resolved)) {
+      failures.push(`Missing LPC inventory sheet asset: ${publicPath}`)
+    }
+  }
+
+  const lpcAssetRoot = path.resolve(distRoot, 'assets', 'lpc')
+  if (!fs.existsSync(lpcAssetRoot)) {
+    failures.push('LPC inventory is present but dist/assets/lpc is missing.')
+    return failures
+  }
+
+  const blockedLpcEntries = walkFiles(lpcAssetRoot)
+    .filter((filePath) => /\.(exe)$/i.test(filePath) || /[\\/](__MACOSX|\.git)[\\/]|[\\/]\.DS_Store$/i.test(filePath))
+    .map((filePath) => path.relative(distRoot, filePath).replaceAll(path.sep, '/'))
+  for (const filePath of blockedLpcEntries) {
+    failures.push(`Forbidden LPC release asset: ${filePath}`)
   }
 
   return failures

@@ -2692,7 +2692,7 @@ function App() {
               tools={toolConnections}
               messages={aiStudioMessages}
               setMessages={setAiStudioMessages}
-              lpcPublished={Boolean(lpcCatalog && lpcInventory)}
+              lpcPublished={Boolean(lpcInventory)}
               localToolsAvailable={localToolsAvailable}
               createApesJob={createApesJob}
               createGenerationJobsFromQueue={createGenerationJobsFromCurrentMissingQueue}

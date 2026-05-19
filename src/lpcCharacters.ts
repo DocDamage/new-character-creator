@@ -1,4 +1,5 @@
 import type { AnimationName, AnimationManifest, CharacterManifest, Direction, FrameRef, LpcAssetInventory, PartLabel } from './types'
+import { publicAssetPath } from './localToolsClient.ts'
 
 const lpcDirectionRows: Array<[Direction, number]> = [
   ['north', 0],
@@ -425,7 +426,7 @@ function buildLpcSheetUrl(inventory: LpcAssetInventory, sheetPath: string) {
   const assetsIndex = assetRoot.toLowerCase().lastIndexOf('/assets/')
   if (assetsIndex < 0) return undefined
   const assetsRelativeRoot = assetRoot.slice(assetsIndex + '/assets/'.length)
-  return `/assets/${assetsRelativeRoot}/${sheetPath.replaceAll('\\', '/')}`.replaceAll('//', '/')
+  return publicAssetPath(`assets/${assetsRelativeRoot}/${sheetPath.replaceAll('\\', '/')}`)
 }
 
 function buildLpcFrames(path: string, fileName: string, columns: number, row: number, frameWidth: number, frameHeight: number): FrameRef[] {

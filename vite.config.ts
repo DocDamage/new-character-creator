@@ -48,8 +48,51 @@ function releasePackagePlugin() {
       if (!releaseManifestAssetsAvailable(distRoot)) {
         writeBundledReleaseManifest(distRoot)
       }
+      writeBundledLpcAssets(distRoot)
     },
   }
+}
+
+function writeBundledLpcAssets(distRoot: string) {
+  const lpcSourceRoot = path.resolve(appRoot, 'assets', 'lpc sprite generator stuff')
+  const lpcInventoryPath = path.resolve(appRoot, 'data', 'lpc', 'lpc_asset_inventory.json')
+  if (!fs.existsSync(lpcSourceRoot) || !fs.existsSync(lpcInventoryPath)) return
+
+  const publicLpcAssetRoot = path.resolve(distRoot, 'assets', 'lpc')
+  fs.rmSync(publicLpcAssetRoot, { recursive: true, force: true })
+  copyReleaseDirectory(lpcSourceRoot, publicLpcAssetRoot)
+
+  const lpcDataRoot = path.resolve(distRoot, 'data', 'lpc')
+  fs.mkdirSync(lpcDataRoot, { recursive: true })
+  const inventory = JSON.parse(fs.readFileSync(lpcInventoryPath, 'utf8'))
+  inventory.source = {
+    ...inventory.source,
+    asset_root: '/assets/lpc',
+    upstream_reference: {
+      ...inventory.source?.upstream_reference,
+      root: '',
+    },
+  }
+  fs.writeFileSync(path.resolve(lpcDataRoot, 'lpc_asset_inventory.json'), `${JSON.stringify(inventory, null, 2)}\n`, 'utf8')
+}
+
+function copyReleaseDirectory(sourceRoot: string, targetRoot: string) {
+  fs.mkdirSync(targetRoot, { recursive: true })
+  for (const entry of fs.readdirSync(sourceRoot, { withFileTypes: true })) {
+    if (shouldSkipReleaseAsset(entry.name)) continue
+    const sourcePath = path.resolve(sourceRoot, entry.name)
+    const targetPath = path.resolve(targetRoot, entry.name)
+    if (entry.isDirectory()) {
+      copyReleaseDirectory(sourcePath, targetPath)
+    } else if (entry.isFile()) {
+      fs.copyFileSync(sourcePath, targetPath)
+    }
+  }
+}
+
+function shouldSkipReleaseAsset(name: string) {
+  const lowerName = name.toLowerCase()
+  return lowerName === '.git' || lowerName === '__macosx' || lowerName === '.ds_store' || lowerName.endsWith('.exe')
 }
 
 function releaseManifestAssetsAvailable(distRoot: string) {

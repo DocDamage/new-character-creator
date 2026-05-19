@@ -128,3 +128,44 @@ test('release validator scans every emitted text asset for private references', 
     await rm(distRoot, { recursive: true, force: true })
   }
 })
+
+test('release validator checks hosted LPC inventory assets and excludes binaries', async () => {
+  const distRoot = await mkdtemp(path.join(tmpdir(), 'pixel-creator-release-lpc-'))
+  try {
+    await mkdir(path.join(distRoot, 'data', 'manifests'), { recursive: true })
+    await mkdir(path.join(distRoot, 'data', 'sprites', 'fixture'), { recursive: true })
+    await mkdir(path.join(distRoot, 'data', 'lpc'), { recursive: true })
+    await mkdir(path.join(distRoot, 'assets', 'lpc', 'Bases'), { recursive: true })
+    await writeFile(path.join(distRoot, 'data', 'sprites', 'fixture', 'frame.png'), 'png', 'utf8')
+    await writeFile(path.join(distRoot, 'assets', 'lpc', 'Bases', 'Body.png'), 'png', 'utf8')
+    await writeFile(path.join(distRoot, 'assets', 'lpc', 'Memao Sprite Sheet Creator.exe'), 'binary', 'utf8')
+    await writeFile(path.join(distRoot, 'data', 'manifests', 'characters.json'), JSON.stringify({
+      characters: [
+        {
+          character_id: 'fixture',
+          representative_frame: '/data/sprites/fixture/frame.png',
+          rotation_preview_paths: [{ path: '/data/sprites/fixture/frame.png' }],
+          animations: [{ name: 'idle', directions: { south: [{ path: '/data/sprites/fixture/frame.png' }] } }],
+        },
+      ],
+    }), 'utf8')
+    await writeFile(path.join(distRoot, 'data', 'lpc', 'lpc_asset_inventory.json'), JSON.stringify({
+      format: 'pixel_creator_lpc_asset_inventory',
+      source: {
+        asset_root: '/assets/lpc',
+        upstream_reference: { root: '' },
+      },
+      sheets: [{ path: 'Bases/Body.png' }],
+    }), 'utf8')
+
+    const result = spawnSync(process.execPath, [validatorPath, '--dist', distRoot], {
+      cwd: repoRoot,
+      encoding: 'utf8',
+    })
+
+    assert.notEqual(result.status, 0)
+    assert.match(result.stderr, /Forbidden LPC release asset/)
+  } finally {
+    await rm(distRoot, { recursive: true, force: true })
+  }
+})

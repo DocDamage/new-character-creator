@@ -1,5 +1,5 @@
 import type { Direction, ExtractedPart, LayerBundleManifest, LpcAssetInventory, PartLabel, Rect } from './types'
-import { localFsPathPrefix, localToolPath } from './localToolsClient.ts'
+import { localFsPathPrefix, localToolPath, publicAssetPath } from './localToolsClient.ts'
 
 export type LpcSheetImportOptions = {
   sheetPaths?: string[]
@@ -188,7 +188,7 @@ export function buildLpcSheetUrl(inventory: LpcAssetInventory, sheetPath: string
   const assetsIndex = assetRoot.toLowerCase().lastIndexOf('/assets/')
   if (assetsIndex < 0) return undefined
   const assetsRelativeRoot = assetRoot.slice(assetsIndex + '/assets/'.length)
-  return `/assets/${assetsRelativeRoot}/${sheetPath.replaceAll('\\', '/')}`.replaceAll('//', '/')
+  return publicAssetPath(`assets/${assetsRelativeRoot}/${sheetPath.replaceAll('\\', '/')}`)
 }
 
 export function inferLpcPartLabel(sheet: LpcAssetInventory['sheets'][number]): PartLabel {
