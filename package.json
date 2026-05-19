@@ -9,6 +9,7 @@
     "repair:manifest-paths": "node tools/repair-manifest-paths.js",
     "lpc:inventory": "node tools/build-lpc-local-inventory.js",
     "lpc:catalog": "node tools/build-lpc-catalog.js",
+    "lpc:alignment-audit": "node tools/audit-lpc-alignment.js",
     "rag:index": "node tools/build-rag-index.js",
     "rag:evaluate": "npm run rag:index && node tools/evaluate-rag-index.js",
     "export:character": "node tools/export-character.js",
