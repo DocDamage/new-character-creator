@@ -21,7 +21,6 @@ dist-ssr
 output/
 data/apes/
 data/cache/
-data/lpc/
 data/rag/
 data/training/
 data/exports/*/exports/
@@ -34,7 +33,6 @@ public/data/manifests/characters.local.json
 public/data/manifests/duelyst.private.json
 /????????????????????????????????/
 /assets/Animated-Pixel-Pack-Characters-V1/
-/assets/lpc sprite generator stuff/
 /assets/Duelyst-Unit-Animations.unitypackage
 /assets/checkpoints/
 /assets/creative_flow/
@@ -48,6 +46,12 @@ public/data/manifests/duelyst.private.json
 vendor/**/.git/
 vendor/**/__pycache__/
 vendor/**/*.pyc
+
+# LPC source assets are tracked for the hosted app, but do not publish binaries.
+*.exe
+*.EXE
+assets/lpc sprite generator stuff/**/.git/
+assets/lpc sprite generator stuff/**/__MACOSX/
 
 # Editor directories and files
 .vscode/*

@@ -10,10 +10,8 @@ const forbiddenTrackedPatterns = [
   /^public\/data\/manifests\/duelyst\.private\.json$/i,
   /^data\/apes\//i,
   /^data\/cache\//i,
-  /^data\/lpc\//i,
   /^data\/training\//i,
   /^assets\/Animated-Pixel-Pack-Characters-V1\//i,
-  /^assets\/lpc sprite generator stuff\//i,
   /^assets\/Duelyst-Unit-Animations\.unitypackage$/i,
   /^assets\/checkpoints\//i,
   /^test-results\//i,
@@ -58,6 +56,7 @@ function runGit(args) {
   const result = spawnSync('git', args, {
     cwd: appRoot,
     encoding: 'utf8',
+    maxBuffer: 50 * 1024 * 1024,
   })
   if (result.status !== 0) {
     throw new Error(result.stderr || result.stdout || `git ${args.join(' ')} failed`)
