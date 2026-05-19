@@ -124,9 +124,9 @@ Placeholder APES fallback is only for development. If it is enabled, release exp
 
 ## AI And RAG
 
-Run `npm run rag:index` to build the local AI knowledge index, or `npm run rag:evaluate` to rebuild it and score the regression query set. APES Lab and AI Studio use that index to attach project, APES, LPC, provider, license, and release-review context to generation jobs and chat replies. Generated output remains blocked from release until reviewed.
+Run `npm run rag:index` to build the AI knowledge indexes, or `npm run rag:evaluate` to rebuild them and score the regression query set. The command writes the full local index to `data/rag/knowledge_index.json` and a public-safe hosted index to `public/data/rag/knowledge_index.json`, so AI Studio's `Activate RAG` button works in both local-tools previews and static hosted builds. APES Lab and AI Studio use that index to attach project, APES, LPC, provider, license, Duelyst, and release-review context to generation jobs and chat replies. Generated output remains blocked from release until reviewed.
 
-AI Studio can propose tool actions, but privileged work is approval-gated. Direct provider calls are routed through a trusted loopback proxy or backend; browser-entered provider secrets are held only in volatile memory and are never written to localStorage, sessionStorage, exports, generated manifests, logs, release bundles, or git.
+AI Studio can propose tool actions, but privileged work is approval-gated. Direct provider calls are routed through a trusted loopback proxy or backend; browser-entered provider secrets are held only in volatile memory and are never written to localStorage, sessionStorage, exports, generated manifests, logs, release bundles, or git. Settings includes one-click defaults and live checks for Aseprite, PixelLab, and local LLM loopback bridges.
 
 ### 7. Handle Missing Animations
 
@@ -192,6 +192,15 @@ Local tool POST requests require:
 - generated `.local-tools-token`
 
 The token is ignored by public release builds.
+
+### Aseprite, PixelLab, And Local LLM Setup
+
+Open `Settings`, then use:
+
+1. `Use Aseprite defaults`, `Use PixelLab defaults`, or `Use local LLM defaults`.
+2. Adjust the executable path, endpoint URL, model, or script folder if your machine differs.
+3. Run the matching `Check ...` button while using a dev/local-tools session.
+4. Ask AI Studio for an Aseprite handoff, PixelLab generation queue, or local-LLM plan. The AI can propose those tool actions, but you approve them before execution.
 
 ### Release Gate
 
@@ -317,6 +326,8 @@ Then:
 4. Inspect staged candidates.
 5. Open a staged character in the workstation.
 6. Queue APES jobs if you want mask extraction.
+
+The public Duelyst manifest is also loaded on startup when present. Staged `duelyst_*` entries stay in the `Duelyst` source family, so choosing `Duelyst` in the source picker should show review candidates instead of mixing them into sprite-kitbash or LPC part layers.
 
 ## APES Notes
 

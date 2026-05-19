@@ -486,6 +486,11 @@ The rebuild must also provide `data/rag/eval_queries.json` and
 `tools/evaluate-rag-index.js`. `npm run rag:evaluate` must fail when required
 source citations or required terms are missing.
 
+`npm run rag:index` must produce both:
+
+- `data/rag/knowledge_index.json`: full local index for local-tools sessions.
+- `public/data/rag/knowledge_index.json`: public-safe hosted index for the static app's `Activate RAG` flow.
+
 AI Studio messages:
 
 - Chat transcript supports user and assistant messages.
@@ -493,6 +498,7 @@ AI Studio messages:
 - Assistant messages can include pending tool proposals.
 - Tool proposals must show input, permission scope, status, and result/failure.
 - Tool proposals execute only after explicit user approval.
+- AI Studio must be able to activate RAG from the UI. Hosted builds load the public index; local-tools builds may load or rebuild the full local index.
 
 Generation jobs must:
 
@@ -507,8 +513,9 @@ Tool registry:
 
 - Tools have IDs, labels, permission scopes, and JSON-like input schemas.
 - Required first-class tool proposals include APES job creation, PixelLab
-  generation queueing, and export handoff.
+  generation queueing, RAG activation, and export handoff.
 - Rejected or failed tools must leave visible recovery text.
+- Settings must expose default-and-check controls for Aseprite, PixelLab, and local LLM loopback connections so those tools can be made available to AI Studio on request.
 
 Training inbox drafts and approved records must preserve source kind, source names, goal, animation, directions, frame layout, frame size, export profile, source-family compatibility, validation findings, review state, and provenance.
 

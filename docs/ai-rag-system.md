@@ -10,13 +10,13 @@ Run:
 npm run rag:index
 ```
 
-This writes `data/rag/knowledge_index.json` from project docs, release notes, APES notes, LPC catalog summaries, manifests, and local APES inventory when present.
+This writes the full local index to `data/rag/knowledge_index.json` from project docs, release notes, APES notes, LPC catalog summaries, manifests, and local APES inventory when present. It also writes a public-safe hosted index to `public/data/rag/knowledge_index.json` so AI Studio can activate RAG in the static app without requiring the local tools server.
 
 ## Use RAG Context
 
-1. Run `npm run rag:index` or `npm run rag:evaluate`.
+1. Run `npm run rag:index` or `npm run rag:evaluate` before publishing a hosted build. In a local-tools session, AI Studio can also rebuild the full local index from the app.
 2. Open AI Studio or APES Lab.
-3. Confirm AI Knowledge reports a loaded index.
+3. Click `Activate RAG` and confirm AI Knowledge reports a loaded or active index.
 4. Build or select an LPC catalog-backed recipe with missing or unsupported animation records.
 5. Ask AI Studio for a plan or click Create generation jobs from queue in APES Lab.
 6. Review citations and any proposed tool actions.
@@ -36,7 +36,7 @@ This writes `data/rag/knowledge_index.json` from project docs, release notes, AP
 - Provider API keys are session-only when typed into the app, redacted from handoffs, and direct provider calls go through a trusted local proxy.
 - Tool calls are proposed first and execute only after user approval.
 - Local proxy, Aseprite, and PixelLab bridge actions write redacted audit records.
-- Public static builds cannot depend on hidden browser secrets.
+- Public static builds cannot depend on hidden browser secrets, but they can load the shipped public RAG index.
 
 ## Evaluate RAG Quality
 

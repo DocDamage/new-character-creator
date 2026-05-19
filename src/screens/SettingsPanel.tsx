@@ -1,4 +1,5 @@
-import type { Dispatch, SetStateAction } from 'react'
+import { useState, type Dispatch, type SetStateAction } from 'react'
+import { localToolFetch, localToolPath } from '../localToolsClient'
 import type { AiProviderConnection, ApesPreflightReport, ToolConnectionSettings } from '../types'
 
 type SettingsPanelProps = {
@@ -68,6 +69,7 @@ export function SettingsPanel({
   const apesPlaceholderLabel = apesAllowPlaceholder ? 'Placeholder APES fallback enabled for UI-only testing.' : 'Real APES bridge only. Placeholder fallback is disabled.'
   const enabledProviderCount = aiProviders.filter((provider) => provider.enabled).length
   const armedProviderCount = aiProviders.filter((provider) => provider.secret_session_set || provider.secret_storage === 'none').length
+  const [bridgeStatus, setBridgeStatus] = useState('Use defaults to enable a local bridge, then run a check from this browser session.')
 
   function updateProvider(providerId: string, patch: Partial<AiProviderConnection>) {
     setAiProviders(aiProviders.map((provider) => provider.provider_id === providerId ? { ...provider, ...patch } : provider))
@@ -80,6 +82,87 @@ export function SettingsPanel({
   function updateSessionSecret(providerId: string, secret: string) {
     setAiSessionSecret(providerId, secret)
     markSecretStatus(providerId, secret.trim().length > 0)
+  }
+
+  function applyAsepriteDefaults() {
+    setToolConnections({
+      ...toolConnections,
+      aseprite: {
+        ...toolConnections.aseprite,
+        enabled: true,
+        bridge_url: toolConnections.aseprite.bridge_url || 'http://127.0.0.1:32123',
+        script_folder: toolConnections.aseprite.script_folder || 'tools/aseprite',
+      },
+    })
+    setBridgeStatus('Aseprite bridge defaults enabled. Add the executable path if you want the local bridge to launch Aseprite directly.')
+  }
+
+  function applyPixelLabDefaults() {
+    setToolConnections({
+      ...toolConnections,
+      pixellab: {
+        ...toolConnections.pixellab,
+        enabled: true,
+        endpoint_url: toolConnections.pixellab.endpoint_url || 'http://127.0.0.1:8787',
+        preferred_model: toolConnections.pixellab.preferred_model || 'sprite-animation',
+      },
+    })
+    setBridgeStatus('PixelLab defaults enabled. The endpoint must stay loopback-only for direct generation handoffs.')
+  }
+
+  function applyLocalLlmDefaults() {
+    setToolConnections({
+      ...toolConnections,
+      local_llm: {
+        ...toolConnections.local_llm,
+        enabled: true,
+        provider: toolConnections.local_llm.provider || 'ollama',
+        endpoint_url: toolConnections.local_llm.endpoint_url || 'http://127.0.0.1:11434',
+        model: toolConnections.local_llm.model || 'llama3.1',
+      },
+    })
+    setBridgeStatus('Local LLM defaults enabled for Ollama. Switch provider/model here if you use LM Studio or another loopback server.')
+  }
+
+  async function checkAsepriteBridge() {
+    await checkLocalBridge('Aseprite', localToolPath('bridge/aseprite'), {
+      action: 'check',
+      executablePath: toolConnections.aseprite.executable_path,
+      bridgeUrl: toolConnections.aseprite.bridge_url,
+    })
+  }
+
+  async function checkPixelLabBridge() {
+    await checkLocalBridge('PixelLab', localToolPath('bridge/pixellab'), {
+      endpointUrl: toolConnections.pixellab.endpoint_url,
+      prompt: 'Pixel Creator bridge health check for a single idle frame.',
+      animation: 'idle',
+    })
+  }
+
+  async function checkLocalLlm() {
+    await checkLocalBridge('Local LLM', localToolPath('ai/proxy'), {
+      provider: toolConnections.local_llm.provider,
+      model: toolConnections.local_llm.model,
+      baseUrl: toolConnections.local_llm.endpoint_url,
+      messages: [{ role: 'user', content: 'Reply with Pixel Creator local LLM bridge OK.' }],
+    })
+  }
+
+  async function checkLocalBridge(label: string, url: string, body: unknown) {
+    setBridgeStatus(`Checking ${label} through the local proxy...`)
+    try {
+      const response = await localToolFetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      })
+      const payload = await response.json().catch(() => null) as { ok?: boolean; error?: string } | null
+      if (!response.ok || !payload?.ok) throw new Error(payload?.error ?? `${label} check failed with status ${response.status}`)
+      setBridgeStatus(`${label} check passed. The app can request this tool after you approve the AI-proposed action.`)
+    } catch (error) {
+      setBridgeStatus(`${label} check failed. ${error instanceof Error ? error.message : String(error)}`)
+    }
   }
 
   return (
@@ -225,6 +308,11 @@ export function SettingsPanel({
               <span>Bridge URL</span>
               <input value={toolConnections.aseprite.bridge_url} onChange={(event) => setToolConnections({ ...toolConnections, aseprite: { ...toolConnections.aseprite, bridge_url: event.target.value } })} />
             </label>
+            <label className="field">
+              <span>Script folder</span>
+              <input value={toolConnections.aseprite.script_folder} onChange={(event) => setToolConnections({ ...toolConnections, aseprite: { ...toolConnections.aseprite, script_folder: event.target.value } })} />
+            </label>
+            <button type="button" onClick={applyAsepriteDefaults}>Use Aseprite defaults</button>
           </article>
           <article>
             <label className="field checkbox-field">
@@ -243,6 +331,11 @@ export function SettingsPanel({
               <span>MCP server URL</span>
               <input value={toolConnections.pixellab.mcp_server_url} onChange={(event) => setToolConnections({ ...toolConnections, pixellab: { ...toolConnections.pixellab, mcp_server_url: event.target.value } })} />
             </label>
+            <label className="field">
+              <span>Preferred model</span>
+              <input value={toolConnections.pixellab.preferred_model} onChange={(event) => setToolConnections({ ...toolConnections, pixellab: { ...toolConnections.pixellab, preferred_model: event.target.value } })} />
+            </label>
+            <button type="button" onClick={applyPixelLabDefaults}>Use PixelLab defaults</button>
           </article>
           <article>
             <label className="field checkbox-field">
@@ -269,13 +362,15 @@ export function SettingsPanel({
               <span>Model</span>
               <input value={toolConnections.local_llm.model} onChange={(event) => setToolConnections({ ...toolConnections, local_llm: { ...toolConnections.local_llm, model: event.target.value } })} />
             </label>
+            <button type="button" onClick={applyLocalLlmDefaults}>Use local LLM defaults</button>
           </article>
         </div>
         <div className="settings-actions">
-          <button data-testid="check-aseprite-bridge" disabled={!localToolsAvailable}>Check Aseprite bridge</button>
-          <button data-testid="check-pixellab-bridge" disabled={!localToolsAvailable}>Check PixelLab bridge</button>
-          <button data-testid="check-local-llm" disabled={!localToolsAvailable}>Check local LLM</button>
+          <button data-testid="check-aseprite-bridge" onClick={() => void checkAsepriteBridge()} disabled={!localToolsAvailable}>Check Aseprite bridge</button>
+          <button data-testid="check-pixellab-bridge" onClick={() => void checkPixelLabBridge()} disabled={!localToolsAvailable}>Check PixelLab bridge</button>
+          <button data-testid="check-local-llm" onClick={() => void checkLocalLlm()} disabled={!localToolsAvailable}>Check local LLM</button>
         </div>
+        <span data-testid="tool-bridge-status">{bridgeStatus}</span>
       </div>
 
       <div className="settings-card">

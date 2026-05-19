@@ -29,6 +29,14 @@ The app-side PixelLab bridge is intentionally guarded:
 - tool actions should be proposed in AI Studio and explicitly approved
 - audit logs are redacted before writing JSONL records
 
+## In-App Setup
+
+1. Open `Settings`.
+2. Click `Use PixelLab defaults` to enable the loopback endpoint and default sprite-animation model.
+3. Change the endpoint or model if your PixelLab bridge uses a different local port.
+4. Click `Check PixelLab bridge` from a dev/local-tools session.
+5. Return to AI Studio and ask for a PixelLab missing-animation handoff. The assistant can propose the generation queue tool, but it does not run until you approve it.
+
 ## Suggested missing-animation workflow
 
 1. Try the app's Motion source selector to borrow a compatible local LPC action, such as `slash`, `thrust`, or `shoot`.

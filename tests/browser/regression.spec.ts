@@ -661,6 +661,13 @@ test('Duelyst audit stays usable with or without the local package', async ({ pa
   await expect(page.locator('#character')).toHaveValue(/duelyst_/, { timeout: 30_000 })
 })
 
+test('Duelyst public staged sources populate the source picker', async ({ page }) => {
+  await page.getByTestId('source-pack-filter').selectOption('duelyst')
+  await expect(page.locator('#character')).toHaveValue(/duelyst_/, { timeout: 30_000 })
+  expect(await page.locator('#character option').count()).toBeGreaterThan(0)
+  await expect(page.locator('.topbar h2')).not.toHaveText('')
+})
+
 test('settings can export a portable local setup bundle', async ({ page }) => {
   await page.getByTestId('nav-settings').click()
   await page.getByTestId('settings-asset-root-input').fill('D:\\sprite-packs\\Animated-Pixel-Pack-Characters-V1')
@@ -683,6 +690,8 @@ test('AI Studio chat and provider vault are surfaced without persisting secrets'
   await expect(page.getByRole('heading', { name: 'AI Studio' })).toBeVisible()
   await expect(page.getByText('RAG brain')).toBeVisible()
   await expect(page.getByTestId('activate-rag')).toBeVisible()
+  await page.getByTestId('activate-rag').click()
+  await expect(page.getByText(/RAG active|RAG index loaded/)).toBeVisible({ timeout: 30_000 })
 
   await page.getByTestId('ai-chat-input').fill('Draft a cleanup plan and cite relevant context.')
   await page.getByTestId('ai-chat-send').click()

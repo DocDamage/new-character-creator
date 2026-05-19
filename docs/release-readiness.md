@@ -107,6 +107,8 @@ suite exercises bundled behavior rather than the Vite dev transform path.
   license metadata.
 - `npm run rag:evaluate` rebuilds the RAG index and fails if required source
   citations or expected terms are missing from the regression set.
+- `npm run rag:index` now writes both the full local index and the
+  public-safe hosted index used by the static AI Studio `Activate RAG` flow.
 - `npm run build:release` creates the public static package without installing
   local tool middleware. `npm run build:local-tools` creates the private preview
   bundle used only for local APES/LPC/Duelyst/repair workflows.
@@ -135,9 +137,15 @@ suite exercises bundled behavior rather than the Vite dev transform path.
   and secret-looking notes do not land in storage or exported JSON.
 - AI Studio replies can cite RAG context and propose tool actions, but tool
   execution requires explicit user approval.
+- AI Studio's RAG activation is covered in browser regression: hosted builds
+  load `public/data/rag/knowledge_index.json`, while local-tools builds can
+  rebuild through the guarded local RAG route.
 - Local proxy, Aseprite bridge, and PixelLab bridge routes are loopback-only,
   token-gated, body-limited, path-allowlisted where applicable, and write
   redacted audit records.
+- Settings provides default-and-check controls for Aseprite, PixelLab, and
+  local LLM connections so AI-requested tools can be enabled without editing
+  raw configuration.
 - `npm run index:assets` preserves the checked-in fallback
   `public/data/manifests/characters.json` when scanning ignored in-repo assets
   or external asset roots. Local scans write `characters.local.json` unless

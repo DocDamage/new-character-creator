@@ -46,8 +46,14 @@ export const sourceFamilies: Record<SourceFamilyId, SourceFamily> = {
 
 export function inferSourceFamilyForCharacter(character: CharacterManifest | undefined): SourceFamilyId {
   if (!character) return 'sprite_pack'
+  const assetLabels = character.labels?.asset_labels
   if (character.class_type === 'lpc_character' || character.labels?.lpc_role) return 'lpc'
-  if (character.class_type === 'duelyst_staged' || character.labels?.source_family === 'duelyst') return 'duelyst'
+  if (
+    character.class_type === 'duelyst_staged' ||
+    character.character_id.startsWith('duelyst_') ||
+    character.labels?.duelyst_unit ||
+    (Array.isArray(assetLabels) && assetLabels.includes('duelyst_public_review_candidate'))
+  ) return 'duelyst'
   return 'sprite_pack'
 }
 

@@ -7,6 +7,10 @@ const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..'
 const outputPath = path.join(repoRoot, 'data', 'rag', 'knowledge_index.json')
 const outArgIndex = process.argv.indexOf('--out')
 const resolvedOutputPath = outArgIndex >= 0 ? path.resolve(process.argv[outArgIndex + 1]) : outputPath
+const publicOutArgIndex = process.argv.indexOf('--public-out')
+const resolvedPublicOutputPath = publicOutArgIndex >= 0
+  ? path.resolve(process.argv[publicOutArgIndex + 1])
+  : (outArgIndex >= 0 ? null : path.join(repoRoot, 'public', 'data', 'rag', 'knowledge_index.json'))
 const limitDocsArgIndex = process.argv.indexOf('--limit-docs')
 const limitDocs = limitDocsArgIndex >= 0 ? Number(process.argv[limitDocsArgIndex + 1]) || Infinity : Infinity
 
@@ -24,29 +28,60 @@ const sourceSpecs = [
   { source_type: 'apes_inventory', path: 'data/apes/output/apes_output_inventory.json', title: 'APES Output Inventory' },
 ]
 
-const documents = []
-for (const spec of sourceSpecs) {
-  if (documents.length >= limitDocs) break
-  const absolutePath = path.join(repoRoot, spec.path)
-  if (!fs.existsSync(absolutePath)) continue
-  const raw = fs.readFileSync(absolutePath, 'utf8')
-  documents.push({
-    source_id: spec.path.replaceAll('\\', '/'),
-    source_type: spec.source_type,
-    title: spec.title,
-    uri: spec.path.replaceAll('\\', '/'),
-    text: normalizeSourceText(raw, spec.path),
-    metadata: {
-      path: spec.path.replaceAll('\\', '/'),
-      workflow: inferWorkflow(spec.path),
-    },
-  })
+const publicSourceSpecs = [
+  { source_type: 'doc', path: 'docs/pixellab-mcp.md', title: 'PixelLab MCP animation bridge' },
+  { source_type: 'doc', path: 'docs/ai-rag-system.md', title: 'AI RAG System' },
+  { source_type: 'asset_manifest', path: 'public/data/manifests/characters.json', title: 'Public Character Manifest' },
+  { source_type: 'duelyst_manifest', path: 'public/data/manifests/duelyst.json', title: 'Public Duelyst Manifest' },
+]
+
+const documents = loadDocuments(sourceSpecs, limitDocs)
+writeIndex(documents, resolvedOutputPath)
+
+if (resolvedPublicOutputPath) {
+  const publicDocuments = loadDocuments(publicSourceSpecs, limitDocs, sanitizePublicText)
+  writeIndex(publicDocuments, resolvedPublicOutputPath)
 }
 
-const index = buildRagIndex(documents)
-fs.mkdirSync(path.dirname(resolvedOutputPath), { recursive: true })
-fs.writeFileSync(resolvedOutputPath, `${JSON.stringify(index, null, 2)}\n`, 'utf8')
-console.log(`Wrote ${index.chunk_count} RAG chunk(s) from ${index.document_count} source document(s) to ${path.relative(repoRoot, resolvedOutputPath)}.`)
+function loadDocuments(specs, documentLimit, sanitizeText = (value) => value) {
+  const loaded = []
+  for (const spec of specs) {
+    if (loaded.length >= documentLimit) break
+    const absolutePath = path.join(repoRoot, spec.path)
+    if (!fs.existsSync(absolutePath)) continue
+    const raw = fs.readFileSync(absolutePath, 'utf8')
+    loaded.push({
+      source_id: spec.path.replaceAll('\\', '/'),
+      source_type: spec.source_type,
+      title: spec.title,
+      uri: spec.path.replaceAll('\\', '/'),
+      text: sanitizeText(normalizeSourceText(raw, spec.path)),
+      metadata: {
+        path: spec.path.replaceAll('\\', '/'),
+        workflow: inferWorkflow(spec.path),
+      },
+    })
+  }
+  return loaded
+}
+
+function writeIndex(documentsToIndex, targetPath) {
+  const index = buildRagIndex(documentsToIndex)
+  fs.mkdirSync(path.dirname(targetPath), { recursive: true })
+  fs.writeFileSync(targetPath, `${JSON.stringify(index, null, 2)}\n`, 'utf8')
+  console.log(`Wrote ${index.chunk_count} RAG chunk(s) from ${index.document_count} source document(s) to ${path.relative(repoRoot, targetPath)}.`)
+}
+
+function sanitizePublicText(text) {
+  return text
+    .replaceAll('/__local/', '/local-bridge/')
+    .replaceAll('/@fs/', '/local-file/')
+    .replaceAll('duelyst.private.json', 'private Duelyst manifest')
+    .replaceAll('characters.local.json', 'local character manifest')
+    .replace(/Duelyst-Unit-Animations/gi, 'Duelyst source package')
+    .replace(/lpc sprite generator stuff/gi, 'LPC source assets')
+    .replace(/[A-Z]:[\\/](?![rn][\\/])[A-Za-z0-9_.()[\] -]+[\\/]/g, 'local-path/')
+}
 
 function normalizeSourceText(raw, sourcePath) {
   if (!sourcePath.endsWith('.json')) return raw
@@ -61,6 +96,9 @@ function normalizeSourceText(raw, sourcePath) {
 function summarizeJson(value) {
   if (Array.isArray(value)) return value.slice(0, 40).map(summarizeJson)
   if (!value || typeof value !== 'object') return value
+  if (typeof value.character_id === 'string' && value.directions && typeof value.directions === 'object') {
+    return summarizeCharacterManifest(value)
+  }
   const output = {}
   for (const [key, child] of Object.entries(value)) {
     if (Array.isArray(child)) {
@@ -72,6 +110,30 @@ function summarizeJson(value) {
     }
   }
   return output
+}
+
+function summarizeCharacterManifest(character) {
+  return {
+    character_id: character.character_id,
+    display_name: character.display_name,
+    class_type: character.class_type,
+    labels: character.labels,
+    source_folder: character.source_folder,
+    canvas_size: character.canvas_size,
+    animation_names: character.animation_names,
+    source_quality_warnings: character.source_quality_warnings,
+    representative_frame: character.representative_frame,
+    rotation_preview_paths: Array.isArray(character.rotation_preview_paths) ? character.rotation_preview_paths.slice(0, 4) : [],
+    animations: Array.isArray(character.animations)
+      ? character.animations.map((animation) => ({
+          name: animation.name,
+          directions: Object.fromEntries(Object.entries(animation.directions ?? {}).map(([direction, frames]) => [
+            direction,
+            Array.isArray(frames) ? frames.length : 0,
+          ])),
+        }))
+      : [],
+  }
 }
 
 function inferWorkflow(sourcePath) {
