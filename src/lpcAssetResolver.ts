@@ -71,7 +71,7 @@ export function resolveLpcLayerAsset(options: LpcResolveOptions): Pick<LpcDrawRe
     if (!options.availablePaths || options.availablePaths.has(sourcePath)) {
       return {
         source_path: sourcePath,
-        source_rect: sourceRectFor(candidate, options.direction, options.frameIndex),
+        source_rect: sourceRectFor(candidate, options.direction, options.frameIndex, sourcePath),
         dest_rect: destRectFor(candidate),
         animation_status: candidate === requestedAnimation ? 'exact' : 'fallback',
         resolved_animation: candidate,
@@ -95,8 +95,8 @@ function animationCandidates(requestedAnimation: string, itemAnimations: string[
   return candidates
 }
 
-function sourceRectFor(animation: string, direction: Direction, frameIndex: number): Rect {
-  const geometry = lpcFrameGeometry[animation] ?? lpcFrameGeometry.walk
+function sourceRectFor(animation: string, direction: Direction, frameIndex: number, sourcePath: string): Rect {
+  const geometry = geometryForSource(animation, sourcePath)
   const row = Math.max(0, geometry.direction_rows.indexOf(direction))
   const frame = Math.max(0, Math.min(frameIndex, geometry.frame_count - 1))
   return {
@@ -115,6 +115,14 @@ function destRectFor(animation: string): Rect {
     w: geometry.frame_width,
     h: geometry.frame_height,
   }
+}
+
+function geometryForSource(animation: string, sourcePath: string): LpcFrameGeometry {
+  const geometry = lpcFrameGeometry[animation] ?? lpcFrameGeometry.walk
+  if (animation === 'shoot' && sourcePath.includes('/feet/accessory/plate_toe/')) {
+    return { ...geometry, frame_count: 8 }
+  }
+  return geometry
 }
 
 function missingRecord(

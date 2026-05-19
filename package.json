@@ -10,6 +10,7 @@
     "lpc:inventory": "node tools/build-lpc-local-inventory.js",
     "lpc:catalog": "node tools/build-lpc-catalog.js",
     "lpc:alignment-audit": "node tools/audit-lpc-alignment.js",
+    "lpc:render-matrix-audit": "node tools/audit-lpc-render-matrix.js",
     "rag:index": "node tools/build-rag-index.js",
     "rag:fetch-web": "node tools/fetch-rag-web-sources.js",
     "rag:scan-pc": "node tools/scan-pc-rag-assets.js",

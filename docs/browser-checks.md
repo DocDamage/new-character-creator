@@ -49,6 +49,7 @@ Latest verified automated run:
 - `npm run license:audit`
 - `npm run rag:evaluate`
 - `npm run test:tools`
+- `npm run lpc:render-matrix-audit`
 - `npm run build:release`
 - `npm run validate:release-package`
 - `npm run test:preview-tools`
@@ -57,6 +58,7 @@ Latest verified automated run:
 - `npm run production:check`
 - `npm run test:browser:all` optional cross-browser coverage, previously 54 Chromium/Firefox/WebKit tests
 - `npm run test:private-assets` optional/private-machine only
+- latest local LPC render matrix audit checked 16,117,644 catalog resolver records, 94,492 unique source geometries, and reported 0 source/destination geometry issues
 - latest production gate passed with lint, source hygiene, secret scan, license audit, RAG evaluation, 80 tool tests, public release build/package validation, tokenized preview local-tool smoke, and 21 Chromium browser tests
 
 Latest verified local app state:

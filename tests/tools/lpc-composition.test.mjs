@@ -88,6 +88,25 @@ test('LPC composition resolves oversize weapon layers exactly for oversize expor
   assert.deepEqual(oversize.warnings, [])
 })
 
+test('LPC composition clamps eight-frame plate toe shoot sheets', () => {
+  const catalog = makeCatalog()
+  const [record] = buildLpcDrawRecords({
+    catalog,
+    selections: {
+      toe: { slot_id: 'toe', item_id: 'shoes_toe:feet_plate_toe', variant: 'steel', type_name: 'shoes_toe', enabled: true },
+    },
+    bodyType: 'male',
+    animation: 'shoot',
+    direction: 'south',
+    frameIndex: 12,
+    availablePaths: new Set(['spritesheets/feet/accessory/plate_toe/male/shoot/steel.png']),
+  })
+
+  assert.equal(record.animation_status, 'exact')
+  assert.equal(record.source_path, 'spritesheets/feet/accessory/plate_toe/male/shoot/steel.png')
+  assert.deepEqual(record.source_rect, { x: 448, y: 0, w: 64, h: 64 })
+})
+
 function makeCatalog() {
   return {
     format: 'pixel_creator_lpc_catalog',
@@ -103,7 +122,7 @@ function makeCatalog() {
       has_palette_definitions: false,
       has_credits_csv: false,
     },
-    summary: { item_count: 4, layer_count: 7, variant_count: 4, credit_count: 0, type_counts: {} },
+    summary: { item_count: 5, layer_count: 8, variant_count: 5, credit_count: 0, type_counts: {} },
     items: {
       'cape:cape_solid': {
         item_id: 'cape:cape_solid',
@@ -181,6 +200,23 @@ function makeCatalog() {
           { layer_id: 'layer_1', z_pos: 140, paths_by_body_type: { male: 'weapon/sword/longsword/' } },
           { layer_id: 'layer_2', z_pos: -1, custom_animation: 'slash_oversize', paths_by_body_type: { male: 'weapon/sword/longsword/attack_slash/behind/' } },
         ],
+      },
+      'shoes_toe:feet_plate_toe': {
+        item_id: 'shoes_toe:feet_plate_toe',
+        name: 'Plate Toe',
+        type_name: 'shoes_toe',
+        path: ['feet', 'accessory'],
+        tags: ['shoes_toe'],
+        required_tags: [],
+        excluded_tags: [],
+        required_body_types: ['male'],
+        variants: ['steel'],
+        animations: ['shoot'],
+        preview: { row: 0, column: 0, x_offset: 0, y_offset: 0 },
+        match_body_color: false,
+        recolors: [],
+        credits: [],
+        layers: [{ layer_id: 'layer_1', z_pos: 60, paths_by_body_type: { male: 'feet/accessory/plate_toe/male/' } }],
       },
     },
     category_tree: { id: 'root', label: 'LPC Catalog', item_ids: [], children: [] },
