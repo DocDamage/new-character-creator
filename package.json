@@ -11,6 +11,7 @@
     "lpc:catalog": "node tools/build-lpc-catalog.js",
     "lpc:alignment-audit": "node tools/audit-lpc-alignment.js",
     "rag:index": "node tools/build-rag-index.js",
+    "rag:scan-pc": "node tools/scan-pc-rag-assets.js",
     "rag:evaluate": "npm run rag:index && node tools/evaluate-rag-index.js",
     "export:character": "node tools/export-character.js",
     "duelyst:private-manifest": "node tools/build-duelyst-private-manifest.js",
@@ -44,6 +45,7 @@
   },
   "dependencies": {
     "jszip": "^3.10.1",
+    "mammoth": "^1.12.0",
     "pngjs": "^7.0.0",
     "react": "^19.2.6",
     "react-dom": "^19.2.6"
