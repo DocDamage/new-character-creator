@@ -13,8 +13,11 @@ test('local LPC pseudo-part frames align to matching base silhouettes', { skip: 
 
   assert.equal(audit.skipped, false)
   assert.equal(audit.partCharacters, 850)
-  assert.equal(audit.partFrameCellsChecked, 125080)
+  assert.equal(audit.partFrameCellsChecked, 121004)
   assert.equal(audit.bodyOverlapCellsChecked, 44096)
+  assert.equal(audit.bodyOverlapEmptyCellsSkipped, 0)
+  assert.deepEqual(audit.emptyCellsByAnimation, {})
   assert.deepEqual(audit.criticalIssues, [])
   assert.deepEqual(audit.bodyOverlapIssues, [])
+  assert.deepEqual(audit.warnings, [])
 })

@@ -168,6 +168,7 @@ export type LpcAssetInventory = {
     frame_columns: number | null
     frame_rows: number | null
     lpc_grid: boolean
+    empty_cells?: string
     tags: string[]
     license_file?: string
     license_scope?: string

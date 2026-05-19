@@ -3,6 +3,7 @@ import path from 'node:path'
 import crypto from 'node:crypto'
 import { execFileSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
+import zlib from 'node:zlib'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const appRoot = path.resolve(__dirname, '..')
@@ -65,6 +66,115 @@ function readPngDimensions(filePath) {
   }
 }
 
+function readPngChunks(filePath) {
+  const buffer = fs.readFileSync(filePath)
+  if (buffer[0] !== 0x89 || buffer.toString('ascii', 1, 4) !== 'PNG') return null
+  const chunks = []
+  let offset = 8
+  while (offset + 8 <= buffer.length) {
+    const length = buffer.readUInt32BE(offset)
+    const type = buffer.toString('ascii', offset + 4, offset + 8)
+    const dataStart = offset + 8
+    const dataEnd = dataStart + length
+    if (dataEnd + 4 > buffer.length) return null
+    chunks.push({ type, data: buffer.subarray(dataStart, dataEnd) })
+    offset = dataEnd + 4
+    if (type === 'IEND') break
+  }
+  return chunks
+}
+
+function readPngAlphaRows(filePath, dimensions) {
+  const chunks = readPngChunks(filePath)
+  if (!chunks) return null
+  const header = chunks.find((chunk) => chunk.type === 'IHDR')?.data
+  if (!header) return null
+  const bitDepth = header[8]
+  const colorType = header[9]
+  const compressionMethod = header[10]
+  const filterMethod = header[11]
+  const interlaceMethod = header[12]
+  if (bitDepth !== 8 || compressionMethod !== 0 || filterMethod !== 0 || interlaceMethod !== 0) return null
+
+  const idatChunks = chunks.filter((chunk) => chunk.type === 'IDAT').map((chunk) => chunk.data)
+  if (idatChunks.length === 0) return null
+  const inflated = zlib.inflateSync(Buffer.concat(idatChunks))
+  const bytesPerPixel = colorType === 6 ? 4 : colorType === 4 ? 2 : colorType === 2 ? 3 : colorType === 0 ? 1 : null
+  if (!bytesPerPixel) return null
+  const stride = dimensions.width * bytesPerPixel
+  const rows = []
+  let sourceOffset = 0
+  let previousRow = Buffer.alloc(stride)
+  for (let y = 0; y < dimensions.height; y += 1) {
+    const filter = inflated[sourceOffset]
+    sourceOffset += 1
+    const row = Buffer.from(inflated.subarray(sourceOffset, sourceOffset + stride))
+    sourceOffset += stride
+    unfilterPngRow(row, previousRow, bytesPerPixel, filter)
+    rows.push(row)
+    previousRow = row
+  }
+  return { rows, bytesPerPixel, colorType }
+}
+
+function unfilterPngRow(row, previousRow, bytesPerPixel, filter) {
+  for (let index = 0; index < row.length; index += 1) {
+    const left = index >= bytesPerPixel ? row[index - bytesPerPixel] : 0
+    const up = previousRow[index] ?? 0
+    const upLeft = index >= bytesPerPixel ? previousRow[index - bytesPerPixel] : 0
+    if (filter === 1) {
+      row[index] = (row[index] + left) & 0xff
+    } else if (filter === 2) {
+      row[index] = (row[index] + up) & 0xff
+    } else if (filter === 3) {
+      row[index] = (row[index] + Math.floor((left + up) / 2)) & 0xff
+    } else if (filter === 4) {
+      row[index] = (row[index] + paethPredictor(left, up, upLeft)) & 0xff
+    } else if (filter !== 0) {
+      throw new Error(`Unsupported PNG filter ${filter}`)
+    }
+  }
+}
+
+function paethPredictor(left, up, upLeft) {
+  const estimate = left + up - upLeft
+  const leftDistance = Math.abs(estimate - left)
+  const upDistance = Math.abs(estimate - up)
+  const upLeftDistance = Math.abs(estimate - upLeft)
+  if (leftDistance <= upDistance && leftDistance <= upLeftDistance) return left
+  if (upDistance <= upLeftDistance) return up
+  return upLeft
+}
+
+function findEmptyCells(filePath, dimensions, frameWidth, frameHeight, frameColumns, frameRows) {
+  if (!frameColumns || !frameRows) return undefined
+  const alphaRows = readPngAlphaRows(filePath, dimensions)
+  if (!alphaRows) return undefined
+  if (alphaRows.colorType !== 6 && alphaRows.colorType !== 4) {
+    return []
+  }
+  const alphaOffset = alphaRows.colorType === 6 ? 3 : 1
+  const cells = []
+  for (let row = 0; row < frameRows; row += 1) {
+    for (let column = 0; column < frameColumns; column += 1) {
+      if (!cellHasAlpha(alphaRows, column * frameWidth, row * frameHeight, frameWidth, frameHeight, alphaOffset)) {
+        cells.push(`${row}:${column}`)
+      }
+    }
+  }
+  return cells
+}
+
+function cellHasAlpha(alphaRows, startX, startY, width, height, alphaOffset) {
+  for (let y = startY; y < startY + height; y += 1) {
+    const row = alphaRows.rows[y]
+    for (let x = startX; x < startX + width; x += 1) {
+      if (row[x * alphaRows.bytesPerPixel + alphaOffset] > 0) return true
+    }
+  }
+  return false
+}
+
 function classifySheet(filePath, rootPath) {
   const dimensions = readPngDimensions(filePath)
   if (!dimensions) return null
@@ -82,6 +192,7 @@ function classifySheet(filePath, rootPath) {
     if (tag) tags.add(tag)
   }
 
+  const emptyCells = lpcGrid ? findEmptyCells(filePath, dimensions, frameWidth, frameHeight, frameColumns, frameRows) : undefined
   return {
     path: relative,
     relative_path: relative,
@@ -95,6 +206,7 @@ function classifySheet(filePath, rootPath) {
     frame_columns: frameColumns,
     frame_rows: frameRows,
     lpc_grid: lpcGrid,
+    ...(emptyCells && emptyCells.length > 0 ? { empty_cells: emptyCells.join(' ') } : {}),
     tags: Array.from(tags).sort(),
     ...findNearestLicense(filePath, rootPath),
   }

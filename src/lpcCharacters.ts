@@ -228,6 +228,7 @@ function buildLpcAnimations(inventory: LpcAssetInventory, sheets: LpcSheet[]): A
             slice.rowStart + Math.min(row, slice.rowCount - 1),
             sheet.frame_width || 64,
             sheet.frame_height || 64,
+            sheet,
           ),
         ]),
       ) as Partial<Record<Direction, FrameRef[]>>
@@ -429,20 +430,27 @@ function buildLpcSheetUrl(inventory: LpcAssetInventory, sheetPath: string) {
   return publicAssetPath(`assets/${assetsRelativeRoot}/${sheetPath.replaceAll('\\', '/')}`)
 }
 
-function buildLpcFrames(path: string, fileName: string, columns: number, row: number, frameWidth: number, frameHeight: number): FrameRef[] {
-  return Array.from({ length: columns }, (_, index) => ({
-    index,
-    path,
-    file_name: `${fileName}#${row}-${index}`,
-    width: 64,
-    height: 64,
-    source_rect: {
-      x: index * frameWidth,
-      y: row * frameHeight,
-      w: frameWidth,
-      h: frameHeight,
-    },
-  }))
+function buildLpcFrames(path: string, fileName: string, columns: number, row: number, frameWidth: number, frameHeight: number, sheet: LpcSheet): FrameRef[] {
+  return Array.from({ length: columns }, (_, index) => index)
+    .filter((index) => isLpcCellNonEmpty(sheet, row, index))
+    .map((index) => ({
+      index,
+      path,
+      file_name: `${fileName}#${row}-${index}`,
+      width: 64,
+      height: 64,
+      source_rect: {
+        x: index * frameWidth,
+        y: row * frameHeight,
+        w: frameWidth,
+        h: frameHeight,
+      },
+    }))
+}
+
+function isLpcCellNonEmpty(sheet: LpcSheet, row: number, column: number) {
+  if (!sheet.empty_cells) return true
+  return !sheet.empty_cells.split(' ').includes(`${row}:${column}`)
 }
 
 function slugLpcId(value: string) {

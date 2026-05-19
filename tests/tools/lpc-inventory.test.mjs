@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { spawnSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
+import { PNG } from 'pngjs'
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..')
 const inventoryPath = path.join(repoRoot, 'tools', 'build-lpc-local-inventory.js')
@@ -36,6 +37,29 @@ test('LPC inventory records sheet grids, categories, and credit files without co
     assert.equal(inventory.sheets[0].frame_rows, 4)
     assert.match(inventory.credit_files[0].excerpt, /CC-by-SA/)
     assert.equal(inventory.source.local_license.basis, 'unknown_or_mixed')
+  } finally {
+    await rm(root, { recursive: true, force: true })
+  }
+})
+
+test('LPC inventory records transparent grid cells compactly', async () => {
+  const root = await mkdtemp(path.join(tmpdir(), 'pixel-creator-lpc-empty-cells-'))
+  try {
+    const assetRoot = path.join(root, 'lpc assets')
+    const outPath = path.join(root, 'inventory.json')
+    await mkdir(path.join(assetRoot, 'Pants'), { recursive: true })
+    await writeFile(path.join(assetRoot, 'Pants', 'walk.png'), makeTwoCellPng())
+
+    const result = spawnSync(process.execPath, [inventoryPath, '--asset-root', assetRoot, '--out', outPath], {
+      cwd: repoRoot,
+      encoding: 'utf8',
+    })
+
+    assert.equal(result.status, 0, result.stderr || result.stdout)
+    const inventory = JSON.parse(await readFile(outPath, 'utf8'))
+    assert.equal(inventory.sheets[0].frame_columns, 2)
+    assert.equal(inventory.sheets[0].frame_rows, 1)
+    assert.equal(inventory.sheets[0].empty_cells, '0:1')
   } finally {
     await rm(root, { recursive: true, force: true })
   }
@@ -123,4 +147,10 @@ function makePngHeader(width, height) {
   buffer.writeUInt32BE(width, 16)
   buffer.writeUInt32BE(height, 20)
   return buffer
+}
+
+function makeTwoCellPng() {
+  const png = new PNG({ width: 128, height: 64 })
+  png.data[3] = 255
+  return PNG.sync.write(png)
 }
