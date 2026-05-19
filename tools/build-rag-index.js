@@ -2,6 +2,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { buildRagIndex } from '../src/ragIndex.ts'
+import { extractRagSource, getRagSupportedExtensions } from './rag-source-extractor.js'
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const outputPath = path.join(repoRoot, 'data', 'rag', 'knowledge_index.json')
@@ -21,46 +22,44 @@ const sourceSpecs = [
   { source_type: 'doc', path: 'docs/apes-gpu-rebuild.md', title: 'APES GPU Rebuild Runbook' },
   { source_type: 'doc', path: 'docs/release-readiness.md', title: 'Release Readiness' },
   { source_type: 'doc', path: 'docs/ai-rag-system.md', title: 'AI RAG System' },
+  { source_type: 'doc', path: 'docs/rag-source-ingestion.md', title: 'RAG Source Ingestion' },
   { source_type: 'license_audit', path: 'docs/asset-license-audit.md', title: 'Asset License Audit' },
   { source_type: 'doc', path: 'docs/browser-checks.md', title: 'Browser Checks' },
   { source_type: 'asset_manifest', path: 'public/data/manifests/characters.json', title: 'Public Character Manifest' },
   { source_type: 'lpc_catalog', path: 'data/lpc/lpc_catalog.json', title: 'Local LPC Catalog' },
   { source_type: 'apes_inventory', path: 'data/apes/output/apes_output_inventory.json', title: 'APES Output Inventory' },
+  ...discoverOptionalRagSources('docs/rag-sources/private', 'doc'),
+  ...discoverOptionalRagSources('docs/rag-sources/visual', 'visual_reference'),
+  ...discoverOptionalRagSources('docs/rag-sources/office', 'office_doc'),
 ]
 
 const publicSourceSpecs = [
   { source_type: 'doc', path: 'docs/pixellab-mcp.md', title: 'PixelLab MCP animation bridge' },
   { source_type: 'doc', path: 'docs/ai-rag-system.md', title: 'AI RAG System' },
+  { source_type: 'doc', path: 'docs/rag-source-ingestion.md', title: 'RAG Source Ingestion' },
   { source_type: 'asset_manifest', path: 'public/data/manifests/characters.json', title: 'Public Character Manifest' },
   { source_type: 'duelyst_manifest', path: 'public/data/manifests/duelyst.json', title: 'Public Duelyst Manifest' },
 ]
 
-const documents = loadDocuments(sourceSpecs, limitDocs)
+const documents = await loadDocuments(sourceSpecs, limitDocs)
 writeIndex(documents, resolvedOutputPath)
 
 if (resolvedPublicOutputPath) {
-  const publicDocuments = loadDocuments(publicSourceSpecs, limitDocs, sanitizePublicText)
+  const publicDocuments = await loadDocuments(publicSourceSpecs, limitDocs, sanitizePublicText)
   writeIndex(publicDocuments, resolvedPublicOutputPath)
 }
 
-function loadDocuments(specs, documentLimit, sanitizeText = (value) => value) {
+async function loadDocuments(specs, documentLimit, sanitizeText = (value) => value) {
   const loaded = []
   for (const spec of specs) {
     if (loaded.length >= documentLimit) break
-    const absolutePath = path.join(repoRoot, spec.path)
-    if (!fs.existsSync(absolutePath)) continue
-    const raw = fs.readFileSync(absolutePath, 'utf8')
-    loaded.push({
-      source_id: spec.path.replaceAll('\\', '/'),
-      source_type: spec.source_type,
-      title: spec.title,
-      uri: spec.path.replaceAll('\\', '/'),
-      text: sanitizeText(normalizeSourceText(raw, spec.path)),
-      metadata: {
-        path: spec.path.replaceAll('\\', '/'),
-        workflow: inferWorkflow(spec.path),
-      },
+    const document = await extractRagSource({
+      repoRoot,
+      spec,
+      sanitizeText,
+      normalizeJsonText: (raw, sourcePath) => normalizeSourceText(raw, sourcePath),
     })
+    if (document) loaded.push(document)
   }
   return loaded
 }
@@ -70,6 +69,20 @@ function writeIndex(documentsToIndex, targetPath) {
   fs.mkdirSync(path.dirname(targetPath), { recursive: true })
   fs.writeFileSync(targetPath, `${JSON.stringify(index, null, 2)}\n`, 'utf8')
   console.log(`Wrote ${index.chunk_count} RAG chunk(s) from ${index.document_count} source document(s) to ${path.relative(repoRoot, targetPath)}.`)
+}
+
+function discoverOptionalRagSources(relativeDir, sourceType) {
+  const absoluteDir = path.join(repoRoot, relativeDir)
+  if (!fs.existsSync(absoluteDir)) return []
+  const supported = new Set(getRagSupportedExtensions())
+  return fs.readdirSync(absoluteDir, { withFileTypes: true })
+    .filter((entry) => entry.isFile() && supported.has(path.extname(entry.name).toLowerCase()))
+    .sort((left, right) => left.name.localeCompare(right.name))
+    .map((entry) => ({
+      source_type: sourceType,
+      path: path.join(relativeDir, entry.name).replaceAll('\\', '/'),
+      title: path.basename(entry.name, path.extname(entry.name)).replace(/[-_]+/g, ' '),
+    }))
 }
 
 function sanitizePublicText(text) {
@@ -134,12 +147,4 @@ function summarizeCharacterManifest(character) {
         }))
       : [],
   }
-}
-
-function inferWorkflow(sourcePath) {
-  if (sourcePath.includes('apes')) return 'apes'
-  if (sourcePath.includes('lpc')) return 'lpc'
-  if (sourcePath.includes('pixellab')) return 'ai_generation'
-  if (sourcePath.includes('release')) return 'release'
-  return 'general'
 }
