@@ -63,6 +63,8 @@ export function SettingsPanel({
     : 'python tools/apes_bridge/check_apes_env.py --json'
   const browserRegressionCommand = 'npm run test:browser'
   const releaseCheckCommand = 'npm run release:check'
+  const productionCheckCommand = 'npm run production:check'
+  const localProxyStatus = localToolsAvailable ? 'Local proxy reachable on loopback.' : 'Local proxy unavailable in this session.'
   const apesPlaceholderLabel = apesAllowPlaceholder ? 'Placeholder APES fallback enabled for UI-only testing.' : 'Real APES bridge only. Placeholder fallback is disabled.'
   const enabledProviderCount = aiProviders.filter((provider) => provider.enabled).length
   const armedProviderCount = aiProviders.filter((provider) => provider.secret_session_set || provider.secret_storage === 'none').length
@@ -147,6 +149,7 @@ export function SettingsPanel({
       <div className="settings-card">
         <strong>AI provider vault</strong>
         <span>{enabledProviderCount} provider(s) enabled, {armedProviderCount} session/local provider(s) armed, {sessionSecretMemoryCount} volatile secret(s) held in page memory. Secrets are never written to persisted project config, exports, release bundles, or handoff JSON.</span>
+        <code>{localProxyStatus}</code>
         <code>Use local proxies for direct calls from GitHub Pages. Browser-entered secrets are session-only and cleared when the browser session ends.</code>
       </div>
 
@@ -268,6 +271,11 @@ export function SettingsPanel({
             </label>
           </article>
         </div>
+        <div className="settings-actions">
+          <button data-testid="check-aseprite-bridge" disabled={!localToolsAvailable}>Check Aseprite bridge</button>
+          <button data-testid="check-pixellab-bridge" disabled={!localToolsAvailable}>Check PixelLab bridge</button>
+          <button data-testid="check-local-llm" disabled={!localToolsAvailable}>Check local LLM</button>
+        </div>
       </div>
 
       <div className="settings-card">
@@ -305,6 +313,7 @@ export function SettingsPanel({
         <code>{exportCommand}</code>
         <code>{browserRegressionCommand}</code>
         <code>{releaseCheckCommand}</code>
+        <code>{productionCheckCommand}</code>
         <code>{apesSetupCommand}</code>
         <code>{apesPreflightCommand}</code>
       </div>

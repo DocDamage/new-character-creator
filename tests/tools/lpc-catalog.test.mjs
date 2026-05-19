@@ -103,6 +103,28 @@ test('LPC catalog prefers local CC0 license over upstream sheet-definition credi
   assert.equal(cape.credits[0].licenses[0], 'CC0 1.0')
   assert.deepEqual(cape.credits[0].authors, [])
   assert.match(cape.credits[0].notes, /Attribution is optional/i)
+  assert.equal(cape.license_status, 'covered')
+  assert.match(cape.license_text_hash, /^[a-f0-9]{64}$/)
+})
+
+test('catalog preserves LPC license coverage metadata', async () => {
+  const root = await mkdtemp(path.join(tmpdir(), 'pixel-creator-lpc-catalog-license-'))
+  const referenceRoot = path.join(root, 'universal-lpc')
+  const assetRoot = path.join(root, 'local-lpc')
+  await mkdir(path.join(referenceRoot, 'sheet_definitions', 'body'), { recursive: true })
+  await mkdir(path.join(assetRoot, 'Randoms'), { recursive: true })
+  await writeFile(path.join(assetRoot, 'Randoms', 'license.txt'), 'License: CC-BY-SA-3.0\nAuthor: LPC contributors\n')
+  await writeDefinition(referenceRoot, 'body/randoms.json', {
+    name: 'Randoms',
+    layer_1: { zPos: 0, male: 'Randoms/man_white.png' },
+    type_name: 'body',
+  })
+
+  const catalog = buildLpcCatalog({ referenceRoot, assetRoot, generatedAt: '2026-05-18T00:00:00.000Z' })
+  const entry = catalog.items['body:randoms']
+  assert.ok(entry)
+  assert.equal(entry.license_status, 'covered')
+  assert.match(entry.license_text_hash, /^[a-f0-9]{64}$/)
 })
 
 async function writeDefinition(referenceRoot, relativePath, definition) {

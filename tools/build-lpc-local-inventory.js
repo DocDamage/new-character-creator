@@ -1,5 +1,6 @@
 import fs from 'node:fs'
 import path from 'node:path'
+import crypto from 'node:crypto'
 import { execFileSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
 
@@ -83,7 +84,9 @@ function classifySheet(filePath, rootPath) {
 
   return {
     path: relative,
+    relative_path: relative,
     category: parts[0] ?? 'root',
+    source_folder: parts[0] ?? '',
     file_name: path.basename(filePath),
     width: dimensions.width,
     height: dimensions.height,
@@ -93,6 +96,33 @@ function classifySheet(filePath, rootPath) {
     frame_rows: frameRows,
     lpc_grid: lpcGrid,
     tags: Array.from(tags).sort(),
+    ...findNearestLicense(filePath, rootPath),
+  }
+}
+
+function findNearestLicense(assetAbsolutePath, rootAbsolutePath) {
+  const root = path.resolve(rootAbsolutePath)
+  let cursor = path.dirname(path.resolve(assetAbsolutePath))
+  while (cursor === root || cursor.startsWith(`${root}${path.sep}`)) {
+    const licensePath = path.join(cursor, 'license.txt')
+    if (fs.existsSync(licensePath)) {
+      const text = fs.readFileSync(licensePath, 'utf8')
+      return {
+        license_file: normalize(path.relative(appRoot, licensePath)),
+        license_scope: cursor === path.dirname(path.resolve(assetAbsolutePath)) ? 'folder' : 'ancestor',
+        license_text_hash: crypto.createHash('sha256').update(text).digest('hex'),
+        license_status: 'covered',
+      }
+    }
+    const next = path.dirname(cursor)
+    if (next === cursor) break
+    cursor = next
+  }
+  return {
+    license_file: '',
+    license_scope: 'none',
+    license_text_hash: '',
+    license_status: 'missing',
   }
 }
 
@@ -200,6 +230,14 @@ function main() {
     .filter(Boolean)
 
   const gridSheets = sheets.filter((sheet) => sheet.lpc_grid)
+  const findings = sheets
+    .filter((sheet) => sheet.license_status !== 'covered')
+    .map((sheet) => ({
+      kind: 'missing_license',
+      severity: 'blocker',
+      path: sheet.path,
+      message: `No nearest license.txt was found for ${sheet.path}.`,
+    }))
   const creditFiles = readCreditFiles(assetRoot)
   const inventory = {
     format: 'pixel_creator_lpc_asset_inventory',
@@ -218,9 +256,13 @@ function main() {
       categories: countBy(sheets, (sheet) => sheet.category),
       frame_grids: countBy(gridSheets, (sheet) => `${sheet.frame_columns}x${sheet.frame_rows}`),
       credit_file_count: 0,
+      license_covered_count: sheets.filter((sheet) => sheet.license_status === 'covered').length,
+      missing_license_count: findings.length,
     },
     credit_files: creditFiles,
+    findings,
     sheets,
+    assets: sheets,
   }
   inventory.source.local_license = summarizeLocalLicenses(creditFiles)
   inventory.summary.credit_file_count = inventory.credit_files.length

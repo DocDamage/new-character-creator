@@ -73,7 +73,35 @@ function writeBundledLpcAssets(distRoot: string) {
       root: '',
     },
   }
+  scrubLpcReleaseLicensePaths(inventory)
   fs.writeFileSync(path.resolve(lpcDataRoot, 'lpc_asset_inventory.json'), `${JSON.stringify(inventory, null, 2)}\n`, 'utf8')
+
+  const lpcCatalogPath = path.resolve(appRoot, 'data', 'lpc', 'lpc_catalog.json')
+  if (fs.existsSync(lpcCatalogPath)) {
+    const catalog = JSON.parse(fs.readFileSync(lpcCatalogPath, 'utf8'))
+    catalog.source = {
+      ...catalog.source,
+      local_asset_root: '/assets/lpc',
+      reference_root: '',
+    }
+    scrubLpcReleaseLicensePaths(catalog)
+    fs.writeFileSync(path.resolve(lpcDataRoot, 'lpc_catalog.json'), `${JSON.stringify(catalog, null, 2)}\n`, 'utf8')
+  }
+}
+
+function scrubLpcReleaseLicensePaths(value: unknown) {
+  if (Array.isArray(value)) {
+    value.forEach(scrubLpcReleaseLicensePaths)
+    return
+  }
+  if (!value || typeof value !== 'object') return
+  const record = value as Record<string, unknown>
+  if (typeof record.license_file === 'string') {
+    record.license_file = record.license_file.replace(/^assets\/lpc sprite generator stuff\//i, 'assets/lpc/')
+  }
+  for (const child of Object.values(record)) {
+    scrubLpcReleaseLicensePaths(child)
+  }
 }
 
 function copyReleaseDirectory(sourceRoot: string, targetRoot: string) {

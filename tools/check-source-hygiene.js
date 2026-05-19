@@ -16,6 +16,7 @@ const forbiddenTrackedPatterns = [
   /^assets\/checkpoints\//i,
   /^test-results\//i,
   /^dist\//i,
+  /\.(exe|bat|cmd)$/i,
 ]
 
 const forbiddenSecretPatterns = [

@@ -30,8 +30,8 @@ jobs:
       - name: Install Chromium
         run: npx playwright install --with-deps chromium
 
-      - name: Run release gate
-        run: npm run release:check
+      - name: Production check
+        run: npm run production:check
 
   browser-matrix:
     name: Cross-browser release gate

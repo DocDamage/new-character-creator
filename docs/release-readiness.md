@@ -233,6 +233,16 @@ report, and they remain visible in the inventory for inspection.
   few minutes on slower machines because they generate downloadable PNG/zip
   artifacts.
 
+## Production Readiness Gate
+
+The production release command is:
+
+```powershell
+npm run production:check
+```
+
+This command must pass before calling the app production ready. It includes source hygiene, secret scanning, license audit generation, RAG evaluation, tool tests, release build validation, preview tool checks, and browser regression coverage.
+
 ## Go / No-Go
 
 GO for app/tooling release.

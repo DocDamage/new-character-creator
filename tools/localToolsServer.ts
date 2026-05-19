@@ -3,6 +3,10 @@ import { spawnSync } from 'node:child_process'
 import fs from 'node:fs'
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import path from 'node:path'
+import { validateAsepriteBridgeRequest } from './asepriteBridge'
+import { normalizeLocalProxyProviderRequest } from './localProxyProviders'
+import { validatePixelLabBridgeRequest } from './pixellabBridge'
+import { appendToolAuditRecord } from './toolAuditLog'
 
 type LocalAssetToolsOptions = {
   sessionToken: string
@@ -234,7 +238,87 @@ async function serveLocalToolRequest(req: IncomingMessage, res: ServerResponse, 
     await handleAssetToolRequest(req, res, appRoot)
     return true
   }
+  if (requestPath === '/__local/ai/proxy') {
+    if (!validateLocalToolMutation(req, res, sessionToken)) return true
+    await handleLocalProxyRequest(req, res, appRoot)
+    return true
+  }
+  if (requestPath === '/__local/bridge/aseprite') {
+    if (!validateLocalToolMutation(req, res, sessionToken)) return true
+    await handleAsepriteBridgeRequest(req, res, appRoot)
+    return true
+  }
+  if (requestPath === '/__local/bridge/pixellab') {
+    if (!validateLocalToolMutation(req, res, sessionToken)) return true
+    await handlePixelLabBridgeRequest(req, res, appRoot)
+    return true
+  }
+  if (requestPath === '/__local/audit') {
+    sendJson(res, 200, { ok: true, audit: 'data/local-tools/audit.jsonl' })
+    return true
+  }
   return false
+}
+
+async function handleLocalProxyRequest(req: IncomingMessage, res: ServerResponse, appRoot: string) {
+  if (req.method !== 'POST') {
+    sendJson(res, 405, { error: 'Method not allowed.' })
+    return
+  }
+  const body = await readJsonBodyOr400(req, res)
+  if (!body) return
+  try {
+    const request = normalizeLocalProxyProviderRequest(body)
+    await appendToolAuditRecord(path.resolve(appRoot, 'data', 'local-tools', 'audit.jsonl'), {
+      route: '/__local/ai/proxy',
+      provider: request.provider,
+      model: request.model,
+      message_count: request.messages.length,
+    })
+    sendJson(res, 200, { ok: true, provider: request.provider, routed: true, note: 'Proxy route validated. Configure provider forwarding before production calls.' })
+  } catch (error) {
+    sendJson(res, 400, { error: error instanceof Error ? error.message : String(error) })
+  }
+}
+
+async function handleAsepriteBridgeRequest(req: IncomingMessage, res: ServerResponse, appRoot: string) {
+  if (req.method !== 'POST') {
+    sendJson(res, 405, { error: 'Method not allowed.' })
+    return
+  }
+  const body = await readJsonBodyOr400(req, res)
+  if (!body) return
+  try {
+    const request = validateAsepriteBridgeRequest(body, appRoot)
+    await appendToolAuditRecord(path.resolve(appRoot, 'data', 'local-tools', 'audit.jsonl'), {
+      route: '/__local/bridge/aseprite',
+      action: request.action,
+      projectPath: request.projectPath ?? null,
+    })
+    sendJson(res, 200, { ok: true, bridge: 'aseprite', action: request.action, executableConfigured: Boolean(request.executablePath) })
+  } catch (error) {
+    sendJson(res, 400, { error: error instanceof Error ? error.message : String(error) })
+  }
+}
+
+async function handlePixelLabBridgeRequest(req: IncomingMessage, res: ServerResponse, appRoot: string) {
+  if (req.method !== 'POST') {
+    sendJson(res, 405, { error: 'Method not allowed.' })
+    return
+  }
+  const body = await readJsonBodyOr400(req, res)
+  if (!body) return
+  try {
+    const request = validatePixelLabBridgeRequest(body)
+    await appendToolAuditRecord(path.resolve(appRoot, 'data', 'local-tools', 'audit.jsonl'), {
+      route: '/__local/bridge/pixellab',
+      endpointUrl: request.endpointUrl,
+      animation: request.animation ?? null,
+    })
+    sendJson(res, 200, { ok: true, bridge: 'pixellab', endpointUrl: request.endpointUrl })
+  } catch (error) {
+    sendJson(res, 400, { error: error instanceof Error ? error.message : String(error) })
+  }
 }
 
 async function handleApesToolRequest(req: IncomingMessage, res: ServerResponse, appRoot: string) {

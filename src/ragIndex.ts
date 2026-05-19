@@ -1,4 +1,4 @@
-import type { RagContextBundle, RagIndex, RagQuery, RagSearchResult, RagSourceDocument, RagSourceType } from './ragTypes'
+import type { RagChunk, RagContextBundle, RagIndex, RagQuery, RagSearchResult, RagSourceDocument, RagSourceType } from './ragTypes'
 
 const defaultChunkCharLimit = 900
 const defaultQueryLimit = 6
@@ -78,16 +78,42 @@ function chunkDocument(document: RagSourceDocument) {
   if (current) chunks.push(current)
 
   return chunks.map((text, index) => ({
-    chunk_id: `${document.source_id}#${String(index + 1).padStart(3, '0')}`,
+    chunk_id: makeChunkId(document.source_id, index, text),
     source_id: document.source_id,
     source_type: document.source_type,
     title: document.title,
     uri: document.uri,
     text,
+    content_hash: stableHash(text),
     token_estimate: Math.ceil(text.length / 4),
+    trust_level: document.trust_level ?? inferTrustLevel(document.source_type),
+    license_tags: document.license_tags ?? inferLicenseTags(text),
     terms: normalizeTerms(`${document.title} ${text} ${Object.values(document.metadata).join(' ')}`),
     metadata: document.metadata,
   }))
+}
+
+function makeChunkId(sourceId: string, index: number, text: string) {
+  return `${sourceId.replace(/[^a-z0-9]+/gi, '_')}_${stableHash(`${sourceId}\n${index}\n${text}`).slice(0, 16)}`
+}
+
+function stableHash(value: string) {
+  let hash = 0x811c9dc5
+  for (let index = 0; index < value.length; index += 1) {
+    hash ^= value.charCodeAt(index)
+    hash = Math.imul(hash, 0x01000193) >>> 0
+  }
+  return hash.toString(16).padStart(8, '0').repeat(8).slice(0, 64)
+}
+
+function inferTrustLevel(sourceType: RagSourceDocument['source_type']): RagChunk['trust_level'] {
+  if (sourceType === 'asset_manifest' || sourceType === 'lpc_catalog') return 'generated_manifest'
+  if (sourceType === 'apes_inventory' || sourceType === 'training_record' || sourceType === 'generation_job') return 'local_report'
+  return 'project_doc'
+}
+
+function inferLicenseTags(text: string) {
+  return Array.from(new Set((text.match(/CC0|CC-BY-SA|OGA-BY|MIT|Apache-2\.0/gi) ?? []).map((tag) => tag.toUpperCase()))).sort()
 }
 
 function normalizeTerms(value: string) {

@@ -25,6 +25,14 @@ http://127.0.0.1:8002/
 
 The checked-in public manifest is enough to open the app and try the main workflow. Private asset workflows need local ignored assets; see [Private Assets](#private-assets).
 
+Production readiness is gated by:
+
+```powershell
+npm run production:check
+```
+
+That command runs source hygiene, secret scanning, license audit generation, RAG evaluation, tool tests, release build validation, preview-tool checks, and browser regressions.
+
 ## Step-By-Step Guide
 
 ### 1. Choose A Source Character

@@ -5,6 +5,7 @@ import { getLpcPartFrameRef } from './lpcPartFrames'
 import { buildLpcReplacementRegions } from './lpcReplacement'
 import { buildLpcRenderPlan, hasCatalogRenderSelections, type LpcRenderRecord } from './lpcRenderPlan'
 import { humanoid64Preset } from './presets'
+import { performanceBudget } from './performanceBudget'
 import type { ExportTargetProfileId } from './creatorCockpit'
 import type { AnimationName, CharacterManifest, Direction, ExtractedPart, KitbashRecipe, Rect } from './types'
 import type { LpcCatalog } from './lpcCatalog'
@@ -24,7 +25,7 @@ type CompositeCanvasProps = {
 }
 
 const imageLoadCache = new Map<string, Promise<HTMLImageElement>>()
-const maxImageLoadCacheEntries = 256
+const maxImageLoadCacheEntries = performanceBudget.imageCacheMaxEntries
 
 export function CompositeCanvas({
   recipe,
@@ -54,6 +55,7 @@ export function CompositeCanvas({
     drawContext.imageSmoothingEnabled = false
     drawContext.clearRect(0, 0, canvas.width, canvas.height)
     drawChecker(drawContext, canvas.width, canvas.height, scale)
+    updateDiagnostics()
     setRenderError('')
 
     async function drawComposite() {
@@ -359,5 +361,15 @@ function trimImageLoadCache() {
     const oldestKey = imageLoadCache.keys().next().value
     if (!oldestKey) return
     imageLoadCache.delete(oldestKey)
+  }
+  updateDiagnostics()
+}
+
+function updateDiagnostics() {
+  if (import.meta.env.DEV || import.meta.env.MODE === 'local-tools') {
+    window.__spriteCreatorDiagnostics = {
+      ...(window.__spriteCreatorDiagnostics ?? {}),
+      imageCacheSize: imageLoadCache.size,
+    }
   }
 }

@@ -1,6 +1,17 @@
 import type { RagContextBundle } from './ragTypes'
+import type { AiToolProposal } from './aiToolRegistry'
 
 export type Direction = 'north' | 'south' | 'east' | 'west' | 'northeast' | 'northwest' | 'southeast' | 'southwest'
+
+declare global {
+  interface Window {
+    __spriteCreatorDiagnostics?: {
+      imageCacheSize?: number
+      indexedDbCompactionMs?: number
+      indexedDbDeletedAssets?: number
+    }
+  }
+}
 
 export type AnimationName = 'idle' | 'walk' | 'running_jump' | 'attack' | string
 export type SourceFamilyId = 'lpc' | 'sprite_pack' | 'duelyst' | 'custom'
@@ -131,14 +142,24 @@ export type LpcAssetInventory = {
     categories: Record<string, number>
     frame_grids: Record<string, number>
     credit_file_count: number
+    license_covered_count?: number
+    missing_license_count?: number
   }
   credit_files: Array<{
     path: string
     excerpt: string
   }>
+  findings?: Array<{
+    kind: string
+    severity?: string
+    path?: string
+    message: string
+  }>
   sheets: Array<{
     path: string
+    relative_path?: string
     category: string
+    source_folder?: string
     file_name: string
     width: number
     height: number
@@ -148,7 +169,12 @@ export type LpcAssetInventory = {
     frame_rows: number | null
     lpc_grid: boolean
     tags: string[]
+    license_file?: string
+    license_scope?: string
+    license_text_hash?: string
+    license_status?: 'covered' | 'missing' | string
   }>
+  assets?: LpcAssetInventory['sheets']
 }
 
 export type PartLabel =
@@ -610,6 +636,15 @@ export type AiProviderConnection = {
   secret_storage: 'session_only' | 'none'
   direct_browser_calls: false
   local_proxy_required: boolean
+  capabilities?: {
+    text_chat: boolean
+    image_to_animation: boolean
+    local_only: boolean
+  }
+  route_constraints?: {
+    requires_proxy: boolean
+    allowed_in_static_app: boolean
+  }
   notes: string
 }
 
@@ -639,8 +674,9 @@ export type AiStudioMessage = {
   role: 'user' | 'assistant' | 'system'
   created_at: string
   content: string
-  citations?: Array<{ title: string; uri: string }>
+  citations?: Array<{ source_id?: string; title: string; uri: string }>
   tool_hints?: string[]
+  tool_proposals?: AiToolProposal[]
 }
 
 export type GenerationJobStatus = 'draft' | 'handoff_ready' | 'exported' | 'running' | 'failed' | 'complete' | 'review_required' | 'reviewed'

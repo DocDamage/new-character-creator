@@ -29,4 +29,15 @@ This writes `data/rag/knowledge_index.json` from project docs, release notes, AP
 - Generated output is not selected automatically.
 - Generated output cannot overwrite upstream assets.
 - Release export remains blocked until review is approved.
-- Provider tokens stay outside the repo.
+- Provider tokens stay outside the repo, browser storage, generated manifests, and release bundles.
+- Provider API keys are session-only when typed into the app, redacted from handoffs, and direct provider calls go through a trusted local proxy.
+
+## Evaluate RAG Quality
+
+Run:
+
+```bash
+npm run rag:evaluate
+```
+
+The evaluator fails when required citation sources or required terms are missing. Release candidates must pass this check before the AI Studio can be considered production ready. The regression set covers Randoms license provenance, PixelLab missing-animation guidance, and the session-only secret policy with redacted local proxy routing.

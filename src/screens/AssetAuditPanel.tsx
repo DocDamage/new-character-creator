@@ -102,6 +102,12 @@ export function AssetAuditPanel({
   const batchableDuelystCandidates = filteredDuelystCandidates.filter((candidate) => candidate.staged && candidate.stage_character_id && getStringLabel(candidate, 'training_role').startsWith('apes_'))
   const lpcTopCategories = lpcInventory ? Object.entries(lpcInventory.summary.categories).slice(0, 8) : []
   const lpcTopFrameGrids = lpcInventory ? Object.entries(lpcInventory.summary.frame_grids).slice(0, 6) : []
+  const lpcLicenseCovered = lpcInventory?.summary.license_covered_count ?? lpcInventory?.sheets.filter((sheet) => sheet.license_status === 'covered').length ?? 0
+  const lpcMissingLicenses = lpcInventory?.summary.missing_license_count ?? lpcInventory?.sheets.filter((sheet) => sheet.license_status && sheet.license_status !== 'covered').length ?? 0
+  const blockedReleaseFindings = [
+    ...(lpcInventory?.findings ?? []).filter((finding) => finding.kind === 'missing_license'),
+    ...(duelystAudit?.warnings ?? []).map((warning) => ({ kind: 'duelyst_warning', message: warning })),
+  ]
   const lpcCategoryOptions = useMemo(() => Object.keys(lpcInventory?.summary.categories ?? {}).sort(), [lpcInventory])
   const filteredLpcSheets = useMemo(() => {
     const search = lpcSearch.trim().toLowerCase()
@@ -169,6 +175,22 @@ export function AssetAuditPanel({
           </p>
         ))}
         {warnings.length === 0 ? <p>No source warnings found.</p> : null}
+      </div>
+
+      <div className="settings-grid">
+        <article className="settings-card">
+          <strong>Total assets</strong>
+          <span>{manifest.characters.length} manifest character(s){lpcInventory ? `, ${lpcInventory.summary.png_count} LPC sheet(s)` : ''}</span>
+        </article>
+        <article className="settings-card">
+          <strong>License readiness</strong>
+          <span>{lpcLicenseCovered} covered LPC asset(s), {lpcMissingLicenses} missing license record(s).</span>
+        </article>
+        <article className={`settings-card ${blockedReleaseFindings.length > 0 ? 'settings-card-warning' : ''}`}>
+          <strong>Blocked release files</strong>
+          <span>{blockedReleaseFindings.length === 0 ? 'No blocked release findings loaded.' : `${blockedReleaseFindings.length} release blocker(s) or warning(s).`}</span>
+          <code>docs/asset-license-audit.md</code>
+        </article>
       </div>
 
       <div className="settings-card">

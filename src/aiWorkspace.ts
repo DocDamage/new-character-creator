@@ -152,6 +152,15 @@ function makeProvider(provider_id: AiProviderConnection['provider_id'], name: st
     secret_storage: needsSecret ? 'session_only' : 'none',
     direct_browser_calls: false,
     local_proxy_required: true,
+    capabilities: {
+      text_chat: type !== 'pixellab',
+      image_to_animation: type === 'pixellab',
+      local_only: !needsSecret,
+    },
+    route_constraints: {
+      requires_proxy: true,
+      allowed_in_static_app: false,
+    },
     notes: needsSecret
       ? 'Secret is accepted for the current browser session only. Use a local proxy for direct calls.'
       : 'Local endpoint; no provider secret is required.',

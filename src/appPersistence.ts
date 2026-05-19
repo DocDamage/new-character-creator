@@ -1,5 +1,6 @@
 import { defaultAiProviderConfig } from './generationJobs.ts'
 import { defaultAiProviderConnections, defaultToolConnections, normalizeAiProviderConnections, normalizeToolConnections, redactAiProviderConnections } from './aiWorkspace.ts'
+import { serializeProviderConfigForStorage } from './aiSecretVault.ts'
 import type { AiProviderConfig, AiProviderConnection, ApesJob, ApesPreflightReport, ComposerLayerSettings, ExtractedPart, GenerationJob, PaletteRules, PartLabel, RecipeModeId, SourceFamilyId, ToolConnectionSettings, TrainingInboxDraft, TrainingLibraryRecord, VariationPreset } from './types'
 import type { LpcRecipeSelection } from './lpcCatalog'
 
@@ -92,7 +93,7 @@ export function loadStoredToolConnections() {
 }
 
 export function storeAiProviderConnections(connections: AiProviderConnection[]) {
-  return storeJson(aiProviderConnectionsStorageKey, redactAiProviderConnections(connections))
+  return storeJson(aiProviderConnectionsStorageKey, serializeProviderConfigForStorage(redactAiProviderConnections(connections)))
 }
 
 export function loadSessionSecretStatus() {

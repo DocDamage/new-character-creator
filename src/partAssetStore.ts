@@ -38,11 +38,18 @@ export async function deletePartLibraryAssets(keys: Array<string | undefined>) {
 
 export async function compactPartLibraryAssets(activeParts: ExtractedPart[]) {
   if (!canUseIndexedDb()) return
+  const startedAt = performance.now()
   try {
     const db = await openAssetDb()
     const activeKeys = new Set(activeParts.flatMap((part) => [part.image_asset_key, part.mask_asset_key]).filter((key): key is string => Boolean(key)))
     const keys = await readAllKeys(db)
-    await deleteAssets(db, keys.filter((key) => !activeKeys.has(key)))
+    const staleKeys = keys.filter((key) => !activeKeys.has(key))
+    await deleteAssets(db, staleKeys)
+    window.__spriteCreatorDiagnostics = {
+      ...(window.__spriteCreatorDiagnostics ?? {}),
+      indexedDbCompactionMs: Math.round(performance.now() - startedAt),
+      indexedDbDeletedAssets: staleKeys.length,
+    }
   } catch {
     // Compaction should never block UI state updates.
   }

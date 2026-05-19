@@ -7,6 +7,7 @@ const appRoot = path.resolve(__dirname, '..')
 const cliArgs = process.argv.slice(2)
 const privateManifestNames = new Set(['characters.local.json', 'duelyst.private.json'])
 const textAssetExtensions = new Set(['.html', '.js', '.css', '.json', '.svg', '.txt', '.map'])
+const blockedReleaseFilePattern = /\.(exe|ps1|bat|cmd)$/i
 const forbiddenTextPatterns = [
   { pattern: /\/@fs\//, label: '/@fs/' },
   { pattern: /\/__local\//, label: '/__local/' },
@@ -84,8 +85,39 @@ function validateReleasePackage(distRoot) {
   }
 
   failures.push(...validateLpcInventory(distRoot))
+  failures.push(...validateLpcCatalog(distRoot))
+  failures.push(...scanBlockedReleaseFiles(distRoot))
 
   return failures
+}
+
+function validateLpcCatalog(distRoot) {
+  const failures = []
+  const catalogPath = path.resolve(distRoot, 'data', 'lpc', 'lpc_catalog.json')
+  if (!fs.existsSync(catalogPath)) return failures
+
+  let catalog
+  try {
+    catalog = JSON.parse(fs.readFileSync(catalogPath, 'utf8'))
+  } catch (error) {
+    return [`LPC catalog could not be parsed: ${error instanceof Error ? error.message : String(error)}`]
+  }
+
+  const entries = Array.isArray(catalog.entries)
+    ? catalog.entries
+    : Object.values(catalog.items ?? {})
+  const missing = entries.filter((entry) => entry && entry.license_status !== 'covered')
+  if (missing.length > 0) {
+    const first = missing[0]
+    failures.push(`Release LPC catalog has ${missing.length} asset(s) without license coverage. First: ${first.asset_path ?? first.item_id ?? first.name ?? 'unknown'}`)
+  }
+  return failures
+}
+
+function scanBlockedReleaseFiles(distRoot) {
+  return walkFiles(distRoot)
+    .filter((filePath) => blockedReleaseFilePattern.test(filePath) || /[\\/](__MACOSX|\.git|\.cache)[\\/]/i.test(filePath))
+    .map((filePath) => `Forbidden release file: ${path.relative(distRoot, filePath).replaceAll(path.sep, '/')}`)
 }
 
 function validateLpcInventory(distRoot) {
@@ -134,7 +166,7 @@ function validateLpcInventory(distRoot) {
   }
 
   const blockedLpcEntries = walkFiles(lpcAssetRoot)
-    .filter((filePath) => /\.(exe)$/i.test(filePath) || /[\\/](__MACOSX|\.git)[\\/]|[\\/]\.DS_Store$/i.test(filePath))
+    .filter((filePath) => blockedReleaseFilePattern.test(filePath) || /[\\/](__MACOSX|\.git|\.cache)[\\/]|[\\/]\.DS_Store$/i.test(filePath))
     .map((filePath) => path.relative(distRoot, filePath).replaceAll(path.sep, '/'))
   for (const filePath of blockedLpcEntries) {
     failures.push(`Forbidden LPC release asset: ${filePath}`)
