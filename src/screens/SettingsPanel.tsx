@@ -1,5 +1,5 @@
 import type { Dispatch, SetStateAction } from 'react'
-import type { ApesPreflightReport } from '../types'
+import type { AiProviderConnection, ApesPreflightReport, ToolConnectionSettings } from '../types'
 
 type SettingsPanelProps = {
   manifestAssetRoot: string
@@ -16,6 +16,12 @@ type SettingsPanelProps = {
   setApesAllowPlaceholder: Dispatch<SetStateAction<boolean>>
   apesPreflight: ApesPreflightReport | null
   localToolsAvailable: boolean
+  aiProviders: AiProviderConnection[]
+  setAiProviders: (providers: AiProviderConnection[]) => void
+  toolConnections: ToolConnectionSettings
+  setToolConnections: (connections: ToolConnectionSettings) => void
+  sessionSecretStatus: Record<string, boolean>
+  setSessionSecretStatus: (status: Record<string, boolean>) => void
 }
 
 export function SettingsPanel({
@@ -33,6 +39,12 @@ export function SettingsPanel({
   setApesAllowPlaceholder,
   apesPreflight,
   localToolsAvailable,
+  aiProviders,
+  setAiProviders,
+  toolConnections,
+  setToolConnections,
+  sessionSecretStatus,
+  setSessionSecretStatus,
 }: SettingsPanelProps) {
   const normalizedAssetRoot = assetRootInput.trim() || manifestAssetRoot
   const manifestRootForCompare = normalizeAssetRootForCompare(manifestAssetRoot)
@@ -50,6 +62,18 @@ export function SettingsPanel({
   const browserRegressionCommand = 'npm run test:browser'
   const releaseCheckCommand = 'npm run release:check'
   const apesPlaceholderLabel = apesAllowPlaceholder ? 'Placeholder APES fallback enabled for UI-only testing.' : 'Real APES bridge only. Placeholder fallback is disabled.'
+  const enabledProviderCount = aiProviders.filter((provider) => provider.enabled).length
+  const armedProviderCount = aiProviders.filter((provider) => provider.secret_session_set || provider.secret_storage === 'none').length
+
+  function updateProvider(providerId: string, patch: Partial<AiProviderConnection>) {
+    setAiProviders(aiProviders.map((provider) => provider.provider_id === providerId ? { ...provider, ...patch } : provider))
+  }
+
+  function markSecretStatus(providerId: string, isSet: boolean) {
+    const nextStatus = { ...sessionSecretStatus, [providerId]: isSet }
+    setSessionSecretStatus(nextStatus)
+    setAiProviders(aiProviders.map((provider) => provider.provider_id === providerId ? { ...provider, secret_session_set: isSet } : provider))
+  }
 
   return (
     <section className="panel wide-panel settings-panel">
@@ -116,8 +140,120 @@ export function SettingsPanel({
       </div>
 
       <div className="settings-card">
-        <strong>AI provider</strong>
-        <span>Default mode is manual handoff. Configure PixelLab or another provider outside the repo; never commit provider tokens.</span>
+        <strong>AI provider vault</strong>
+        <span>{enabledProviderCount} provider(s) enabled, {armedProviderCount} session/local provider(s) armed. Secrets are never written to persisted project config, exports, release bundles, or handoff JSON.</span>
+        <code>Use local proxies for direct calls from GitHub Pages. Browser-entered secrets are session-only and cleared when the browser session ends.</code>
+      </div>
+
+      <div className="settings-card ai-provider-vault" data-testid="ai-provider-vault">
+        <strong>LLM providers</strong>
+        {aiProviders.map((provider) => (
+          <article key={provider.provider_id} className="provider-row">
+            <label className="field checkbox-field">
+              <input
+                type="checkbox"
+                checked={provider.enabled}
+                onChange={(event) => updateProvider(provider.provider_id, { enabled: event.target.checked })}
+              />
+              <span>{provider.name}</span>
+            </label>
+            <label className="field">
+              <span>Model</span>
+              <input value={provider.model} onChange={(event) => updateProvider(provider.provider_id, { model: event.target.value })} />
+            </label>
+            <label className="field">
+              <span>Base URL</span>
+              <input value={provider.base_url} onChange={(event) => updateProvider(provider.provider_id, { base_url: event.target.value })} />
+            </label>
+            {provider.secret_storage === 'session_only' ? (
+              <div className="provider-secret-controls">
+                <label className="field">
+                  <span>Session secret</span>
+                  <input
+                    data-testid={`ai-secret-${provider.provider_id}`}
+                    type="password"
+                    autoComplete="off"
+                    value=""
+                    placeholder={sessionSecretStatus[provider.provider_id] ? 'set for this session' : 'paste to arm session'}
+                    onChange={(event) => markSecretStatus(provider.provider_id, event.target.value.trim().length > 0)}
+                  />
+                </label>
+                <button onClick={() => markSecretStatus(provider.provider_id, false)} disabled={!sessionSecretStatus[provider.provider_id]}>Clear</button>
+              </div>
+            ) : (
+              <span>Local endpoint, no provider secret required.</span>
+            )}
+            <code>{provider.notes}</code>
+          </article>
+        ))}
+      </div>
+
+      <div className="settings-card" data-testid="ai-tool-connections">
+        <strong>Tool connections</strong>
+        <div className="settings-grid">
+          <article>
+            <label className="field checkbox-field">
+              <input
+                type="checkbox"
+                checked={toolConnections.aseprite.enabled}
+                onChange={(event) => setToolConnections({ ...toolConnections, aseprite: { ...toolConnections.aseprite, enabled: event.target.checked } })}
+              />
+              <span>Aseprite bridge</span>
+            </label>
+            <label className="field">
+              <span>Executable path</span>
+              <input value={toolConnections.aseprite.executable_path} onChange={(event) => setToolConnections({ ...toolConnections, aseprite: { ...toolConnections.aseprite, executable_path: event.target.value } })} />
+            </label>
+            <label className="field">
+              <span>Bridge URL</span>
+              <input value={toolConnections.aseprite.bridge_url} onChange={(event) => setToolConnections({ ...toolConnections, aseprite: { ...toolConnections.aseprite, bridge_url: event.target.value } })} />
+            </label>
+          </article>
+          <article>
+            <label className="field checkbox-field">
+              <input
+                type="checkbox"
+                checked={toolConnections.pixellab.enabled}
+                onChange={(event) => setToolConnections({ ...toolConnections, pixellab: { ...toolConnections.pixellab, enabled: event.target.checked } })}
+              />
+              <span>PixelLab</span>
+            </label>
+            <label className="field">
+              <span>Endpoint URL</span>
+              <input value={toolConnections.pixellab.endpoint_url} onChange={(event) => setToolConnections({ ...toolConnections, pixellab: { ...toolConnections.pixellab, endpoint_url: event.target.value } })} />
+            </label>
+            <label className="field">
+              <span>MCP server URL</span>
+              <input value={toolConnections.pixellab.mcp_server_url} onChange={(event) => setToolConnections({ ...toolConnections, pixellab: { ...toolConnections.pixellab, mcp_server_url: event.target.value } })} />
+            </label>
+          </article>
+          <article>
+            <label className="field checkbox-field">
+              <input
+                type="checkbox"
+                checked={toolConnections.local_llm.enabled}
+                onChange={(event) => setToolConnections({ ...toolConnections, local_llm: { ...toolConnections.local_llm, enabled: event.target.checked } })}
+              />
+              <span>Local LLM</span>
+            </label>
+            <label className="field">
+              <span>Provider</span>
+              <select value={toolConnections.local_llm.provider} onChange={(event) => setToolConnections({ ...toolConnections, local_llm: { ...toolConnections.local_llm, provider: event.target.value as ToolConnectionSettings['local_llm']['provider'] } })}>
+                <option value="ollama">Ollama</option>
+                <option value="lm_studio">LM Studio</option>
+                <option value="custom">Custom</option>
+              </select>
+            </label>
+            <label className="field">
+              <span>Endpoint URL</span>
+              <input value={toolConnections.local_llm.endpoint_url} onChange={(event) => setToolConnections({ ...toolConnections, local_llm: { ...toolConnections.local_llm, endpoint_url: event.target.value } })} />
+            </label>
+            <label className="field">
+              <span>Model</span>
+              <input value={toolConnections.local_llm.model} onChange={(event) => setToolConnections({ ...toolConnections, local_llm: { ...toolConnections.local_llm, model: event.target.value } })} />
+            </label>
+          </article>
+        </div>
       </div>
 
       <div className="settings-card">

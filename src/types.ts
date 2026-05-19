@@ -564,7 +564,18 @@ export type TrainingLibraryRecord = Omit<TrainingInboxDraft, 'draft_id' | 'revie
   }
 }
 
-export type AiProviderType = 'pixellab' | 'manual_handoff' | 'custom'
+export type AiProviderType =
+  | 'openai'
+  | 'anthropic'
+  | 'google'
+  | 'mistral'
+  | 'groq'
+  | 'openrouter'
+  | 'ollama'
+  | 'lm_studio'
+  | 'pixellab'
+  | 'manual_handoff'
+  | 'custom'
 
 export type AiProviderConfig = {
   provider_id: string
@@ -586,6 +597,50 @@ export type AiProviderConfig = {
     notes?: string
   }
   settings: Record<string, string | number | boolean | null>
+}
+
+export type AiProviderConnection = {
+  provider_id: string
+  name: string
+  type: AiProviderType
+  enabled: boolean
+  model: string
+  base_url: string
+  secret_session_set: boolean
+  secret_storage: 'session_only' | 'none'
+  direct_browser_calls: false
+  local_proxy_required: boolean
+  notes: string
+}
+
+export type ToolConnectionSettings = {
+  aseprite: {
+    enabled: boolean
+    executable_path: string
+    bridge_url: string
+    script_folder: string
+  }
+  pixellab: {
+    enabled: boolean
+    endpoint_url: string
+    mcp_server_url: string
+    preferred_model: string
+  }
+  local_llm: {
+    enabled: boolean
+    endpoint_url: string
+    provider: 'ollama' | 'lm_studio' | 'custom'
+    model: string
+  }
+}
+
+export type AiStudioMessage = {
+  message_id: string
+  role: 'user' | 'assistant' | 'system'
+  created_at: string
+  content: string
+  citations?: Array<{ title: string; uri: string }>
+  tool_hints?: string[]
 }
 
 export type GenerationJobStatus = 'draft' | 'handoff_ready' | 'exported' | 'running' | 'failed' | 'complete' | 'review_required' | 'reviewed'

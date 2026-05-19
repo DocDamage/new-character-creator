@@ -6,14 +6,19 @@ import {
   apesJobsStorageKey,
   apesPreflightStorageKey,
   apesPythonPathStorageKey,
+  aiSecretSessionStorageKey,
+  aiToolConnectionsStorageKey,
   apesQaHarnessJobId,
   assetRootInputStorageKey,
   aiProviderConfigStorageKey,
+  aiProviderConnectionsStorageKey,
+  loadSessionSecretStatus,
   composerRecipesStorageKey,
   exportTargetProfileStorageKey,
   filenameTemplateStorageKey,
   generationJobsStorageKey,
   loadStoredAiProviderConfig,
+  loadStoredAiProviderConnections,
   loadStoredApesPreflight,
   loadStoredApesJobs,
   loadStoredBoolean,
@@ -21,13 +26,16 @@ import {
   loadStoredGenerationJobs,
   loadStoredPartLibrary,
   loadStoredString,
+  loadStoredToolConnections,
   loadStoredTrainingInboxDrafts,
   loadStoredTrainingLibraryRecords,
   loadStoredVariationPresets,
   makeDraftRecipeId,
   partLibraryStorageKey,
+  storeAiProviderConnections,
   storeBoolean,
   storeJson,
+  storeSessionSecretStatus,
   storeString,
   trainingInboxStorageKey,
   trainingLibraryStorageKey,
@@ -55,12 +63,13 @@ import { buildManualMaskPart } from './manualParts'
 import { buildLpcCharacterManifests } from './lpcCharacters'
 import { buildLpcSelectionCreditReadiness } from './lpcCatalogPicker'
 import type { LpcCatalog, LpcRecipeSelection, RecipeModeId } from './lpcCatalog'
-import type { MissingAnimationQueue } from './missingAnimationQueue'
+import { buildMissingAnimationQueue, filterMissingAnimationQueue, type MissingAnimationQueue } from './missingAnimationQueue'
 import { compactPartLibraryAssets, deletePartLibraryAssets, hydratePartLibraryAssets, persistPartLibraryAssets } from './partAssetStore'
 import { CompositeCanvas } from './CompositeCanvas'
 import { PixelCanvas } from './PixelCanvas'
 import { humanoid64Preset, layerOrder, palettePresets } from './presets'
 import { ApesLabPanel } from './screens/ApesLabPanel'
+import { AIStudioPanel } from './screens/AIStudioPanel'
 import { AssetAuditPanel } from './screens/AssetAuditPanel'
 import { BatchGeneratorPanel } from './screens/BatchGeneratorPanel'
 import { ExportsPanel } from './screens/ExportsPanel'
@@ -72,7 +81,7 @@ import { canShowCharacterInRecipeMode, sourceFamilyForRecipeMode } from './sourc
 import { validateApesReport } from './apesReportValidation'
 import { approveTrainingDraft, classifyTrainingInboxDraft, type ClassifyTrainingInboxInput } from './trainingLibrary'
 import type { RagIndex } from './ragTypes'
-import type { AiProviderConfig, AnimationName, ApesBridgeStatus, ApesFinetuneManifest, ApesJob, ApesOutputInventory, ApesPreflightReport, ApesReport, AssetManifest, CharacterManifest, ComposerLayerSettings, Direction, DuelystApesJobBatch, DuelystPackageAudit, ExtractedPart, ExtractionMethod, GenerationJob, LpcAssetInventory, PaletteRules, PartLabel, Rect, TrainingInboxDraft, TrainingLibraryRecord, VariationPreset } from './types'
+import type { AiProviderConfig, AiProviderConnection, AiStudioMessage, AnimationName, ApesBridgeStatus, ApesFinetuneManifest, ApesJob, ApesOutputInventory, ApesPreflightReport, ApesReport, AssetManifest, CharacterManifest, ComposerLayerSettings, Direction, DuelystApesJobBatch, DuelystPackageAudit, ExtractedPart, ExtractionMethod, GenerationJob, LpcAssetInventory, PaletteRules, PartLabel, Rect, ToolConnectionSettings, TrainingInboxDraft, TrainingLibraryRecord, VariationPreset } from './types'
 import {
   buildExportManifest,
   buildAsepriteReference,
@@ -94,7 +103,7 @@ import {
   slugLabel,
 } from './utils'
 
-type Screen = 'fast' | 'workstation' | 'library' | 'batch' | 'audit' | 'apes' | 'exports' | 'settings'
+type Screen = 'fast' | 'workstation' | 'library' | 'batch' | 'audit' | 'ai' | 'apes' | 'exports' | 'settings'
 
 const screens: Array<{ id: Screen; label: string }> = [
   { id: 'fast', label: 'Fast Creator' },
@@ -102,6 +111,7 @@ const screens: Array<{ id: Screen; label: string }> = [
   { id: 'library', label: 'Part Library' },
   { id: 'batch', label: 'Batch Generator' },
   { id: 'audit', label: 'Asset Audit' },
+  { id: 'ai', label: 'AI Studio' },
   { id: 'apes', label: 'APES Lab' },
   { id: 'exports', label: 'Exports' },
   { id: 'settings', label: 'Settings' },
@@ -351,6 +361,10 @@ function App() {
   const [extractionMethod, setExtractionMethod] = useState<ExtractionMethod>('apes')
   const [apesJobs, setApesJobs] = useState<ApesJob[]>(loadStoredApesJobs)
   const [aiProviderConfig, setAiProviderConfig] = useState<AiProviderConfig>(loadStoredAiProviderConfig)
+  const [aiProviders, setAiProviders] = useState<AiProviderConnection[]>(loadStoredAiProviderConnections)
+  const [toolConnections, setToolConnections] = useState<ToolConnectionSettings>(loadStoredToolConnections)
+  const [sessionSecretStatus, setSessionSecretStatusState] = useState<Record<string, boolean>>(loadSessionSecretStatus)
+  const [aiStudioMessages, setAiStudioMessages] = useState<AiStudioMessage[]>([])
   const [generationJobs, setGenerationJobs] = useState<GenerationJob[]>(loadStoredGenerationJobs)
   const [ragIndex, setRagIndex] = useState<RagIndex | null>(null)
   const [ragStatus, setRagStatus] = useState('RAG index not loaded. Run npm run rag:index to build local AI knowledge.')
@@ -415,6 +429,11 @@ function App() {
       return { ...current, [storageKey]: warning }
     })
   }, [])
+
+  const setSessionSecretStatus = useCallback((status: Record<string, boolean>) => {
+    setSessionSecretStatusState(status)
+    setPersistenceResult(aiSecretSessionStorageKey, storeSessionSecretStatus(status), 'Could not persist session AI secret status.')
+  }, [setPersistenceResult])
 
   async function fetchManifest(signal?: AbortSignal) {
     const manifestUrls = import.meta.env.DEV
@@ -614,6 +633,21 @@ function App() {
   useEffect(() => {
     setPersistenceResult(aiProviderConfigStorageKey, storeJson(aiProviderConfigStorageKey, aiProviderConfig), 'Could not persist AI provider configuration in browser storage. Download handoff JSON before reloading.')
   }, [aiProviderConfig, setPersistenceResult])
+
+  useEffect(() => {
+    setPersistenceResult(aiProviderConnectionsStorageKey, storeAiProviderConnections(aiProviders), 'Could not persist redacted AI provider settings.')
+  }, [aiProviders, setPersistenceResult])
+
+  useEffect(() => {
+    setAiProviders((current) => current.map((provider) => ({
+      ...provider,
+      secret_session_set: Boolean(sessionSecretStatus[provider.provider_id]),
+    })))
+  }, [sessionSecretStatus])
+
+  useEffect(() => {
+    setPersistenceResult(aiToolConnectionsStorageKey, storeJson(aiToolConnectionsStorageKey, toolConnections), 'Could not persist AI tool connection settings.')
+  }, [setPersistenceResult, toolConnections])
 
   useEffect(() => {
     setPersistenceResult(generationJobsStorageKey, storeJson(generationJobsStorageKey, generationJobs), 'Could not persist generation jobs in browser storage. Download handoff JSON before reloading.')
@@ -1065,6 +1099,40 @@ function App() {
     setGenerationJobs((current) => [...jobs, ...current])
     setApesBridgeStatus(`Queued ${jobs.length} manual generation handoff job(s). Outputs remain blocked until review and are not selected automatically.`)
     setScreen('apes')
+  }
+
+  function createGenerationJobsFromCurrentMissingQueue() {
+    if (!recipe || recipe.recipe_mode !== 'lpc_character' || !lpcCatalog) {
+      setApesBridgeStatus('Missing-animation generation jobs require an LPC recipe and the LPC catalog. Load LPC locally first, then queue the jobs.')
+      setScreen('apes')
+      return
+    }
+    const consumedItemIds = new Set(
+      generationJobs
+        .filter((job) => (
+          job.recipe_id === recipe.character_id &&
+          job.character_id === selectedCharacter.character_id &&
+          job.target_profile === exportTargetProfile
+        ))
+        .flatMap((job) => job.source_queue_item_ids),
+    )
+    const queue = filterMissingAnimationQueue(
+      buildMissingAnimationQueue({
+        catalog: lpcCatalog,
+        recipe,
+        bodyType: inferLpcBodyTypeForCharacter(selectedCharacter),
+        animations: apesAnimations.length > 0 ? apesAnimations : selectedCharacter.animation_names,
+        directions: apesDirections.length > 0 ? apesDirections : availableDirections,
+        frameRange: apesFrameRange,
+      }),
+      consumedItemIds,
+    )
+    if (queue.items.length === 0) {
+      setApesBridgeStatus('No missing LPC animation layers were found for the current recipe, animation, direction, and frame selection.')
+      setScreen('apes')
+      return
+    }
+    createGenerationJobsFromQueue(queue)
   }
 
   function downloadGenerationJobsHandoff() {
@@ -2614,6 +2682,26 @@ function App() {
               lpcImportStatus={lpcImportStatus}
             />
           ) : null}
+          {screen === 'ai' ? (
+            <AIStudioPanel
+              selectedCharacter={selectedCharacter}
+              recipe={recipe}
+              ragIndex={ragIndex}
+              ragStatus={ragStatus}
+              providers={aiProviders}
+              tools={toolConnections}
+              messages={aiStudioMessages}
+              setMessages={setAiStudioMessages}
+              lpcPublished={Boolean(lpcCatalog && lpcInventory)}
+              localToolsAvailable={localToolsAvailable}
+              createApesJob={createApesJob}
+              createGenerationJobsFromQueue={createGenerationJobsFromCurrentMissingQueue}
+              downloadGenerationManifest={downloadGenerationManifest}
+              openSettings={() => setScreen('settings')}
+              openApesLab={() => setScreen('apes')}
+              openExports={() => setScreen('exports')}
+            />
+          ) : null}
           {screen === 'apes' ? (
             <ApesLabPanel
               jobs={apesJobs}
@@ -2726,6 +2814,12 @@ function App() {
               setApesAllowPlaceholder={setApesAllowPlaceholder}
               apesPreflight={apesPreflight}
               localToolsAvailable={localToolsAvailable}
+              aiProviders={aiProviders}
+              setAiProviders={setAiProviders}
+              toolConnections={toolConnections}
+              setToolConnections={setToolConnections}
+              sessionSecretStatus={sessionSecretStatus}
+              setSessionSecretStatus={setSessionSecretStatus}
             />
           ) : null}
         </div>
@@ -2736,6 +2830,16 @@ function App() {
 
 function screenLabel(screen: Screen) {
   return screens.find((item) => item.id === screen)?.label ?? 'Creator'
+}
+
+function inferLpcBodyTypeForCharacter(character: CharacterManifest) {
+  const bodyLabel = [character.display_name, String(character.labels?.lpc_path ?? '')].join(' ').toLowerCase()
+  if (bodyLabel.includes('female') || bodyLabel.includes('feminine') || bodyLabel.includes('woman')) return 'female'
+  if (bodyLabel.includes('muscular')) return 'muscular'
+  if (bodyLabel.includes('pregnant')) return 'pregnant'
+  if (bodyLabel.includes('teen')) return 'teen'
+  if (bodyLabel.includes('child')) return 'child'
+  return 'male'
 }
 
 export default App

@@ -1008,6 +1008,83 @@ input {
   white-space: pre-wrap;
 }
 
+.ai-studio-panel {
+  display: grid;
+  gap: 14px;
+}
+
+.ai-chat-shell,
+.ai-chat-log,
+.ai-chat-message,
+.provider-row,
+.provider-secret-controls {
+  display: grid;
+  gap: 10px;
+}
+
+.ai-chat-shell {
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: var(--control);
+}
+
+.ai-chat-log {
+  max-height: 420px;
+  overflow: auto;
+}
+
+.ai-chat-message {
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: #101721;
+}
+
+.ai-chat-message.user {
+  background: #17202c;
+}
+
+.ai-chat-message strong {
+  color: var(--text-strong);
+}
+
+.ai-chat-message p,
+.ai-chat-message pre {
+  margin: 0;
+  color: var(--text);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font: 13px/1.5 var(--body);
+}
+
+.ai-chat-shell textarea {
+  min-height: 120px;
+  padding: 10px;
+  resize: vertical;
+  color: var(--text);
+  background: #111821;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  font: 13px/1.45 var(--body);
+}
+
+.provider-row {
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: #101721;
+}
+
+.provider-secret-controls {
+  grid-template-columns: minmax(180px, 1fr) auto;
+  align-items: end;
+}
+
+.provider-secret-controls button {
+  min-height: 34px;
+}
+
 .audit-grid strong {
   color: var(--accent);
   font-size: 24px;

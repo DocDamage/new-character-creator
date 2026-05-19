@@ -1,5 +1,6 @@
 import { defaultAiProviderConfig } from './generationJobs.ts'
-import type { AiProviderConfig, ApesJob, ApesPreflightReport, ComposerLayerSettings, ExtractedPart, GenerationJob, PaletteRules, PartLabel, RecipeModeId, SourceFamilyId, TrainingInboxDraft, TrainingLibraryRecord, VariationPreset } from './types'
+import { defaultAiProviderConnections, defaultToolConnections, normalizeAiProviderConnections, normalizeToolConnections, redactAiProviderConnections } from './aiWorkspace.ts'
+import type { AiProviderConfig, AiProviderConnection, ApesJob, ApesPreflightReport, ComposerLayerSettings, ExtractedPart, GenerationJob, PaletteRules, PartLabel, RecipeModeId, SourceFamilyId, ToolConnectionSettings, TrainingInboxDraft, TrainingLibraryRecord, VariationPreset } from './types'
 import type { LpcRecipeSelection } from './lpcCatalog'
 
 export type SavedComposerRecipe = {
@@ -26,6 +27,9 @@ export const apesAllowPlaceholderStorageKey = 'pixel_creator_apes_allow_placehol
 export const apesPreflightStorageKey = 'pixel_creator_apes_preflight'
 export const apesJobsStorageKey = 'pixel_creator_apes_jobs'
 export const aiProviderConfigStorageKey = 'pixel_creator_ai_provider_config'
+export const aiProviderConnectionsStorageKey = 'pixel_creator_ai_provider_connections'
+export const aiToolConnectionsStorageKey = 'pixel_creator_ai_tool_connections'
+export const aiSecretSessionStorageKey = 'pixel_creator_ai_session_secret_status'
 export const generationJobsStorageKey = 'pixel_creator_generation_jobs'
 export const apesHarnessGeneratedAtStorageKey = 'pixel_creator_apes_harness_generated_at'
 export const variationPresetsStorageKey = 'pixel_creator_variation_presets'
@@ -40,6 +44,18 @@ function parseStoredJson<T>(storageKey: string, fallback: T) {
 
   try {
     const raw = window.localStorage.getItem(storageKey)
+    if (!raw) return fallback
+    return JSON.parse(raw) as T
+  } catch {
+    return fallback
+  }
+}
+
+function parseSessionJson<T>(storageKey: string, fallback: T) {
+  if (typeof window === 'undefined') return fallback
+
+  try {
+    const raw = window.sessionStorage.getItem(storageKey)
     if (!raw) return fallback
     return JSON.parse(raw) as T
   } catch {
@@ -65,6 +81,32 @@ export function loadStoredApesJobs() {
 
 export function loadStoredAiProviderConfig() {
   return parseStoredJson<AiProviderConfig>(aiProviderConfigStorageKey, defaultAiProviderConfig)
+}
+
+export function loadStoredAiProviderConnections() {
+  return normalizeAiProviderConnections(parseStoredJson<AiProviderConnection[]>(aiProviderConnectionsStorageKey, defaultAiProviderConnections))
+}
+
+export function loadStoredToolConnections() {
+  return normalizeToolConnections(parseStoredJson<ToolConnectionSettings>(aiToolConnectionsStorageKey, defaultToolConnections))
+}
+
+export function storeAiProviderConnections(connections: AiProviderConnection[]) {
+  return storeJson(aiProviderConnectionsStorageKey, redactAiProviderConnections(connections))
+}
+
+export function loadSessionSecretStatus() {
+  return parseSessionJson<Record<string, boolean>>(aiSecretSessionStorageKey, {})
+}
+
+export function storeSessionSecretStatus(status: Record<string, boolean>) {
+  if (typeof window === 'undefined') return true
+  try {
+    window.sessionStorage.setItem(aiSecretSessionStorageKey, JSON.stringify(status))
+    return true
+  } catch {
+    return false
+  }
 }
 
 export function loadStoredGenerationJobs() {

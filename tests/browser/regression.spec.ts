@@ -671,6 +671,28 @@ test('settings can export a portable local setup bundle', async ({ page }) => {
   expect(bundleText).toContain('micromamba env update -n apes-gpu-modern -f tools/apes_bridge/environment.gpu.yml')
 })
 
+test('AI Studio chat and provider vault are surfaced without persisting secrets', async ({ page }) => {
+  await page.getByTestId('nav-ai').click()
+  await expect(page.getByRole('heading', { name: 'AI Studio' })).toBeVisible()
+  await expect(page.getByText('RAG brain')).toBeVisible()
+
+  await page.getByTestId('ai-chat-input').fill('Draft a cleanup plan and cite relevant context.')
+  await page.getByTestId('ai-chat-send').click()
+  await expect(page.getByTestId('ai-chat-log')).toContainText('Draft a cleanup plan')
+  await expect(page.getByTestId('ai-chat-log')).toContainText('Recommended next actions')
+
+  await page.getByRole('button', { name: 'Open Settings' }).click()
+  await expect(page.getByTestId('ai-provider-vault')).toBeVisible()
+  await expect(page.getByTestId('ai-tool-connections')).toBeVisible()
+
+  const sentinelSecret = 'sk-test-do-not-persist-ai-studio'
+  await page.getByTestId('ai-secret-openai').fill(sentinelSecret)
+  await expect(page.getByTestId('ai-provider-vault')).toContainText('OpenAI')
+
+  const storageText = await page.evaluate(() => `${JSON.stringify(localStorage)}\n${JSON.stringify(sessionStorage)}`)
+  expect(storageText).not.toContain(sentinelSecret)
+})
+
 test('placeholder mode provenance and accessible release controls stay visible', async ({ page }) => {
   await expect(page.getByRole('navigation', { name: 'Creator screens' })).toBeVisible()
   await expect(page.getByRole('combobox', { name: 'Source character' })).toBeVisible()
