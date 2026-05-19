@@ -682,11 +682,13 @@ test('AI Studio chat and provider vault are surfaced without persisting secrets'
   await page.getByTestId('nav-ai').click()
   await expect(page.getByRole('heading', { name: 'AI Studio' })).toBeVisible()
   await expect(page.getByText('RAG brain')).toBeVisible()
+  await expect(page.getByTestId('activate-rag')).toBeVisible()
 
   await page.getByTestId('ai-chat-input').fill('Draft a cleanup plan and cite relevant context.')
   await page.getByTestId('ai-chat-send').click()
   await expect(page.getByTestId('ai-chat-log')).toContainText('Draft a cleanup plan')
   await expect(page.getByTestId('ai-chat-log')).toContainText('Recommended next actions')
+  await expect(page.getByTestId('ai-chat-log')).toContainText('Activate RAG')
 
   await page.getByRole('button', { name: 'Open Settings' }).click()
   await expect(page.getByTestId('ai-provider-vault')).toBeVisible()

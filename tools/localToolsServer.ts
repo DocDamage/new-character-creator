@@ -243,6 +243,11 @@ async function serveLocalToolRequest(req: IncomingMessage, res: ServerResponse, 
     await handleLocalProxyRequest(req, res, appRoot)
     return true
   }
+  if (requestPath === '/__local/rag-tools') {
+    if (!validateLocalToolMutation(req, res, sessionToken)) return true
+    await handleRagToolRequest(req, res, appRoot)
+    return true
+  }
   if (requestPath === '/__local/bridge/aseprite') {
     if (!validateLocalToolMutation(req, res, sessionToken)) return true
     await handleAsepriteBridgeRequest(req, res, appRoot)
@@ -282,6 +287,38 @@ async function handleLocalProxyRequest(req: IncomingMessage, res: ServerResponse
       model: request.model,
       content: result.content,
     })
+  } catch (error) {
+    sendJson(res, 400, { error: error instanceof Error ? error.message : String(error) })
+  }
+}
+
+async function handleRagToolRequest(req: IncomingMessage, res: ServerResponse, appRoot: string) {
+  if (req.method !== 'POST') {
+    sendJson(res, 405, { error: 'Method not allowed.' })
+    return
+  }
+  const body = await readJsonBodyOr400(req, res)
+  if (!body) return
+  const action = typeof (body as { action?: unknown }).action === 'string' ? (body as { action: string }).action : 'load'
+  const outputPath = path.resolve(appRoot, 'data', 'rag', 'knowledge_index.json')
+  try {
+    if (action === 'rebuild' || !fs.existsSync(outputPath)) {
+      const result = spawnSync(process.execPath, ['tools/build-rag-index.js'], {
+        cwd: appRoot,
+        encoding: 'utf8',
+        timeout: 120_000,
+      })
+      if (result.status !== 0) {
+        throw new Error((result.stderr || result.stdout || 'RAG build failed.').trim())
+      }
+    }
+    const index = JSON.parse(fs.readFileSync(outputPath, 'utf8'))
+    await appendToolAuditRecord(path.resolve(appRoot, 'data', 'local-tools', 'audit.jsonl'), {
+      route: '/__local/rag-tools',
+      action,
+      chunk_count: index.chunk_count ?? null,
+    })
+    sendJson(res, 200, { ok: true, action, index })
   } catch (error) {
     sendJson(res, 400, { error: error instanceof Error ? error.message : String(error) })
   }

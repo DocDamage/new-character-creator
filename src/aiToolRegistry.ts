@@ -1,6 +1,6 @@
 import { aiToolSchemas, type JsonSchema } from './aiToolSchemas.ts'
 
-export type AiToolPermissionScope = 'local_tool' | 'download' | 'generation_queue'
+export type AiToolPermissionScope = 'local_tool' | 'download' | 'generation_queue' | 'knowledge'
 
 export type AiToolDefinition = {
   tool_id: keyof typeof aiToolSchemas
@@ -34,6 +34,13 @@ export const aiToolRegistry: AiToolDefinition[] = [
     description: 'Create a missing-animation generation handoff for PixelLab review.',
     permission_scope: 'generation_queue',
     input_schema: aiToolSchemas.queue_pixellab_generation,
+  },
+  {
+    tool_id: 'activate_rag',
+    label: 'Activate RAG',
+    description: 'Load or rebuild the local project knowledge index for cited AI context.',
+    permission_scope: 'knowledge',
+    input_schema: aiToolSchemas.activate_rag,
   },
   {
     tool_id: 'export_handoff',

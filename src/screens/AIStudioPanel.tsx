@@ -23,6 +23,7 @@ type AIStudioPanelProps = {
   openApesLab: () => void
   openExports: () => void
   getAiSessionSecret: (providerId: string) => string | null
+  activateRag: (mode?: 'load' | 'rebuild') => Promise<void>
 }
 
 export function AIStudioPanel({
@@ -43,6 +44,7 @@ export function AIStudioPanel({
   openApesLab,
   openExports,
   getAiSessionSecret,
+  activateRag,
 }: AIStudioPanelProps) {
   const [draft, setDraft] = useState('')
   const [sending, setSending] = useState(false)
@@ -122,6 +124,7 @@ export function AIStudioPanel({
     if (toolId === 'create_apes_job') createApesJob()
     if (toolId === 'queue_pixellab_generation') createGenerationJobsFromQueue()
     if (toolId === 'export_handoff') downloadGenerationManifest()
+    if (toolId === 'activate_rag') void activateRag('rebuild')
     setMessages(messages.map((message) => message.message_id === messageId
       ? applyApprovedToolResult(message, proposalId, 'Approved and sent to the matching app action.')
       : message))
@@ -146,6 +149,10 @@ export function AIStudioPanel({
           <strong>RAG brain</strong>
           <span>{ragStatus}</span>
           {ragIndex ? <code>{ragIndex.document_count} source document(s), {ragIndex.chunk_count} retrievable chunk(s)</code> : null}
+          <div className="status-strip">
+            <button data-testid="activate-rag" onClick={() => void activateRag('load')}>Activate RAG</button>
+            <button data-testid="rebuild-rag" onClick={() => void activateRag('rebuild')} disabled={!localToolsAvailable}>Rebuild</button>
+          </div>
         </article>
         <article className="settings-card">
           <strong>Tool access</strong>
@@ -211,6 +218,7 @@ export function AIStudioPanel({
           <button onClick={createApesJob}>Create APES job</button>
           <button onClick={createGenerationJobsFromQueue}>Queue AI missing layers</button>
           <button onClick={downloadGenerationManifest}>Download generation manifest</button>
+          <button onClick={() => void activateRag('load')}>Activate RAG</button>
           <button onClick={openApesLab}>Open APES Lab</button>
           <button onClick={openExports}>Open Exports</button>
           <button onClick={openSettings}>Open Settings</button>

@@ -33,4 +33,11 @@ export const aiToolSchemas = {
     required: ['prompt'],
     additionalProperties: false,
   },
+  activate_rag: {
+    type: 'object',
+    properties: {
+      mode: { type: 'string', enum: ['load', 'rebuild'] },
+    },
+    additionalProperties: false,
+  },
 } satisfies Record<string, JsonSchema>

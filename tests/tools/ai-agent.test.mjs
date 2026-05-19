@@ -65,6 +65,26 @@ test('AI provider selection respects explicit provider hints', () => {
   assert.equal(chooseAiProvider(providers, 'local').provider_id, 'ollama')
 })
 
+test('AI agent proposes RAG activation when project context is requested', () => {
+  const reply = buildAiAgentReply({
+    request: 'Activate RAG and cite docs for APES cleanup',
+    selectedCharacter: character,
+    recipe: null,
+    ragIndex: null,
+    providers: [],
+    tools: {
+      aseprite: { enabled: false, executable_path: '', bridge_url: '', script_folder: '' },
+      pixellab: { enabled: false, endpoint_url: '', mcp_server_url: '', preferred_model: '' },
+      local_llm: { enabled: false, endpoint_url: '', provider: 'ollama', model: '' },
+    },
+    lpcPublished: false,
+    localToolsAvailable: true,
+  })
+
+  assert.ok(reply.tool_proposals.some((proposal) => proposal.tool_id === 'activate_rag'))
+  assert.match(reply.content, /Available tools:/)
+})
+
 function makeProvider(provider_id, name, type, secret_session_set) {
   return {
     provider_id,

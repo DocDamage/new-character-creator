@@ -34,6 +34,7 @@ export function buildAiAgentReply(options: AiAgentRequest): AiStudioMessage {
     `Current character: ${options.selectedCharacter.display_name}.`,
     `Tool mode: ${options.localToolsAvailable ? 'local approvals available' : 'static handoff only'}.`,
     ragBundle ? `Citations: ${ragBundle.citations.map((citation) => citation.title).join('; ')}.` : 'Citations: RAG index not loaded.',
+    `Available tools: ${aiToolRegistry.map((tool) => `${tool.tool_id} (${tool.permission_scope})`).join(', ')}.`,
     proposals.length > 0 ? `Pending approvals: ${proposals.map((proposal) => proposal.label).join(', ')}.` : 'No tool approval is needed for this reply.',
     'Recommended next actions: review citations, approve any proposed tool calls, then export or import generated output for manual review.',
   ].join('\n')
@@ -74,6 +75,9 @@ function proposeTools(options: AiAgentRequest, intent = parseAiRequestIntent(opt
   }
   if (intent.actions.includes('generate')) {
     proposals.push(makeProposal('queue_pixellab_generation', { prompt: options.request, animation: intent.animations[0] ?? options.recipe?.animation_coverage[0] ?? 'idle', layers: intent.layers }))
+  }
+  if (intent.actions.includes('rag_search') || (options.request.toLowerCase().includes('activate') && options.request.toLowerCase().includes('rag'))) {
+    proposals.push(makeProposal('activate_rag', { mode: options.ragIndex ? 'load' : 'rebuild' }))
   }
   if (intent.actions.includes('export')) {
     proposals.push(makeProposal('export_handoff', { format: intent.outputFormat ?? 'generation_manifest' }))

@@ -4,6 +4,7 @@ import { localToolFetch, localToolPath } from './localToolsClient.ts'
 import type { AiProviderConnection, CharacterManifest, KitbashRecipe } from './types.ts'
 import type { RagIndex } from './ragTypes.ts'
 import { buildRagContextBundle } from './ragIndex.ts'
+import { aiToolRegistry } from './aiToolRegistry.ts'
 
 export type AiProviderCallOptions = {
   request: string
@@ -52,6 +53,7 @@ export async function requestAiProviderReply(options: AiProviderCallOptions): Pr
             'Give concise, actionable sprite-production guidance.',
             'Respect review gates: generated or segmented output must be reviewed before release.',
             'Prefer exact LPC/APES layer, animation, direction, and frame language.',
+            `Available approval-gated tools: ${aiToolRegistry.map((tool) => `${tool.tool_id}: ${tool.description}`).join(' | ')}`,
           ].join('\n'),
         },
         {

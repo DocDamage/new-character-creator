@@ -594,6 +594,35 @@ function App() {
     }
   }, [])
 
+  async function activateRag(mode: 'load' | 'rebuild' = 'load') {
+    setRagStatus(mode === 'rebuild' ? 'Rebuilding RAG knowledge index...' : 'Activating RAG knowledge index...')
+    try {
+      if (localToolsAvailable) {
+        const response = await localToolFetch(localToolPath('rag-tools'), {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: mode }),
+        })
+        const payload = await response.json().catch(() => null) as { ok?: boolean; index?: RagIndex; error?: string } | null
+        if (!response.ok || !payload?.ok || payload.index?.format !== 'pixel_creator_rag_index') {
+          throw new Error(payload?.error ?? 'Local RAG tool did not return a knowledge index.')
+        }
+        setRagIndex(payload.index)
+        setRagStatus(`RAG active with ${payload.index.chunk_count} knowledge chunk(s) from ${payload.index.document_count} source document(s).`)
+        return
+      }
+
+      const response = await fetch(publicAssetPath('data/rag/knowledge_index.json'), { cache: 'no-store' })
+      if (!response.ok) throw new Error('Hosted RAG index is not available.')
+      const payload = await response.json() as RagIndex
+      if (payload?.format !== 'pixel_creator_rag_index') throw new Error('Hosted RAG index has an unexpected format.')
+      setRagIndex(payload)
+      setRagStatus(`RAG active with ${payload.chunk_count} knowledge chunk(s) from hosted data.`)
+    } catch (error) {
+      setRagStatus(`RAG activation failed: ${error instanceof Error ? error.message : String(error)}`)
+    }
+  }
+
   useEffect(() => {
     const controller = new AbortController()
     fetch(publicAssetPath('data/lpc/lpc_catalog.json'), { signal: controller.signal, cache: 'no-store' })
@@ -2744,6 +2773,7 @@ function App() {
               openApesLab={() => setScreen('apes')}
               openExports={() => setScreen('exports')}
               getAiSessionSecret={(providerId) => aiSecretVaultRef.current.get(providerId)}
+              activateRag={activateRag}
             />
           ) : null}
           {screen === 'apes' ? (
