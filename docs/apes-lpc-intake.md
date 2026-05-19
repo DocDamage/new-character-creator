@@ -237,8 +237,8 @@ choose `characters.local.json` for ignored or external assets.
 - The generated audit currently reports 655 covered LPC catalog entries and 0
   missing entries after the Randoms/per-folder-license cleanup.
 - `npm run production:check` includes secret scanning, license audit, RAG
-  evaluation, tool tests, release validation, preview local-tools smoke, and
-  browser regression.
+  evaluation, hosted RAG validation, tool tests, release validation, preview
+  local-tools smoke, and browser regression.
 
 ## Remaining Next Steps
 
@@ -250,6 +250,9 @@ choose `characters.local.json` for ignored or external assets.
 - Continue expanding provider output intake for PixelLab/future AI backends that
   consume the missing-animation queue. Provider calls must stay behind the
   session-only secret vault and local proxy/backend boundary.
+- Keep AI Studio's natural-language command routing broad enough for production
+  wording such as `cut out the cloak`, `make art in PixelLab`, `why can't I
+  export`, `the feet are floating`, and `scan my computer`.
 - Add guided Training Inbox / Training Library records for dropped or generated
   animation sets, with validation and review gates before frames become
   selectable.

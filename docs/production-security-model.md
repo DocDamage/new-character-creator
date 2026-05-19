@@ -25,7 +25,7 @@ Production readiness is verified with:
 npm run production:check
 ```
 
-That command includes source hygiene, secret scanning, license audit generation, RAG evaluation, tool tests, release build validation, preview local-tool smoke, and browser regression.
+That command includes source hygiene, secret scanning, license audit generation, RAG evaluation, hosted RAG validation, tool tests, release build validation, preview local-tool smoke, and browser regression.
 
 Security-specific checks:
 
@@ -33,4 +33,5 @@ Security-specific checks:
 npm run security:scan
 npm run license:audit
 npm run rag:evaluate
+npm run rag:hosted-check
 ```

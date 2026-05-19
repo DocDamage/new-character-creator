@@ -31,7 +31,7 @@ npm run test:browser
 That harness covers export/package downloads, standalone Godot SpriteFrames resources, credits/provenance report export, manual mask save persistence, recipe save/load, creator cockpit filtering/export-target persistence, Part Library bulk review actions, fake APES-part prevention, APES QA harness generation/import, APES fine-tune prep and Duelyst job-batch queueing, APES local-output image/mask package assets, Duelyst audit behavior, LPC inventory browse/select/label/import, LPC source picker canonical animations and compatible sheet parts, catalog-backed LPC selections, rendered-frame export, upstream credit readiness, right-click LPC source details, missing-animation queue visibility, oversize/custom-animation warnings, placeholder-mode manifest provenance, paged large Part Library imports, page-scoped visible export/review actions, AI Studio live-context/tool approvals, and the portable local setup bundle download from `Settings`.
 
 - APES Lab shows AI Knowledge/RAG status and generation jobs include cited context when a local index is available.
-- AI Studio shows provider/RAG/tool status, live context, chat replies, RAG citations when loaded, and approval-gated tool proposal cards.
+- AI Studio shows provider/RAG/tool status, live context, chat replies, RAG citations when loaded, natural-language command routing, approval shortcuts such as `approve`/`run it`, and approval-gated tool proposal cards.
 - Settings shows volatile secret count, local proxy status, bridge health actions, and the production check command.
 - Asset Audit shows license readiness, missing-license counts, and blocked release findings.
 
@@ -62,7 +62,7 @@ Latest verified automated run:
 - `npm run build:release`
 - `npm run validate:release-package`
 - `npm run test:preview-tools`
-- `npm run test:browser` passed, 21 Chromium tests
+- `npm run test:browser` passed, 23 Chromium tests
 - `npm run test:memory`
 - `npm run production:check`
 - `npm run test:browser:all` optional cross-browser coverage, previously 54 Chromium/Firefox/WebKit tests

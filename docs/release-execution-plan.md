@@ -1,6 +1,6 @@
 # Release Execution Plan
 
-> Status update, 2026-05-19: this plan has been superseded by the production-readiness implementation on branch `codex/aaa-production-readiness`, commit `7363392b3`. The living production gate is now `npm run production:check`, which adds secret scanning, license audit generation, RAG evaluation, release validation, preview local-tools smoke, and browser regression. Keep this file as historical execution context; use `README.md`, `docs/release-readiness.md`, and `docs/rebuild-spec.md` for current rebuild/release requirements.
+> Status update, 2026-05-19: this plan has been superseded by the production-readiness work now on `main` through commit `277523fe4`. The living production gate is now `npm run production:check`, which adds secret scanning, license audit generation, RAG evaluation, hosted RAG validation, release validation, preview local-tools smoke, and browser regression. AI Studio also includes hosted/static RAG, live context, schema-validated tool proposals, natural-language command routing, and approval shortcuts. Keep this file as historical execution context; use `README.md`, `docs/release-readiness.md`, and `docs/rebuild-spec.md` for current rebuild/release requirements.
 
 This plan converts the production-readiness audit into ordered implementation work. It is structured so a developer or coding agent can complete tasks one by one without guessing.
 

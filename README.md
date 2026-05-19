@@ -37,7 +37,7 @@ Production readiness is gated by:
 npm run production:check
 ```
 
-That command runs source hygiene, secret scanning, license audit generation, RAG evaluation, tool tests, release build validation, preview-tool checks, and browser regressions.
+That command runs source hygiene, secret scanning, license audit generation, RAG evaluation, hosted RAG validation, tool tests, release build validation, preview-tool checks, and browser regressions.
 
 ## Step-By-Step Guide
 
@@ -133,6 +133,8 @@ Placeholder APES fallback is only for development. If it is enabled, release exp
 Run `npm run rag:index` to build the AI knowledge indexes, or `npm run rag:evaluate` to rebuild them and score the regression query set. The command writes the full local index to `data/rag/knowledge_index.json` and a public-safe hosted index to `public/data/rag/knowledge_index.json`, so AI Studio's `Activate RAG` button works in both local-tools previews and static hosted builds. APES Lab and AI Studio use that index to attach project, APES, LPC, provider, license, Duelyst, and release-review context to generation jobs and chat replies. `npm run rag:hosted-check` validates the GitHub Pages index before publishing. Generated output remains blocked from release until reviewed.
 
 AI Studio can answer questions about the current work from a compact live activity snapshot: active screen, selected character, frame geometry, layer, recipe readiness, release blockers, RAG mode, tool status, warnings, recent activity, and recent tool results. It can propose tool actions, but privileged work is approval-gated. Provider-suggested tools are schema-validated before they become approval cards. Direct provider calls are routed through a trusted loopback proxy or backend; browser-entered provider secrets are held only in volatile memory and are never written to localStorage, sessionStorage, exports, generated manifests, logs, release bundles, or git. Settings includes one-click defaults and live checks for Aseprite, PixelLab, and local LLM loopback bridges.
+
+AI Studio accepts direct tool names, but you can also speak normally. Examples that map to app functions include `cut out the cloak`, `make art in PixelLab`, `download a zip bundle`, `why can't I export`, `what am I looking at`, `the feet are floating`, `find helmet sprites on my PC`, `jump to Settings`, `wire up PixelLab`, and `run a production check`. If you type `approve`, `yes`, `run it`, or `do it` while an approval card is pending, the app runs that pending card instead of starting a new plan.
 
 ### 7. Handle Missing Animations
 
@@ -433,7 +435,7 @@ production-readiness-2026-05-19
 Latest certified commit:
 
 ```text
-7363392b3 Add production readiness gates
+277523fe4 Expand AI natural language triggers
 ```
 
 Verified gates:

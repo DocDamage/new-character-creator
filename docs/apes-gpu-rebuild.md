@@ -155,8 +155,9 @@ project-local Vite file serving rules.
 The GPU APES environment, private Duelyst staging, and local APES bridge are
 development-only tooling. They are not shipped in the public static package.
 Production readiness is measured by `npm run production:check`, which includes
-secret scanning, license audit generation, RAG evaluation, release validation,
-preview local-tool smoke coverage, and browser regression.
+secret scanning, license audit generation, RAG evaluation, hosted RAG
+validation, release validation, preview local-tool smoke coverage, and browser
+regression.
 
 ## Private Duelyst And Fine-Tune Prep
 

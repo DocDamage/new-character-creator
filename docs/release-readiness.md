@@ -21,11 +21,12 @@ Latest verification after the production-readiness pass:
 - `npm run security:scan`: passed
 - `npm run license:audit`: passed, 655 covered LPC catalog entries and 0 missing
 - `npm run rag:evaluate`: passed, 3/3 evaluation queries
-- `npm run test:tools`: passed, 80 tests
+- `npm run rag:hosted-check`: passed
+- `npm run test:tools`: passed, 121 tests
 - `npm run build:release`: passed
 - `npm run validate:release-package`: passed
 - `npm run test:preview-tools`: passed
-- `npm run test:browser`: passed, 21 Chromium tests
+- `npm run test:browser`: passed, 23 Chromium tests
 - `npm run test:memory`: passed
 - `npm run production:check`: passed
 - `npm run test:browser:all`: optional cross-browser matrix, previously passed with 54 tests across Chromium, Firefox, and WebKit
@@ -34,7 +35,7 @@ Latest verification after the production-readiness pass:
 The certified branch commit for this pass is:
 
 ```text
-7363392b3 Add production readiness gates
+277523fe4 Expand AI natural language triggers
 ```
 
 ```powershell
@@ -43,6 +44,7 @@ npm run check:source-hygiene
 npm run security:scan
 npm run license:audit
 npm run rag:evaluate
+npm run rag:hosted-check
 npm run test:tools
 npm run build:release
 npm run validate:release-package
@@ -83,8 +85,9 @@ LPC sheet-part selection, catalog-backed LPC recipe persistence, rendered-frame
 export, selected upstream credit readiness in Exports, right-click `View info`
 details on LPC source cards, missing-animation queue visibility in APES Lab, and
 oversize/custom-animation warnings in the LPC catalog picker, AI Studio/tool
-proposal and volatile secret surfaces, production-readiness status cards, and
-the image-cache performance budget. Private Duelyst package harvesting is available through
+proposal and volatile secret surfaces, AI Studio natural-language command
+routing and approval shortcuts, production-readiness status cards, and the
+image-cache performance budget. Private Duelyst package harvesting is available through
 `npm run test:private-assets` and is intentionally opt-in outside the standard
 production gate. Browser regression is served from a built Vite preview so the
 suite exercises bundled behavior rather than the Vite dev transform path.
@@ -97,8 +100,8 @@ suite exercises bundled behavior rather than the Vite dev transform path.
   validation, preview local-tool smoke, and browser regression.
 - `npm run production:check` is the current production gate. It runs lint,
   source hygiene, secret scanning, license audit generation, RAG evaluation,
-  tool tests, release build validation, preview local-tool smoke, and browser
-  regression.
+  hosted RAG validation, tool tests, release build validation, preview
+  local-tool smoke, and browser regression.
 - `npm run security:scan` scans source, docs, public assets, generated data, and
   release output for provider-looking keys while ignoring known redacted or
   non-secret sentinel strings.
@@ -137,6 +140,10 @@ suite exercises bundled behavior rather than the Vite dev transform path.
   and secret-looking notes do not land in storage or exported JSON.
 - AI Studio replies can cite RAG context and propose tool actions, but tool
   execution requires explicit user approval.
+- AI Studio accepts natural-language production wording for tools and app
+  functions, including PixelLab generation, APES masks, RAG/docs lookup,
+  export blockers, alignment triage, local asset scans, setup, navigation, and
+  project checks. Approval shortcuts run only existing pending approval cards.
 - AI Studio's RAG activation is covered in browser regression: hosted builds
   load `public/data/rag/knowledge_index.json`, while local-tools builds can
   rebuild through the guarded local RAG route.
@@ -279,7 +286,7 @@ The production release command is:
 npm run production:check
 ```
 
-This command must pass before calling the app production ready. It includes source hygiene, secret scanning, license audit generation, RAG evaluation, tool tests, release build validation, preview tool checks, and browser regression coverage.
+This command must pass before calling the app production ready. It includes source hygiene, secret scanning, license audit generation, RAG evaluation, hosted RAG validation, tool tests, release build validation, preview tool checks, and browser regression coverage.
 
 ## Go / No-Go
 

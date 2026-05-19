@@ -255,6 +255,12 @@ AI Studio exposes source ingestion as approval-gated local-only tool proposals:
 - `fetch_web_rag_sources` fetches curated public web references and rebuilds RAG.
 - `rag_search` is static-safe and can search the already-loaded hosted index with citations on GitHub Pages.
 
+Natural wording maps to these same tools. Examples: `scan my computer`, `find
+helmet sprites on my PC`, `index assets`, `feed the knowledge base`, `fetch web
+sources`, `what docs can you cite?`, and `look this up in the knowledge base`.
+Static hosted builds can answer from the shipped index, while local PC scans and
+web fetches still require a local-tools session and explicit approval.
+
 Run the tool tests:
 
 ```bash

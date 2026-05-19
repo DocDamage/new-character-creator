@@ -522,6 +522,19 @@ AI Studio messages:
 - AI Studio must provide a visible "ask about blockers" style affordance when
   live context includes warnings. That action may prefill chat but must not run
   privileged tools.
+- AI Studio must route common human wording to the same approval-gated tools as
+  direct tool names. Required examples include PixelLab/generation wording
+  (`make art in PixelLab`, `fill the missing frames`), APES/mask wording (`cut
+  out the cloak`, `make a mask`), export wording (`download a zip`, `send this
+  to Aseprite`), current-status questions (`what am I looking at?`), blocker
+  questions (`why can't I export?`), alignment wording (`the feet are floating`,
+  `wrong layer`), RAG/docs wording (`what docs can you cite?`), local asset/RAG
+  ingestion wording (`scan my computer`, `index assets`), navigation/setup
+  wording (`jump to Settings`, `wire up PixelLab`), and project-check wording
+  (`run a production check`).
+- Approval shortcuts such as `approve`, `yes`, `ok`, `run it`, and `do it` must
+  execute only an existing pending approval card. If no pending card exists, the
+  app must say so and ask the user to request a concrete action first.
 
 Generation jobs must:
 

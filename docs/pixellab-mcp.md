@@ -37,6 +37,8 @@ The app-side PixelLab bridge is intentionally guarded:
 4. Click `Check PixelLab bridge` from a dev/local-tools session.
 5. Return to AI Studio and ask for a PixelLab missing-animation handoff. The assistant can propose the generation queue tool, but it does not run until you approve it.
 
+Natural phrasing is supported. You can say `make art in PixelLab`, `use PixelLab on this character`, `write a PixelLab prompt`, `fill the missing frames`, or `draw a cloak variation`. In a static GitHub Pages session, AI Studio can prepare prompts and handoff JSON but cannot call the PixelLab bridge directly. Direct bridge checks and calls require a dev/local-tools session served through `node tools/local-vite-server.js ...`.
+
 ## Suggested missing-animation workflow
 
 1. Try the app's Motion source selector to borrow a compatible local LPC action, such as `slash`, `thrust`, or `shoot`.
