@@ -11,6 +11,7 @@ const jsonOutputPath = path.join(repoRoot, 'data', 'rag', 'pc-asset-inventory.js
 const markdownOutputPath = path.join(outputDir, 'pc-asset-inventory.md')
 const maxFileBytes = getNumberArg('--max-mb', 250) * 1024 * 1024
 const maxUniqueRows = getNumberArg('--max-rows', 100000)
+const duplicateGroupLimit = getNumberArg('--duplicate-groups', 2000)
 const roots = getRoots()
 
 const assetExtensions = new Set([
@@ -118,25 +119,51 @@ console.log(`Wrote ${groups.length} unique asset group(s), ${stats.duplicate_cou
 console.log(`RAG source: ${path.relative(repoRoot, markdownOutputPath)}`)
 
 function getRoots() {
-  const rootArgIndex = process.argv.indexOf('--root')
-  if (rootArgIndex >= 0 && process.argv[rootArgIndex + 1]) {
-    return process.argv[rootArgIndex + 1].split(';').map((item) => path.resolve(item)).filter(fs.existsSync)
+  const rootValues = getArgValues('--root')
+  if (rootValues.length > 0) {
+    return Array.from(new Set(rootValues.flatMap((value) => value.split(';')).map((item) => path.resolve(item)).filter(fs.existsSync)))
   }
-  const preferred = [
-    path.join(userHome, 'Desktop'),
-    path.join(userHome, 'Documents'),
-    path.join(userHome, 'Downloads'),
-    path.join(userHome, 'Pictures'),
-    path.join(userHome, 'OneDrive'),
-    path.join(userHome, 'dev'),
-  ]
+  const preferred = process.argv.includes('--all-profile')
+    ? [
+        path.join(userHome, 'Desktop'),
+        path.join(userHome, 'Documents'),
+        path.join(userHome, 'Downloads'),
+        path.join(userHome, 'Pictures'),
+        path.join(userHome, 'OneDrive'),
+        path.join(userHome, 'dev'),
+      ]
+    : [
+        path.join(userHome, 'Downloads'),
+        path.join(userHome, 'Documents'),
+        path.join(userHome, 'OneDrive', 'Pictures'),
+        path.join(userHome, 'GameMakerProjects'),
+        path.join(userHome, 'resources'),
+        path.join(userHome, 'dev', 'sprite character creator', 'assets'),
+        path.join(userHome, 'dev', 'rpg maker mz projects'),
+        path.join(userHome, 'dev', 'URPG - RPG Game Maker'),
+        path.join(userHome, 'dev', 'URPG-RPG-Game-Designer'),
+      ]
   return Array.from(new Set(preferred.map((item) => path.resolve(item)).filter(fs.existsSync)))
 }
 
+function getArgValues(name) {
+  const values = []
+  for (let index = 0; index < process.argv.length; index += 1) {
+    const arg = process.argv[index]
+    if (arg === name && process.argv[index + 1]) {
+      values.push(process.argv[index + 1])
+      index += 1
+    } else if (arg.startsWith(`${name}=`)) {
+      values.push(arg.slice(name.length + 1))
+    }
+  }
+  return values
+}
+
 function getNumberArg(name, fallback) {
-  const index = process.argv.indexOf(name)
-  if (index < 0 || !process.argv[index + 1]) return fallback
-  const value = Number(process.argv[index + 1])
+  const values = getArgValues(name)
+  if (values.length === 0) return fallback
+  const value = Number(values.at(-1))
   return Number.isFinite(value) && value > 0 ? value : fallback
 }
 
@@ -216,7 +243,7 @@ function processCandidates(records) {
   for (const [sizeBytes, sizeGroup] of bySize.entries()) {
     if (sizeGroup.length === 1) {
       const record = sizeGroup[0]
-      groupsByHash.set(`unique-size:${sizeBytes}:${record.path}`, makeGroup(`size-${sizeBytes}`, record))
+      groupsByHash.set(`unique-size:${sizeBytes}:${record.path}`, makeGroup(`size-only-${sizeBytes}`, record))
       continue
     }
     for (const record of sizeGroup) {
@@ -255,20 +282,29 @@ function makeGroup(hash, record) {
 
 function hashFile(filePath) {
   const hash = crypto.createHash('sha256')
-  const buffer = fs.readFileSync(filePath)
-  hash.update(buffer)
-  return hash.digest('hex')
+  const fd = fs.openSync(filePath, 'r')
+  try {
+    const buffer = Buffer.allocUnsafe(1024 * 1024)
+    let bytesRead = 0
+    do {
+      bytesRead = fs.readSync(fd, buffer, 0, buffer.length, null)
+      if (bytesRead > 0) hash.update(buffer.subarray(0, bytesRead))
+    } while (bytesRead > 0)
+    return hash.digest('hex')
+  } finally {
+    fs.closeSync(fd)
+  }
 }
 
 function buildMarkdown(payload) {
   const topGroups = payload.groups.slice(0, maxUniqueRows)
   const rows = topGroups.map((group) => {
     const duplicateNote = group.duplicates.length > 1 ? ` duplicate_count=${group.duplicates.length - 1}` : ''
-    return `- ${group.canonical_home_relative_path} | ${group.extensions.join(', ')} | ${formatBytes(group.size_bytes)} | sha256=${group.content_hash.slice(0, 16)}${duplicateNote}`
+    return `- ${group.canonical_home_relative_path} | ${group.extensions.join(', ')} | ${formatBytes(group.size_bytes)} | content_id=${group.content_hash.slice(0, 16)}${duplicateNote}`
   })
   const duplicateRows = payload.groups
     .filter((group) => group.duplicates.length > 1)
-    .slice(0, 300)
+    .slice(0, duplicateGroupLimit)
     .map((group) => [
       `- ${group.canonical_home_relative_path}`,
       ...group.duplicates.slice(1, 8).map((duplicate) => `  - duplicate: ${duplicate.home_relative_path}`),
@@ -295,19 +331,27 @@ function buildMarkdown(payload) {
     '',
     '## Unique Assets',
     '',
-    ...rows,
+    ...chunkLines(rows, 20),
     '',
     '## Duplicate Groups',
     '',
-    ...(duplicateRows.length ? duplicateRows : ['No duplicate content groups found.']),
+    ...(duplicateRows.length ? chunkLines(duplicateRows, 5) : ['No duplicate content groups found.']),
     '',
     '## Notes',
     '',
-    '- Deduplication uses SHA-256 content hashes.',
+    '- Deduplication uses SHA-256 content hashes for same-size files; unique-size files are retained without reading their full contents.',
     '- The canonical path is the first unique content record found during scanning.',
     '- Use the JSON sidecar for full duplicate lists and machine-readable metadata.',
     '',
   ].join('\n')
+}
+
+function chunkLines(lines, size) {
+  const chunks = []
+  for (let index = 0; index < lines.length; index += size) {
+    chunks.push(lines.slice(index, index + size).join('\n'))
+  }
+  return chunks
 }
 
 function formatBytes(bytes) {

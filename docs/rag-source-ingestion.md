@@ -182,6 +182,23 @@ Build the local and public indexes:
 npm run rag:index
 ```
 
+Scan local PC asset folders into an ignored private RAG inventory:
+
+```bash
+npm run rag:scan-pc
+npm run rag:index
+```
+
+By default, `rag:scan-pc` scans asset-heavy user folders such as Downloads,
+Documents, OneDrive Pictures, GameMakerProjects, this project's `assets`, and
+known RPG Maker/dev asset folders. Use `--root "path1;path2"` for a custom
+scan set, or `--all-profile` when you really want a broader profile crawl.
+
+The scanner deduplicates by content for files that share the same byte size,
+keeps unique-size files without hashing their full contents, writes a compact
+Markdown source for RAG, and writes the full JSON sidecar under ignored
+`data/rag/` for local inspection.
+
 Evaluate RAG quality:
 
 ```bash
