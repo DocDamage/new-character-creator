@@ -668,7 +668,7 @@ test('settings can export a portable local setup bundle', async ({ page }) => {
   expect(bundleText).toContain('npm run validate:release-package')
   expect(bundleText).toContain('npm run test:browser')
   expect(bundleText).toContain('npm run release:check')
-  expect(bundleText).toContain('.\\tools\\apes_bridge\\setup_home_pc.ps1')
+  expect(bundleText).toContain('micromamba env update -n apes-gpu-modern -f tools/apes_bridge/environment.gpu.yml')
 })
 
 test('placeholder mode provenance and accessible release controls stay visible', async ({ page }) => {

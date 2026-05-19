@@ -43,7 +43,7 @@ export function SettingsPanel({
   const repairCommand = `npm run repair:manifest-paths -- --asset-root "${escapedAssetRoot}"`
   const reindexCommand = `npm run index:assets -- --asset-root "${escapedAssetRoot}"`
   const exportCommand = `npm run export:character -- 1-warrior-woman --asset-root "${escapedAssetRoot}"`
-  const apesSetupCommand = '.\\tools\\apes_bridge\\setup_home_pc.ps1'
+  const apesSetupCommand = 'micromamba env update -n apes-gpu-modern -f tools/apes_bridge/environment.gpu.yml'
   const apesPreflightCommand = apesPythonPath.trim()
     ? `"${escapedPythonPath}" tools/apes_bridge/check_apes_env.py --json`
     : 'python tools/apes_bridge/check_apes_env.py --json'

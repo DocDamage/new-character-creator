@@ -1680,7 +1680,7 @@ function App() {
       '## APES machine checks',
       '',
       '```powershell',
-      '.\\tools\\apes_bridge\\setup_home_pc.ps1',
+      'micromamba env update -n apes-gpu-modern -f tools/apes_bridge/environment.gpu.yml',
       preflightCommand,
       '```',
       '',
