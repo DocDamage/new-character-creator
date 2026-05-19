@@ -58,6 +58,7 @@ export function createGenerationJobsFromMissingAnimationQueue(
       settings: options.settings ?? {},
       provider,
       rag_context: options.contextForItem?.(item),
+      input_artifacts: buildInputArtifacts(item),
       status: provider.configured ? 'draft' : 'handoff_ready',
       logs: [
         `Created from missing-animation queue item ${item.id}.`,
@@ -134,6 +135,7 @@ function queueItemLabel(item: MissingAnimationQueueItem) {
 }
 
 function buildPrompt(item: MissingAnimationQueueItem, prefix = 'Generate pixel-art animation layer frames') {
+  const artifacts = buildInputArtifacts(item)
   const affected = item.affected_frames
     .slice(0, 6)
     .map((frame) => `${frame.animation}/${frame.direction}/${frame.frame_index}`)
@@ -145,8 +147,30 @@ function buildPrompt(item: MissingAnimationQueueItem, prefix = 'Generate pixel-a
     `Target animation: ${item.requested_animation}; status: ${item.status}`,
     affected ? `Affected frames: ${affected}${item.affected_frames.length > 6 ? ', ...' : ''}` : '',
     item.warnings.length > 0 ? `Warnings: ${item.warnings.join('; ')}` : '',
-    'Keep transparent background, crisp pixels, 64x64 alignment, and reusable layer boundaries.',
+    `Validation: ${artifacts.validation_checks.join('; ')}`,
+    `Constraints: ${artifacts.constraints.join('; ')}`,
   ].filter(Boolean).join('\n')
+}
+
+function buildInputArtifacts(item: MissingAnimationQueueItem): NonNullable<GenerationJob['input_artifacts']> {
+  return {
+    target_layer: item.layer_id,
+    body_type: item.body_type,
+    affected_frames: item.affected_frames.map((frame) => ({ ...frame })),
+    constraints: [
+      'transparent background',
+      'crisp unscaled pixel edges',
+      '64x64 standard LPC frame alignment unless target profile says otherwise',
+      'preserve reusable layer boundaries without baking in the base body',
+      `match ${item.body_type} body proportions`,
+    ],
+    validation_checks: [
+      'output URI is present',
+      'output is an image or PNG data URL',
+      'review gate remains blocked until manual approval',
+      'affected frame count matches the handoff request',
+    ],
+  }
 }
 
 function makeGenerationJobId(characterId: string, item: MissingAnimationQueueItem, createdAt: string, index: number) {

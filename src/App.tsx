@@ -2743,6 +2743,7 @@ function App() {
               openSettings={() => setScreen('settings')}
               openApesLab={() => setScreen('apes')}
               openExports={() => setScreen('exports')}
+              getAiSessionSecret={(providerId) => aiSecretVaultRef.current.get(providerId)}
             />
           ) : null}
           {screen === 'apes' ? (

@@ -4,7 +4,7 @@ import fs from 'node:fs'
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import path from 'node:path'
 import { validateAsepriteBridgeRequest } from './asepriteBridge'
-import { normalizeLocalProxyProviderRequest } from './localProxyProviders'
+import { forwardLocalProxyProviderRequest, normalizeLocalProxyProviderRequest } from './localProxyProviders'
 import { validatePixelLabBridgeRequest } from './pixellabBridge'
 import { appendToolAuditRecord } from './toolAuditLog'
 
@@ -275,7 +275,13 @@ async function handleLocalProxyRequest(req: IncomingMessage, res: ServerResponse
       model: request.model,
       message_count: request.messages.length,
     })
-    sendJson(res, 200, { ok: true, provider: request.provider, routed: true, note: 'Proxy route validated. Configure provider forwarding before production calls.' })
+    const result = await forwardLocalProxyProviderRequest(request)
+    sendJson(res, 200, {
+      ok: true,
+      provider: request.provider,
+      model: request.model,
+      content: result.content,
+    })
   } catch (error) {
     sendJson(res, 400, { error: error instanceof Error ? error.message : String(error) })
   }

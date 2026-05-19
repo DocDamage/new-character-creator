@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react'
 import { applyApprovedToolResult, buildAiAgentReply } from '../aiAgent'
+import { requestAiProviderReply } from '../aiProviderClient'
 import { makeAiStudioMessage } from '../aiWorkspace'
 import type { RagIndex } from '../ragTypes'
 import type { AiProviderConnection, AiStudioMessage, CharacterManifest, KitbashRecipe, ToolConnectionSettings } from '../types'
@@ -21,6 +22,7 @@ type AIStudioPanelProps = {
   openSettings: () => void
   openApesLab: () => void
   openExports: () => void
+  getAiSessionSecret: (providerId: string) => string | null
 }
 
 export function AIStudioPanel({
@@ -40,8 +42,10 @@ export function AIStudioPanel({
   openSettings,
   openApesLab,
   openExports,
+  getAiSessionSecret,
 }: AIStudioPanelProps) {
   const [draft, setDraft] = useState('')
+  const [sending, setSending] = useState(false)
   const enabledProviders = providers.filter((provider) => provider.enabled)
   const sessionReadyProviders = enabledProviders.filter((provider) => provider.secret_session_set || provider.type === 'ollama' || provider.type === 'lm_studio')
   const toolList = useMemo(() => [
@@ -52,11 +56,11 @@ export function AIStudioPanel({
     lpcPublished ? 'Hosted LPC bundle' : 'LPC local-only',
   ], [localToolsAvailable, lpcPublished, tools])
 
-  function sendMessage() {
+  async function sendMessage() {
     const request = draft.trim()
-    if (!request) return
+    if (!request || sending) return
     const userMessage = makeAiStudioMessage('user', request)
-    const assistantMessage = buildAiAgentReply({
+    const fallbackMessage = buildAiAgentReply({
       request,
       selectedCharacter,
       recipe,
@@ -66,8 +70,52 @@ export function AIStudioPanel({
       lpcPublished,
       localToolsAvailable,
     })
-    setMessages([...messages, userMessage, assistantMessage])
+    const nextMessages = [...messages, userMessage]
+    setMessages(nextMessages)
     setDraft('')
+    setSending(true)
+    try {
+      const providerReply = localToolsAvailable
+        ? await requestAiProviderReply({
+            request,
+            selectedCharacter,
+            recipe,
+            ragIndex,
+            providers,
+            getSessionSecret: getAiSessionSecret,
+          })
+        : null
+      setMessages([
+        ...nextMessages,
+        providerReply
+          ? {
+              ...fallbackMessage,
+              content: [
+                `Provider reply from ${providerReply.provider.name}:`,
+                '',
+                providerReply.content,
+                '',
+                'Deterministic guardrails:',
+                fallbackMessage.content,
+              ].join('\n'),
+            }
+          : fallbackMessage,
+      ])
+    } catch (error) {
+      setMessages([
+        ...nextMessages,
+        {
+          ...fallbackMessage,
+          content: [
+            `Provider call failed: ${error instanceof Error ? error.message : String(error)}`,
+            '',
+            fallbackMessage.content,
+          ].join('\n'),
+        },
+      ])
+    } finally {
+      setSending(false)
+    }
   }
 
   function approveTool(messageId: string, proposalId: string, toolId: string) {
@@ -159,7 +207,7 @@ export function AIStudioPanel({
           />
         </label>
         <div className="status-strip">
-          <button className="primary" data-testid="ai-chat-send" onClick={sendMessage} disabled={!draft.trim()}>Send</button>
+          <button className="primary" data-testid="ai-chat-send" onClick={() => void sendMessage()} disabled={!draft.trim() || sending}>{sending ? 'Sending' : 'Send'}</button>
           <button onClick={createApesJob}>Create APES job</button>
           <button onClick={createGenerationJobsFromQueue}>Queue AI missing layers</button>
           <button onClick={downloadGenerationManifest}>Download generation manifest</button>

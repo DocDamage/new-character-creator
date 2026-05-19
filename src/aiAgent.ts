@@ -1,4 +1,5 @@
 import { buildRagContextBundle } from './ragIndex.ts'
+import { parseAiRequestIntent, summarizeAiIntent } from './aiIntent.ts'
 import { makeAiStudioMessage } from './aiWorkspace.ts'
 import { aiToolRegistry, type AiToolProposal } from './aiToolRegistry.ts'
 import type { RagIndex } from './ragTypes.ts'
@@ -16,17 +17,19 @@ export type AiAgentRequest = {
 }
 
 export function buildAiAgentReply(options: AiAgentRequest): AiStudioMessage {
-  const provider = chooseProvider(options.providers)
+  const intent = parseAiRequestIntent(options.request)
+  const provider = chooseAiProvider(options.providers, intent.providerHint)
   const ragBundle = options.ragIndex
     ? buildRagContextBundle(options.ragIndex, {
-      query: `${options.request} ${options.selectedCharacter.display_name} ${options.recipe?.recipe_mode ?? ''}`,
+      query: `${options.request} ${summarizeAiIntent(intent)} ${options.selectedCharacter.display_name} ${options.recipe?.recipe_mode ?? ''}`,
       purpose: 'generation_prompt',
       limit: 5,
     })
     : null
-  const proposals = proposeTools(options)
+  const proposals = proposeTools(options, intent)
   const content = [
     `Plan for "${options.request.trim()}".`,
+    `Intent: ${summarizeAiIntent(intent)}.`,
     `Provider route: ${provider ? `${provider.name} via ${provider.local_proxy_required ? 'local proxy' : 'local endpoint'}` : 'manual planning until a provider is enabled'}.`,
     `Current character: ${options.selectedCharacter.display_name}.`,
     `Tool mode: ${options.localToolsAvailable ? 'local approvals available' : 'static handoff only'}.`,
@@ -51,21 +54,29 @@ export function applyApprovedToolResult(message: AiStudioMessage, proposalId: st
   }
 }
 
-function chooseProvider(providers: AiProviderConnection[]) {
-  return providers.find((provider) => provider.enabled && (provider.secret_session_set || provider.secret_storage === 'none')) ?? null
+export function chooseAiProvider(providers: AiProviderConnection[], providerHint?: string) {
+  const enabled = providers.filter((provider) => provider.enabled && (provider.secret_session_set || provider.secret_storage === 'none'))
+  if (providerHint) {
+    const hinted = enabled.find((provider) => provider.provider_id === providerHint || provider.type === providerHint)
+    if (hinted) return hinted
+    if (providerHint === 'local') {
+      const local = enabled.find((provider) => provider.type === 'ollama' || provider.type === 'lm_studio')
+      if (local) return local
+    }
+  }
+  return enabled[0] ?? null
 }
 
-function proposeTools(options: AiAgentRequest): AiToolProposal[] {
-  const request = options.request.toLowerCase()
+function proposeTools(options: AiAgentRequest, intent = parseAiRequestIntent(options.request)): AiToolProposal[] {
   const proposals: AiToolProposal[] = []
-  if (request.includes('apes') || request.includes('segment')) {
-    proposals.push(makeProposal('create_apes_job', { animation: options.recipe?.animation_coverage[0] ?? 'idle' }))
+  if (intent.actions.includes('segment')) {
+    proposals.push(makeProposal('create_apes_job', { animation: intent.animations[0] ?? options.recipe?.animation_coverage[0] ?? 'idle', layers: intent.layers }))
   }
-  if (request.includes('pixellab') || request.includes('missing animation')) {
-    proposals.push(makeProposal('queue_pixellab_generation', { prompt: options.request, animation: options.recipe?.animation_coverage[0] ?? 'idle' }))
+  if (intent.actions.includes('generate')) {
+    proposals.push(makeProposal('queue_pixellab_generation', { prompt: options.request, animation: intent.animations[0] ?? options.recipe?.animation_coverage[0] ?? 'idle', layers: intent.layers }))
   }
-  if (request.includes('export') || request.includes('aseprite')) {
-    proposals.push(makeProposal('export_handoff', { format: request.includes('aseprite') ? 'aseprite_reference' : 'generation_manifest' }))
+  if (intent.actions.includes('export')) {
+    proposals.push(makeProposal('export_handoff', { format: intent.outputFormat ?? 'generation_manifest' }))
   }
   return proposals
 }

@@ -696,6 +696,17 @@ export type GenerationJob = {
   settings: Record<string, string | number | boolean | null>
   provider: AiProviderConfig
   rag_context?: RagContextBundle
+  input_artifacts?: {
+    target_layer: string
+    body_type: string
+    affected_frames: Array<{
+      animation: AnimationName
+      direction: Direction
+      frame_index: number
+    }>
+    constraints: string[]
+    validation_checks: string[]
+  }
   status: GenerationJobStatus
   logs: string[]
   outputs: Array<{

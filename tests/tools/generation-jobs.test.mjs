@@ -6,7 +6,7 @@ import {
   generationJobBlocksRelease,
 } from '../../src/generationJobs.ts'
 import { buildAiGenerationContextQuery } from '../../src/aiContext.ts'
-import { markGenerationOutputImportedForReview } from '../../src/aiOutputIntake.ts'
+import { markGenerationOutputImportedForReview, validateGenerationOutputImport } from '../../src/aiOutputIntake.ts'
 
 test('generation jobs created from missing-animation queue do not auto-select outputs', () => {
   const [job] = createGenerationJobsFromMissingAnimationQueue(makeQueue(), {
@@ -33,6 +33,9 @@ test('generation jobs created from missing-animation queue do not auto-select ou
   assert.equal(job.outputs[0].auto_selected, false)
   assert.equal(job.outputs[0].reviewed, false)
   assert.equal(job.review_gate.outputs_auto_selected, false)
+  assert.equal(job.input_artifacts.target_layer, 'layer_1')
+  assert.equal(job.input_artifacts.affected_frames.length, 2)
+  assert.match(job.prompt, /Validation:/)
 
   const [contextJob] = createGenerationJobsFromMissingAnimationQueue(makeQueue(), {
     recipeId: 'recipe_1',
@@ -121,6 +124,25 @@ test('imported AI output moves job to review required without release approval',
   assert.equal(updated.outputs[0].uri, 'data/generated/job/output.png')
   assert.equal(updated.outputs[0].reviewed, false)
   assert.equal(updated.review_gate.release_blocked, true)
+  assert.match(updated.logs.at(-1), /Validation passed/)
+})
+
+test('AI output validation rejects unknown ids and unsupported file types', () => {
+  const [job] = createGenerationJobsFromMissingAnimationQueue(makeQueue(), {
+    recipeId: 'recipe_1',
+    characterId: 'lpc-body',
+    targetProfile: 'standard_64',
+    now: '2026-05-18T12:00:00.000Z',
+  })
+
+  const validation = validateGenerationOutputImport(job, {
+    outputId: 'missing',
+    uri: 'data/generated/job/output.txt',
+  })
+
+  assert.equal(validation.ok, false)
+  assert.match(validation.findings.join(' '), /Unknown output id/)
+  assert.match(validation.findings.join(' '), /PNG\/WebP/)
 })
 
 function makeQueue() {

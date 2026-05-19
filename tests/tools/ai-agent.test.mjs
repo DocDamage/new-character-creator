@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { buildAiAgentReply } from '../../src/aiAgent.ts'
+import { buildAiAgentReply, chooseAiProvider } from '../../src/aiAgent.ts'
+import { parseAiRequestIntent } from '../../src/aiIntent.ts'
 
 const character = {
   character_id: 'fixture',
@@ -42,4 +43,40 @@ test('AI agent proposes approval-gated tools from user intent', () => {
   assert.equal(reply.role, 'assistant')
   assert.ok(reply.tool_proposals.some((proposal) => proposal.tool_id === 'queue_pixellab_generation'))
   assert.ok(reply.tool_proposals.some((proposal) => proposal.tool_id === 'export_handoff'))
+  assert.match(reply.content, /Intent:/)
 })
+
+test('AI intent parser extracts provider, action, layer, animation, and export format', () => {
+  const intent = parseAiRequestIntent('Use OpenAI to generate missing slash torso frames and export an Aseprite handoff')
+  assert.deepEqual(intent.actions, ['generate', 'export'])
+  assert.equal(intent.providerHint, 'openai')
+  assert.equal(intent.outputFormat, 'aseprite_reference')
+  assert.deepEqual(intent.animations, ['slash'])
+  assert.deepEqual(intent.layers, ['torso'])
+  assert.equal(intent.reviewRequired, true)
+})
+
+test('AI provider selection respects explicit provider hints', () => {
+  const providers = [
+    makeProvider('ollama', 'ollama', 'ollama', false),
+    makeProvider('openai', 'openai', 'openai', true),
+  ]
+  assert.equal(chooseAiProvider(providers, 'openai').provider_id, 'openai')
+  assert.equal(chooseAiProvider(providers, 'local').provider_id, 'ollama')
+})
+
+function makeProvider(provider_id, name, type, secret_session_set) {
+  return {
+    provider_id,
+    name,
+    type,
+    enabled: true,
+    model: 'fixture',
+    base_url: 'http://127.0.0.1:11434',
+    secret_session_set,
+    secret_storage: secret_session_set ? 'session_only' : 'none',
+    direct_browser_calls: false,
+    local_proxy_required: true,
+    notes: '',
+  }
+}
