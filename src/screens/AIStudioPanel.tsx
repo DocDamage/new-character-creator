@@ -7,7 +7,7 @@ import { makeAiStudioMessage } from '../aiWorkspace'
 import { localToolFetch, localToolPath } from '../localToolsClient'
 import { buildRagContextBundle } from '../ragIndex'
 import type { RagIndex } from '../ragTypes'
-import type { AiProviderConnection, AiStudioMessage, CharacterManifest, KitbashRecipe, ToolConnectionSettings } from '../types'
+import type { AiProviderConnection, AiStudioMessage, AnimationName, CharacterManifest, Direction, KitbashRecipe, PartLabel, ToolConnectionSettings } from '../types'
 
 type CreatorPanelId = 'fast' | 'workstation' | 'library' | 'batch' | 'audit' | 'ai' | 'apes' | 'exports' | 'settings'
 
@@ -25,6 +25,8 @@ type AIStudioPanelProps = {
   activitySnapshot: AiActivitySnapshot
   createApesJob: () => void
   createGenerationJobsFromQueue: () => void
+  createPixelLabGenerationJob: (input: { prompt: string; animation: AnimationName; directions: Direction[]; layers: PartLabel[] }) => { jobId: string | null; message: string }
+  importPixelLabGenerationOutputs: (jobId: string, rawOutput: unknown) => string
   downloadGenerationManifest: () => void
   openSettings: () => void
   openApesLab: () => void
@@ -48,6 +50,8 @@ export function AIStudioPanel({
   activitySnapshot,
   createApesJob,
   createGenerationJobsFromQueue,
+  createPixelLabGenerationJob,
+  importPixelLabGenerationOutputs,
   downloadGenerationManifest,
   openSettings,
   openApesLab,
@@ -168,15 +172,77 @@ export function AIStudioPanel({
       : message))
   }
 
+  async function submitPixelLabPrompt(prompt: string, animation: AnimationName, jobId: string | null, directions: Direction[], layers: PartLabel[]) {
+    if (!tools.pixellab.enabled) {
+      return 'PixelLab is not enabled in Settings, so the job was queued for handoff instead of direct submission.'
+    }
+    if (!localToolsAvailable) {
+      return 'Local tools are not available, so the job was queued for handoff instead of direct submission.'
+    }
+    try {
+      const response = await localToolFetch(localToolPath('bridge/pixellab'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          endpointUrl: tools.pixellab.endpoint_url,
+          mcpServerUrl: tools.pixellab.mcp_server_url,
+          model: tools.pixellab.preferred_model || 'sprite-animation',
+          animation,
+          directions,
+          layers,
+          prompt,
+        }),
+      })
+      const payload = await response.json().catch(() => null) as {
+        ok?: boolean
+        content?: string
+        error?: string
+        raw?: unknown
+        frames?: string[]
+        spritesheet?: string | null
+        warnings?: string[]
+      } | null
+      if (!response.ok || !payload?.ok) {
+        return `PixelLab submission failed: ${payload?.error ?? `HTTP ${response.status}`}. The generation job is still queued for handoff.`
+      }
+      const importResult = jobId
+        ? importPixelLabGenerationOutputs(jobId, payload.raw ?? payload)
+        : 'PixelLab response did not include raw image output metadata to attach.'
+      const imageCount = (payload.frames?.length ?? 0) + (payload.spritesheet ? 1 : 0)
+      const warningText = payload.warnings?.length ? ` Warnings: ${payload.warnings.join(' ')}` : ''
+      return `Sent to PixelLab through the local bridge. ${payload.content ?? 'PixelLab request accepted.'} Returned ${imageCount} image output(s). ${importResult}${warningText}`
+    } catch (error) {
+      return `PixelLab submission failed: ${error instanceof Error ? error.message : String(error)}. The generation job is still queued for handoff.`
+    }
+  }
+
   async function executeToolProposal(proposal: AiToolProposal) {
     let result = 'Approved and sent to the matching app action.'
     if (proposal.tool_id === 'create_apes_job') createApesJob()
     if (proposal.tool_id === 'queue_pixellab_generation') {
-      if (activitySnapshot.queues.missing_animation && activitySnapshot.queues.missing_animation.issue_count > 0) {
+      const requestedDirections = stringArrayInput(proposal.input.directions)
+      if (activitySnapshot.queues.missing_animation && activitySnapshot.queues.missing_animation.issue_count > 0 && requestedDirections.length === 0) {
         createGenerationJobsFromQueue()
         result = 'Queued PixelLab/manual generation handoff jobs from the current missing-animation queue.'
       } else {
-        result = `No missing-animation queue is active for this exact context, so there was nothing to queue. PixelLab prompt you can use now: ${prepareGenerationPrompt(activitySnapshot, 'pixellab')}`
+        const prompt = prepareGenerationPrompt(activitySnapshot, 'pixellab', proposal.input)
+        const animation = animationInput(proposal.input.animation, activitySnapshot.frame.animation)
+        const layers = partLabelArrayInput(proposal.input.layers)
+        const queued = createPixelLabGenerationJob({
+          prompt,
+          animation,
+          directions: directionArrayInput(proposal.input.directions),
+          layers,
+        })
+        const pixelLabResult = await submitPixelLabPrompt(prompt, animation, queued.jobId, directionArrayInput(proposal.input.directions), layers)
+        result = [
+          requestedDirections.length > 0
+            ? 'Prepared a PixelLab directional-generation handoff.'
+            : 'Prepared a PixelLab generation handoff.',
+          queued.message,
+          pixelLabResult,
+          prompt,
+        ].filter(Boolean).join(' ')
       }
     }
     if (proposal.tool_id === 'export_handoff') downloadGenerationManifest()
@@ -240,7 +306,7 @@ export function AIStudioPanel({
         : 'No active recipe is available to validate.'
     }
     if (proposal.tool_id === 'prepare_generation_prompt') {
-      result = prepareGenerationPrompt(activitySnapshot, typeof proposal.input.target === 'string' ? proposal.input.target : undefined)
+      result = prepareGenerationPrompt(activitySnapshot, typeof proposal.input.target === 'string' ? proposal.input.target : undefined, proposal.input)
     }
     if (proposal.tool_id === 'inspect_rag_sources') {
       result = ragIndex
@@ -478,11 +544,28 @@ function suggestNextAction(snapshot: AiActivitySnapshot) {
   return 'Next action: export a small reviewed package and inspect the result before broad batch generation.'
 }
 
-function prepareGenerationPrompt(snapshot: AiActivitySnapshot, requestedTarget = 'pixellab') {
+function prepareGenerationPrompt(snapshot: AiActivitySnapshot, requestedTarget = 'pixellab', input: Record<string, unknown> = {}) {
   const target = requestedTarget.toLowerCase()
+  const requestedAnimation = typeof input.animation === 'string' && input.animation.trim()
+    ? input.animation.trim()
+    : snapshot.frame.animation
+  const requestedDirections = stringArrayInput(input.directions)
+  const requestedLayers = stringArrayInput(input.layers)
+  const requestedPrompt = typeof input.prompt === 'string' ? input.prompt.trim() : ''
+  const directionText = requestedDirections.length > 0
+    ? requestedDirections.join(', ')
+    : snapshot.frame.direction
+  const layerText = requestedLayers.length > 0
+    ? requestedLayers.join(', ')
+    : 'full character'
+  const requestedScope = requestedDirections.length > 0
+    ? `${snapshot.source.selected_character_name}; generate ${requestedAnimation} direction set for ${directionText}; layer scope ${layerText}.`
+    : `${snapshot.source.selected_character_name}; ${requestedAnimation}/${directionText}; frame ${snapshot.frame.frame_number}; layer ${layerText}.`
   const shared = [
-    `${snapshot.source.selected_character_name}; ${snapshot.frame.animation}/${snapshot.frame.direction}; frame ${snapshot.frame.frame_number}; layer ${snapshot.layer.selected_layer}.`,
+    requestedScope,
     `Canvas ${snapshot.render_evidence.canvas_size?.width ?? 64}x${snapshot.render_evidence.canvas_size?.height ?? 64}; source rect ${snapshot.render_evidence.source_rect ? `${snapshot.render_evidence.source_rect.x},${snapshot.render_evidence.source_rect.y},${snapshot.render_evidence.source_rect.w},${snapshot.render_evidence.source_rect.h}` : 'unknown'}; geometry ${snapshot.render_evidence.frame_geometry}.`,
+    requestedDirections.length > 0 ? `Use the existing ${snapshot.frame.animation}/${snapshot.frame.direction} frame sequence only as visual reference; do not overwrite the requested ${requestedAnimation} ${directionText} target.` : '',
+    requestedPrompt ? `User request: ${requestedPrompt}` : '',
     `Preserve RPG sprite proportions, clean alpha, stable floor contact, readable silhouette, and reusable layer boundaries.`,
     snapshot.queues.missing_animation ? `Cover missing/unsupported animation queue: ${snapshot.queues.missing_animation.issue_count} issue(s), ${snapshot.queues.missing_animation.affected_frame_count} affected frame(s).` : '',
     `Return candidates for manual review; do not imply release approval.`,
@@ -500,4 +583,41 @@ function prepareGenerationPrompt(snapshot: AiActivitySnapshot, requestedTarget =
     return [`Duelyst source-cleanup brief: preserve source identity while normalizing to the current app frame and review gates.`, ...shared, `Separate costume/equipment from body wherever possible.`].join(' ')
   }
   return [`PixelLab generation brief: create pixel-art sprite content that can be imported as a reviewed layer candidate.`, ...shared].join(' ')
+}
+
+function stringArrayInput(value: unknown) {
+  return Array.isArray(value)
+    ? value.filter((item): item is string => typeof item === 'string' && item.trim().length > 0).map((item) => item.trim())
+    : []
+}
+
+function animationInput(value: unknown, fallback: AnimationName): AnimationName {
+  return typeof value === 'string' && value.trim() ? value.trim() : fallback
+}
+
+function directionArrayInput(value: unknown): Direction[] {
+  const validDirections = new Set<Direction>(['north', 'south', 'east', 'west', 'northeast', 'northwest', 'southeast', 'southwest'])
+  return stringArrayInput(value).filter((item): item is Direction => validDirections.has(item as Direction))
+}
+
+function partLabelArrayInput(value: unknown): PartLabel[] {
+  const validLabels = new Set<PartLabel>([
+    'shadow',
+    'back_item',
+    'cloak_back',
+    'back_arm',
+    'back_leg',
+    'torso',
+    'front_leg',
+    'front_arm',
+    'neck',
+    'head',
+    'face',
+    'hair_hat_hood',
+    'weapon',
+    'shield',
+    'accessory',
+    'aura_effect',
+  ])
+  return stringArrayInput(value).filter((item): item is PartLabel => validLabels.has(item as PartLabel))
 }

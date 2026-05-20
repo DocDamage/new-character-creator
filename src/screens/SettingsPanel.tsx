@@ -65,6 +65,8 @@ export function SettingsPanel({
   const browserRegressionCommand = 'npm run test:browser'
   const releaseCheckCommand = 'npm run release:check'
   const productionCheckCommand = 'npm run production:check'
+  const localToolsStartCommand = 'node tools/local-vite-server.js dev --host 127.0.0.1 --port 4180'
+  const localToolsDefaultUrl = 'http://127.0.0.1:4180/'
   const localProxyStatus = localToolsAvailable ? 'Local proxy reachable on loopback.' : 'Local proxy unavailable in this session.'
   const apesPlaceholderLabel = apesAllowPlaceholder ? 'Placeholder APES fallback enabled for UI-only testing.' : 'Real APES bridge only. Placeholder fallback is disabled.'
   const enabledProviderCount = aiProviders.filter((provider) => provider.enabled).length
@@ -104,10 +106,11 @@ export function SettingsPanel({
         ...toolConnections.pixellab,
         enabled: true,
         endpoint_url: toolConnections.pixellab.endpoint_url || 'http://127.0.0.1:8787',
+        mcp_server_url: toolConnections.pixellab.mcp_server_url || 'https://api.pixellab.ai/mcp',
         preferred_model: toolConnections.pixellab.preferred_model || 'sprite-animation',
       },
     })
-    setBridgeStatus('PixelLab defaults enabled. The endpoint must stay loopback-only for direct generation handoffs.')
+    setBridgeStatus('PixelLab defaults enabled. Direct app calls still use a loopback proxy; keep the PixelLab MCP bearer token only in your local MCP environment.')
   }
 
   function applyLocalLlmDefaults() {
@@ -124,6 +127,16 @@ export function SettingsPanel({
     setBridgeStatus('Local LLM defaults enabled for Ollama. Switch provider/model here if you use LM Studio or another loopback server.')
   }
 
+  async function openLocalToolsApp() {
+    if (localToolsAvailable) {
+      window.location.assign('/')
+      return
+    }
+    await copyCommand(localToolsStartCommand, 'Local-tools start command copied. Run it in PowerShell, then use the opened local-tools tab.')
+    window.open(localToolsDefaultUrl, '_blank', 'noopener,noreferrer')
+    setBridgeStatus(`Opened ${localToolsDefaultUrl}. If it does not load, run the copied command first.`)
+  }
+
   async function checkAsepriteBridge() {
     await checkLocalBridge('Aseprite', localToolPath('bridge/aseprite'), {
       action: 'check',
@@ -135,6 +148,7 @@ export function SettingsPanel({
   async function checkPixelLabBridge() {
     await checkLocalBridge('PixelLab', localToolPath('bridge/pixellab'), {
       endpointUrl: toolConnections.pixellab.endpoint_url,
+      mcpServerUrl: toolConnections.pixellab.mcp_server_url,
       prompt: 'Pixel Creator bridge health check for a single idle frame.',
       animation: 'idle',
     })
@@ -214,6 +228,8 @@ export function SettingsPanel({
         <button data-testid="copy-browser-regression-command" onClick={() => void copyCommand(browserRegressionCommand, 'Browser regression command copied. Run it to validate exports and manual mask persistence.')}>Copy browser regression command</button>
         <button data-testid="copy-release-check-command" onClick={() => void copyCommand(releaseCheckCommand, 'Release check command copied. Run it before packaging or handoff.')}>Copy release check command</button>
         <button data-testid="download-local-setup-bundle" onClick={downloadLocalSetupBundle}>Download local setup bundle</button>
+        <button data-testid="open-local-tools-app" className="primary" onClick={() => void openLocalToolsApp()}>{localToolsAvailable ? 'Open local-tools root' : 'Open local-tools app'}</button>
+        <button data-testid="copy-local-tools-start-command" onClick={() => void copyCommand(localToolsStartCommand, 'Local-tools start command copied. Run it in PowerShell, then open http://127.0.0.1:4180/.')}>Copy local-tools start command</button>
         <button onClick={() => setAssetRootInput(manifestAssetRoot)}>Use indexed root</button>
       </div>
 
@@ -387,7 +403,9 @@ export function SettingsPanel({
 
       <div className="settings-card">
         <strong>Direct actions</strong>
-        <span>{localToolsAvailable ? 'Local server tools are available in this session, including preview builds served by Vite.' : 'Local server tools are unavailable in this static session. Use the copy-command buttons or serve the build with npm run preview.'}</span>
+        <span>{localToolsAvailable ? 'Local server tools are available in this session, including preview builds served by Vite.' : 'Local server tools are unavailable in this static session. Use Open local-tools app, run the copied command if needed, then use the root URL it opens.'}</span>
+        <code>{localToolsStartCommand}</code>
+        <code>{localToolsDefaultUrl}</code>
       </div>
 
       <div className={`settings-card ${apesPreflight && !apesPreflight.ready ? 'settings-card-warning' : ''}`}>
@@ -409,6 +427,7 @@ export function SettingsPanel({
         <code>{browserRegressionCommand}</code>
         <code>{releaseCheckCommand}</code>
         <code>{productionCheckCommand}</code>
+        <code>{localToolsStartCommand}</code>
         <code>{apesSetupCommand}</code>
         <code>{apesPreflightCommand}</code>
       </div>

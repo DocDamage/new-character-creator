@@ -5,7 +5,7 @@ import type { IncomingMessage, ServerResponse } from 'node:http'
 import path from 'node:path'
 import { validateAsepriteBridgeRequest } from './asepriteBridge'
 import { forwardLocalProxyProviderRequest, normalizeLocalProxyProviderRequest } from './localProxyProviders'
-import { validatePixelLabBridgeRequest } from './pixellabBridge'
+import { submitPixelLabBridgeRequest, validatePixelLabBridgeRequest } from './pixellabBridge'
 import { appendToolAuditRecord } from './toolAuditLog'
 
 type LocalAssetToolsOptions = {
@@ -286,6 +286,7 @@ async function handleLocalProxyRequest(req: IncomingMessage, res: ServerResponse
       provider: request.provider,
       model: request.model,
       content: result.content,
+      raw: result.raw,
     })
   } catch (error) {
     sendJson(res, 400, { error: error instanceof Error ? error.message : String(error) })
@@ -432,9 +433,18 @@ async function handlePixelLabBridgeRequest(req: IncomingMessage, res: ServerResp
     await appendToolAuditRecord(path.resolve(appRoot, 'data', 'local-tools', 'audit.jsonl'), {
       route: '/__local/bridge/pixellab',
       endpointUrl: request.endpointUrl,
+      mcpServerUrl: request.mcpServerUrl ?? null,
       animation: request.animation ?? null,
+      model: request.model ?? null,
+      directions: request.directions ?? [],
+      layers: request.layers ?? [],
     })
-    sendJson(res, 200, { ok: true, bridge: 'pixellab', endpointUrl: request.endpointUrl })
+    const result = await submitPixelLabBridgeRequest(request)
+    sendJson(res, 200, {
+      ...result,
+      endpointUrl: request.endpointUrl,
+      mcpServerUrl: request.mcpServerUrl ?? null,
+    })
   } catch (error) {
     sendJson(res, 400, { error: error instanceof Error ? error.message : String(error) })
   }

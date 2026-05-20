@@ -24,6 +24,7 @@ test('local provider routes reject non-loopback endpoints', () => {
 
 test('remote API providers require the trusted proxy boundary', () => {
   assert.equal(providerRequiresProxy('openai'), true)
+  assert.equal(providerRequiresProxy('kimi'), true)
   assert.equal(providerRequiresProxy('ollama'), false)
 })
 
@@ -55,6 +56,32 @@ test('local proxy forwards OpenAI-compatible requests and normalizes content', a
       messages: [{ role: 'user', content: 'hello' }],
     }))
     assert.equal(result.content, 'hello from provider')
+  } finally {
+    globalThis.fetch = originalFetch
+  }
+})
+
+test('local proxy forwards Kimi through the OpenAI-compatible route', async () => {
+  const originalFetch = globalThis.fetch
+  globalThis.fetch = async (url, init) => {
+    assert.equal(String(url), 'https://api.moonshot.ai/v1/chat/completions')
+    const body = JSON.parse(init.body)
+    assert.equal(body.model, 'kimi-k2.6')
+    assert.equal(init.headers.Authorization, 'Bearer sk-kimi-test')
+    return new Response(JSON.stringify({ choices: [{ message: { content: 'hello from kimi' } }] }), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' },
+    })
+  }
+  try {
+    const result = await forwardLocalProxyProviderRequest(normalizeLocalProxyProviderRequest({
+      provider: 'kimi',
+      baseUrl: 'https://api.moonshot.ai/v1',
+      model: 'kimi-k2.6',
+      apiKey: 'sk-kimi-test',
+      messages: [{ role: 'user', content: 'hello' }],
+    }))
+    assert.equal(result.content, 'hello from kimi')
   } finally {
     globalThis.fetch = originalFetch
   }

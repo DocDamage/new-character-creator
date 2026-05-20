@@ -52,17 +52,58 @@ test('AI intent parser extracts provider, action, layer, animation, and export f
   assert.equal(intent.providerHint, 'openai')
   assert.equal(intent.outputFormat, 'aseprite_reference')
   assert.deepEqual(intent.animations, ['slash'])
+  assert.deepEqual(intent.directions, [])
   assert.deepEqual(intent.layers, ['torso'])
   assert.equal(intent.reviewRequired, true)
+})
+
+test('AI intent parser extracts requested generation directions', () => {
+  const intent = parseAiRequestIntent('Make the other directions for this sprite: north, east, and west for the idle animation')
+  assert.ok(intent.actions.includes('generate'))
+  assert.deepEqual(intent.animations, ['idle'])
+  assert.deepEqual(intent.directions, ['north', 'east', 'west'])
+})
+
+test('AI intent parser treats new animation requests as generation work', () => {
+  const intent = parseAiRequestIntent('make a slide animation for all directions')
+  assert.ok(intent.actions.includes('generate'))
+  assert.deepEqual(intent.animations, ['slide'])
+  assert.deepEqual(intent.directions, ['south', 'east', 'north', 'west'])
+})
+
+test('AI intent parser recognizes human animation language', () => {
+  const cases = [
+    ['make a cast spell cycle facing east', ['spellcast'], ['east']],
+    ['draw dodge roll frames north and south', ['roll'], ['north', 'south']],
+    ['add a take damage flinch pose', ['hurt'], []],
+    ['create a death animation for every direction', ['death'], ['south', 'east', 'north', 'west']],
+    ['build stab and sword swing attacks', ['slash', 'thrust', 'attack'], []],
+    ['finish running keyframes and a wave emote', ['run', 'emotes'], []],
+    ['produce blocking and parry motions', ['block'], []],
+  ]
+
+  for (const [request, expectedAnimations, expectedDirections] of cases) {
+    const intent = parseAiRequestIntent(request)
+    assert.ok(intent.actions.includes('generate'), request)
+    assert.deepEqual(intent.animations, expectedAnimations, request)
+    assert.deepEqual(intent.directions, expectedDirections, request)
+  }
 })
 
 test('AI provider selection respects explicit provider hints', () => {
   const providers = [
     makeProvider('ollama', 'ollama', 'ollama', false),
     makeProvider('openai', 'openai', 'openai', true),
+    makeProvider('kimi', 'Kimi', 'kimi', true),
   ]
   assert.equal(chooseAiProvider(providers, 'openai').provider_id, 'openai')
+  assert.equal(chooseAiProvider(providers, 'kimi').provider_id, 'kimi')
   assert.equal(chooseAiProvider(providers, 'local').provider_id, 'ollama')
+})
+
+test('AI intent parser recognizes Kimi and Moonshot provider hints', () => {
+  assert.equal(parseAiRequestIntent('use kimi to plan the sprite animation').providerHint, 'kimi')
+  assert.equal(parseAiRequestIntent('route this through moonshot').providerHint, 'kimi')
 })
 
 test('AI agent proposes RAG activation when project context is requested', () => {
@@ -163,6 +204,49 @@ test('AI agent keeps PixelLab requests actionable in static handoff mode', () =>
   assert.ok(toolIds.includes('queue_pixellab_generation'))
   assert.ok(toolIds.includes('configure_pixellab_bridge'))
   assert.match(reply.content, /Pending approvals:/)
+})
+
+test('AI agent preserves explicit animation and direction requests for PixelLab handoffs', () => {
+  const reply = buildAiAgentReply({
+    request: 'make the other directions for this sprite. north, east and west, for the idle animation',
+    selectedCharacter: { ...character, character_id: 'duelyst_f6_general', display_name: 'Duelyst General', class_type: 'duelyst_staged', canvas_size: { width: 80, height: 80 } },
+    recipe: {
+      character_id: 'duelyst_f6_general',
+      recipe_mode: 'duelyst_review',
+      source_family: 'duelyst',
+      base_canvas: [80, 80],
+      base_character: 'duelyst_f6_general',
+      layers: [{ label: 'head', source_character: 'duelyst_f6_general', offset: [0, 0], visible: true, locked: false, extraction_method: 'source' }],
+      palette: { ramps: {} },
+      animation_coverage: ['idle', 'death'],
+      export_targets: [],
+    },
+    ragIndex: null,
+    providers: [],
+    tools: {
+      aseprite: { enabled: false, executable_path: '', bridge_url: '', script_folder: '' },
+      pixellab: { enabled: false, endpoint_url: '', mcp_server_url: '', preferred_model: '' },
+      local_llm: { enabled: false, endpoint_url: '', provider: 'ollama', model: '' },
+    },
+    lpcPublished: true,
+    localToolsAvailable: false,
+    activitySnapshot: {
+      ...makeActivitySnapshot(),
+      source: { selected_character_id: 'duelyst_f6_general', selected_character_name: 'Duelyst General', animation_source_id: 'duelyst_f6_general', animation_source_name: 'Duelyst General', borrowed_animation_source: false },
+      frame: { animation: 'death', direction: 'south', frame_index: 5, frame_number: 6, frame_count: 10, playing: false },
+      render_evidence: { source_rect: null, canvas_size: { width: 80, height: 80 }, frame_geometry: 'oversize' },
+      layer: { selected_layer: 'head', selected_part_id: null, selected_source_part_id: null, option_count: 0 },
+      recipe: { present: true, character_id: 'duelyst_f6_general', recipe_mode: 'duelyst_review', source_family: 'duelyst', layer_count: 16, selected_library_part_count: 0, selected_source_part_count: 16, selected_layers: ['head'], animation_coverage: ['idle', 'death'], export_targets: [], readiness_state: 'incomplete', readiness_summary: 'Recipe readiness is incomplete.' },
+      queues: { generation_job_count: 0, release_blocking_generation_job_count: 0, missing_animation: null },
+    },
+  })
+
+  const queueProposal = reply.tool_proposals.find((proposal) => proposal.tool_id === 'queue_pixellab_generation')
+  assert.ok(queueProposal)
+  assert.equal(queueProposal.input.animation, 'idle')
+  assert.deepEqual(queueProposal.input.directions, ['north', 'east', 'west'])
+  assert.equal(reply.tool_proposals.some((proposal) => proposal.tool_id === 'check_lpc_compatibility'), false)
+  assert.match(reply.content, /directions=north,east,west/)
 })
 
 test('AI agent understands more natural app function phrasing', () => {

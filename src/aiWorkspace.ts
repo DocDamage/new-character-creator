@@ -9,6 +9,7 @@ export const defaultAiProviderConnections: AiProviderConnection[] = [
   makeProvider('mistral', 'Mistral', 'mistral', 'mistral-large-latest', 'https://api.mistral.ai/v1'),
   makeProvider('groq', 'Groq', 'groq', 'llama-3.3-70b-versatile', 'https://api.groq.com/openai/v1'),
   makeProvider('openrouter', 'OpenRouter', 'openrouter', 'openrouter/auto', 'https://openrouter.ai/api/v1'),
+  makeProvider('kimi', 'Kimi', 'kimi', 'kimi-k2.6', 'https://api.moonshot.ai/v1'),
   makeProvider('ollama', 'Ollama', 'ollama', 'llama3.1', 'http://127.0.0.1:11434', false),
   makeProvider('lm_studio', 'LM Studio', 'lm_studio', 'local-model', 'http://127.0.0.1:1234/v1', false),
   makeProvider('pixellab', 'PixelLab', 'pixellab', 'sprite-animation', 'http://127.0.0.1:8787'),
@@ -24,7 +25,7 @@ export const defaultToolConnections: ToolConnectionSettings = {
   pixellab: {
     enabled: false,
     endpoint_url: 'http://127.0.0.1:8787',
-    mcp_server_url: '',
+    mcp_server_url: 'https://api.pixellab.ai/mcp',
     preferred_model: 'sprite-animation',
   },
   local_llm: {

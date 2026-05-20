@@ -210,6 +210,10 @@ Open `Settings`, then use:
 3. Run the matching `Check ...` button while using a dev/local-tools session.
 4. Ask AI Studio for an Aseprite handoff, PixelLab generation queue, or local-LLM plan. The AI can propose those tool actions, but you approve them before execution.
 
+PixelLab MCP auth belongs in local MCP configuration or the trusted local bridge environment, not in this repo or browser storage. The app calls `/__local/bridge/pixellab`, which forwards approved AI Studio generation requests to the configured loopback PixelLab service at `/generate` and attaches returned frames or spritesheets to the review queue. Use `PIXELLAB_AUTH_HEADER="Bearer <PIXELLAB_API_TOKEN>"` or `PIXELLAB_API_TOKEN="<PIXELLAB_API_TOKEN>"` only in your local environment. See [docs/pixellab-mcp.md](docs/pixellab-mcp.md) for the redacted `mcp-remote` example and accepted response shapes.
+
+If you accidentally open a static route such as `/new-character-creator/` and local tools are unavailable, open `Settings` and use `Open local-tools app`. The button copies the local-tools start command and opens the default local-tools URL, so PixelLab, APES, RAG rebuilds, and other loopback tools can run from the app.
+
 ### Release Gate
 
 Run this before handoff:

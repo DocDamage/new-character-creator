@@ -598,6 +598,7 @@ export type AiProviderType =
   | 'mistral'
   | 'groq'
   | 'openrouter'
+  | 'kimi'
   | 'ollama'
   | 'lm_studio'
   | 'pixellab'
@@ -722,7 +723,7 @@ export type GenerationJob = {
     release_blocked: boolean
   }>
   provenance: {
-    source: 'missing_animation_queue'
+    source: 'missing_animation_queue' | 'ai_studio_request'
     queue_recipe_id: string
     queue_item_count: number
     affected_frame_count: number

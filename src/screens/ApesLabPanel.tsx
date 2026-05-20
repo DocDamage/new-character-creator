@@ -654,6 +654,16 @@ export function ApesLabPanel({
             <p>{job.source_queue_item_labels.join(', ')} for {slugLabel(job.target_animation)} / {job.target_profile}</p>
             <p>{job.provider.name}: {job.provider.configured ? 'configured' : 'manual handoff'}.</p>
             <p>{job.review_gate.release_blocked ? 'Blocked from release until review. Outputs are not selected automatically.' : 'Review approved.'}</p>
+            {job.outputs.some((output) => output.uri) ? (
+              <div className="generation-output-grid" aria-label={`${job.job_id} PixelLab outputs`}>
+                {job.outputs.filter((output) => output.uri).map((output) => (
+                  <figure key={output.output_id} className="generation-output-preview">
+                    <img src={output.uri ?? ''} alt={`${output.label} generated output`} />
+                    <figcaption>{output.label}</figcaption>
+                  </figure>
+                ))}
+              </div>
+            ) : null}
             {job.rag_context ? (
               <code>{job.rag_context.citations.map((citation) => `${citation.title}: ${citation.uri}`).join('\n')}</code>
             ) : null}

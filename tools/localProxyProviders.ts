@@ -9,7 +9,7 @@ export type LocalProxyProviderRequest = {
 }
 
 const allowedLoopbackHosts = new Set(['127.0.0.1', 'localhost', '::1'])
-const openAiCompatibleProviders = new Set(['openai', 'mistral', 'groq', 'openrouter', 'lm_studio', 'custom'])
+const openAiCompatibleProviders = new Set(['openai', 'mistral', 'groq', 'openrouter', 'kimi', 'lm_studio', 'custom'])
 
 export function normalizeLocalProxyProviderRequest(body: unknown): LocalProxyProviderRequest {
   if (!body || typeof body !== 'object') throw new Error('Expected JSON body.')

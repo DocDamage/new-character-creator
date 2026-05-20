@@ -113,7 +113,14 @@ function proposeTools(options: AiAgentRequest, intent = parseAiRequestIntent(opt
     proposals.push(makeProposal('validate_current_recipe', { include_release_gates: true }))
   }
   if (/\b(generation prompt|prepare prompt|prompt me|write .*prompt|make .*prompt|pixellab prompt|pixel lab prompt|apes prompt|aseprite prompt|lpc prompt|duelyst prompt|brief for|instructions for)\b/.test(lowerRequest) || wantsPixellab) {
-    proposals.push(makeProposal('prepare_generation_prompt', { target: inferGenerationPromptTarget(lowerRequest), include_rag_context: Boolean(options.ragIndex) }))
+    proposals.push(makeProposal('prepare_generation_prompt', {
+      target: inferGenerationPromptTarget(lowerRequest),
+      include_rag_context: Boolean(options.ragIndex),
+      animation: intent.animations[0] ?? options.activitySnapshot?.frame.animation ?? 'idle',
+      directions: intent.directions,
+      layers: intent.layers,
+      prompt: options.request,
+    }))
   }
   if (/\b(rag sources?|source documents?|knowledge sources?|what .*rag knows|inspect rag|rag status|citations?|references?|knowledge status|what sources|what docs|what can you cite)\b/.test(lowerRequest)) {
     proposals.push(makeProposal('inspect_rag_sources', { include_private_status: options.localToolsAvailable }))
@@ -141,10 +148,15 @@ function proposeTools(options: AiAgentRequest, intent = parseAiRequestIntent(opt
     proposals.push(makeProposal('run_lpc_render_matrix_audit', { scope: lowerRequest.includes('sample') ? 'sample' : 'full' }))
   }
   if (intent.actions.includes('segment')) {
-    proposals.push(makeProposal('create_apes_job', { animation: intent.animations[0] ?? options.recipe?.animation_coverage[0] ?? 'idle', layers: intent.layers }))
+    proposals.push(makeProposal('create_apes_job', { animation: intent.animations[0] ?? options.recipe?.animation_coverage[0] ?? 'idle', directions: intent.directions, layers: intent.layers }))
   }
   if (intent.actions.includes('generate')) {
-    proposals.push(makeProposal('queue_pixellab_generation', { prompt: options.request, animation: intent.animations[0] ?? options.recipe?.animation_coverage[0] ?? 'idle', layers: intent.layers }))
+    proposals.push(makeProposal('queue_pixellab_generation', {
+      prompt: options.request,
+      animation: intent.animations[0] ?? options.activitySnapshot?.frame.animation ?? options.recipe?.animation_coverage[0] ?? 'idle',
+      directions: intent.directions,
+      layers: intent.layers,
+    }))
   }
   if ((intent.actions.includes('rag_search') && lowerRequest.includes('activate')) || (lowerRequest.includes('activate') && lowerRequest.includes('rag'))) {
     proposals.push(makeProposal('activate_rag', { mode: options.ragIndex ? 'load' : 'rebuild' }))
@@ -153,6 +165,7 @@ function proposeTools(options: AiAgentRequest, intent = parseAiRequestIntent(opt
     if (lowerRequest.includes('pixellab')) {
       proposals.push(makeProposal('configure_pixellab_bridge', {
         endpoint_url: options.tools.pixellab.endpoint_url,
+        mcp_server_url: options.tools.pixellab.mcp_server_url,
         preferred_model: options.tools.pixellab.preferred_model,
       }))
     }
@@ -166,6 +179,7 @@ function proposeTools(options: AiAgentRequest, intent = parseAiRequestIntent(opt
   if (wantsPixellab && !options.tools.pixellab.enabled) {
     proposals.push(makeProposal('configure_pixellab_bridge', {
       endpoint_url: options.tools.pixellab.endpoint_url,
+      mcp_server_url: options.tools.pixellab.mcp_server_url,
       preferred_model: options.tools.pixellab.preferred_model,
     }))
   }

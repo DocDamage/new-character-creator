@@ -1,6 +1,6 @@
 import type { MissingAnimationQueue, MissingAnimationQueueItem } from './missingAnimationQueue.ts'
 import type { RagContextBundle } from './ragTypes.ts'
-import type { AiProviderConfig, AnimationName, GenerationJob, GenerationJobStatus } from './types.ts'
+import type { AiProviderConfig, AnimationName, Direction, GenerationJob, GenerationJobStatus } from './types.ts'
 
 export const defaultAiProviderConfig: AiProviderConfig = {
   provider_id: 'pixellab_manual_handoff',
@@ -30,6 +30,19 @@ type CreateGenerationJobsOptions = {
   promptPrefix?: string
   settings?: Record<string, string | number | boolean | null>
   contextForItem?: (item: MissingAnimationQueueItem) => RagContextBundle | undefined
+  now?: string
+}
+
+type CreateAiStudioGenerationJobOptions = {
+  recipeId?: string
+  characterId: string
+  targetAnimation: AnimationName
+  targetDirections: Direction[]
+  targetProfile: string
+  prompt: string
+  provider?: AiProviderConfig
+  targetLayers?: string[]
+  settings?: Record<string, string | number | boolean | null>
   now?: string
 }
 
@@ -100,6 +113,82 @@ export function createGenerationJobsFromMissingAnimationQueue(
 
 export function generationJobBlocksRelease(job: GenerationJob) {
   return job.review_gate.required && (job.review_gate.release_blocked || job.review_gate.status !== 'approved')
+}
+
+export function createGenerationJobFromAiStudioRequest(options: CreateAiStudioGenerationJobOptions): GenerationJob {
+  const createdAt = options.now ?? new Date().toISOString()
+  const provider = options.provider ?? defaultAiProviderConfig
+  const jobId = makeAiStudioGenerationJobId(options.characterId, options.targetAnimation, createdAt)
+  const directions: Direction[] = options.targetDirections.length > 0 ? options.targetDirections : ['south']
+  const targetLayer = options.targetLayers && options.targetLayers.length > 0 ? options.targetLayers.join(',') : 'full_character'
+  return {
+    job_id: jobId,
+    created_at: createdAt,
+    updated_at: createdAt,
+    source_queue_item_ids: [`ai_studio_${jobId}`],
+    source_queue_item_labels: [`AI Studio request / ${targetLayer} / ${options.targetAnimation}`],
+    recipe_id: options.recipeId ?? options.characterId,
+    character_id: options.characterId,
+    target_animation: options.targetAnimation,
+    target_profile: options.targetProfile,
+    prompt: options.prompt,
+    settings: options.settings ?? {},
+    provider,
+    input_artifacts: {
+      target_layer: targetLayer,
+      body_type: 'current character',
+      affected_frames: directions.map((direction) => ({
+        animation: options.targetAnimation,
+        direction,
+        frame_index: 0,
+      })),
+      constraints: [
+        'transparent background',
+        'crisp unscaled pixel edges',
+        'preserve full-character silhouette and reusable layer boundaries',
+        'keep generated output blocked until manual review',
+      ],
+      validation_checks: [
+        'output URI is present',
+        'output is an image, spritesheet, or PNG data URL',
+        'directions match the requested direction set',
+        'review gate remains blocked until manual approval',
+      ],
+    },
+    status: provider.configured ? 'draft' : 'handoff_ready',
+    logs: [
+      'Created from an AI Studio PixelLab generation approval.',
+      provider.configured
+        ? `Submitted or ready for ${provider.name} generation.`
+        : 'No configured provider is available; use manual export/import handoff.',
+      'Generated outputs are blocked from release until reviewed and are not selected automatically.',
+    ],
+    outputs: directions.map((direction, index) => ({
+      output_id: `${jobId}_output_${index + 1}`,
+      queue_item_id: `ai_studio_${jobId}_${direction}`,
+      label: `${targetLayer} / ${options.targetAnimation} / ${direction}`,
+      animation: options.targetAnimation,
+      profile: options.targetProfile,
+      uri: null,
+      reviewed: false,
+      auto_selected: false,
+      selected_part_id: null,
+      release_blocked: true,
+    })),
+    provenance: {
+      source: 'ai_studio_request',
+      queue_recipe_id: options.recipeId ?? options.characterId,
+      queue_item_count: 1,
+      affected_frame_count: directions.length,
+      warnings: ['AI-generated outputs require manual review before export or selection.'],
+    },
+    review_gate: {
+      required: true,
+      status: 'blocked',
+      release_blocked: true,
+      outputs_auto_selected: false,
+    },
+  }
 }
 
 export function buildGenerationJobsHandoffPayload(jobs: GenerationJob[]) {
@@ -181,4 +270,14 @@ function makeGenerationJobId(characterId: string, item: MissingAnimationQueueIte
     .replace(/^_+|_+$/g, '')
     .slice(0, 72)
   return `gen_${characterId}_${stamp}_${String(index + 1).padStart(2, '0')}_${slug}`
+}
+
+function makeAiStudioGenerationJobId(characterId: string, animation: AnimationName, createdAt: string) {
+  const stamp = createdAt.replace(/\D/g, '').slice(0, 14)
+  const slug = `${characterId}_${animation}`
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '_')
+    .replace(/^_+|_+$/g, '')
+    .slice(0, 80)
+  return `gen_${stamp}_${slug}`
 }

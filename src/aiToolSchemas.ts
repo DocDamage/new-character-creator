@@ -13,6 +13,7 @@ export const aiToolSchemas = {
     properties: {
       animation: { type: 'string' },
       directions: { type: 'array', items: { type: 'string' } },
+      layers: { type: 'array', items: { type: 'string' } },
     },
     additionalProperties: false,
   },
@@ -29,6 +30,8 @@ export const aiToolSchemas = {
     properties: {
       prompt: { type: 'string' },
       animation: { type: 'string' },
+      directions: { type: 'array', items: { type: 'string' } },
+      layers: { type: 'array', items: { type: 'string' } },
     },
     required: ['prompt'],
     additionalProperties: false,
@@ -110,7 +113,14 @@ export const aiToolSchemas = {
   },
   prepare_generation_prompt: {
     type: 'object',
-    properties: { target: { type: 'string', enum: ['pixellab', 'apes', 'aseprite', 'lpc', 'duelyst'] }, include_rag_context: { type: 'boolean' } },
+    properties: {
+      target: { type: 'string', enum: ['pixellab', 'apes', 'aseprite', 'lpc', 'duelyst'] },
+      include_rag_context: { type: 'boolean' },
+      animation: { type: 'string' },
+      directions: { type: 'array', items: { type: 'string' } },
+      layers: { type: 'array', items: { type: 'string' } },
+      prompt: { type: 'string' },
+    },
     additionalProperties: false,
   },
   inspect_rag_sources: {
@@ -145,6 +155,7 @@ export const aiToolSchemas = {
     type: 'object',
     properties: {
       endpoint_url: { type: 'string' },
+      mcp_server_url: { type: 'string' },
       preferred_model: { type: 'string' },
     },
     additionalProperties: false,

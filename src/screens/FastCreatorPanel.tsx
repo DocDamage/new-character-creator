@@ -18,6 +18,8 @@ import type { LpcCatalog, LpcRecipeSelection } from '../lpcCatalog'
 import { ContextMenuArea, ContextMenuButton, DetailsDrawer, Tooltip, type DetailsRecord } from '../uiDisclosure'
 import { slugLabel } from '../utils'
 
+type FastCreatorTab = 'preview' | 'layers' | 'style'
+
 type FastCreatorPanelProps = {
   selectedCharacter: CharacterManifest
   animationSourceCharacter: CharacterManifest
@@ -148,6 +150,7 @@ export function FastCreatorPanel({
   const [lpcCatalogSearch, setLpcCatalogSearch] = useState('')
   const [partMethodFilter, setPartMethodFilter] = useState<ExtractedPart['extraction_method'] | 'all'>('all')
   const [detailsRecord, setDetailsRecord] = useState<DetailsRecord | null>(null)
+  const [creatorTab, setCreatorTab] = useState<FastCreatorTab>('preview')
   const activeExportTarget = getExportTargetProfile(exportTargetProfile)
   const lpcBodyType = inferLpcBodyType(selectedCharacter)
   const lpcCatalogOptions = useMemo(
@@ -630,183 +633,211 @@ export function FastCreatorPanel({
           <button onClick={openSettingsRepair} disabled={localToolsAvailable}>Check setup</button>
         </div>
       </section>
-      <ContextMenuArea
-        label="Actions for all-direction preview"
-        actions={[{ id: 'view-details', label: 'View details', onSelect: () => showPreviewDetails('direction') }]}
-      >
-        <DirectionPreviewGrid character={animationSourceCharacter} animation={currentAnimation} frameIndex={currentFrameIndex} directions={mainDirections} />
-      </ContextMenuArea>
-      {recipe ? (
-        <ContextMenuArea
-          label="Actions for composite preview"
-          actions={[{ id: 'view-details', label: 'View details', onSelect: () => showPreviewDetails('composite') }]}
-        >
-          <section className="composite-preview-panel">
-            <div>
-              <strong>Composite preview</strong>
-              <span>{slugLabel(currentAnimation)} / {currentDirection} / frame {currentFrameIndex + 1}</span>
-            </div>
-            <CompositeCanvas
-              recipe={recipe}
-              characters={characters}
-              partLibrary={partLibrary}
-              animation={currentAnimation}
-              direction={currentDirection}
-              frameIndex={currentFrameIndex}
-              lpcCatalog={lpcCatalog}
-              exportTargetProfile={exportTargetProfile}
-              scale={3}
-              label={`composite ${currentAnimation} ${currentDirection} frame ${currentFrameIndex + 1}`}
-            />
-          </section>
-        </ContextMenuArea>
-      ) : null}
-      <div className="part-grid">
-        {layerOrder.map((label) => {
-          const approvedOptions = filterReviewedPartsForLayer({
-            reviewedParts,
-            label,
-            query: partSearch,
-            method: partMethodFilter,
-            selectedPartId: selectedPartIds[label],
-          })
-          const totalApprovedOptions = reviewedParts.filter((part) => part.label === label).length
-          const settings = layerSettings[label] ?? { offset: [0, 0], visible: true, locked: false }
-          const isLocked = settings.locked
-          const layerActions = buildLayerActions(label, settings)
-          return (
-            <ContextMenuArea key={label} label={`Actions for ${slugLabel(label)} recipe layer`} actions={layerActions}>
-              <article className="composer-layer" data-testid={`fast-layer-card-${label}`}>
-                <div className="part-meta">
-                  <span>{slugLabel(label)}</span>
-                  <span>{selectedPartIds[label] ? 'approved part selected' : 'source character'}</span>
-                  <ContextMenuButton label={`More actions for ${slugLabel(label)} recipe layer`} actions={layerActions} />
+      <div className="tab-row creator-workspace-tabs" role="tablist" aria-label="Fast Creator workspace">
+        {[
+          ['preview', 'Preview'],
+          ['layers', 'Layer Stack'],
+          ['style', 'Palette'],
+        ].map(([id, label]) => (
+          <button
+            key={id}
+            type="button"
+            role="tab"
+            aria-selected={creatorTab === id}
+            className={creatorTab === id ? 'active' : ''}
+            onClick={() => setCreatorTab(id as FastCreatorTab)}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+      {creatorTab === 'preview' ? (
+        <section className="creator-tab-panel" aria-label="Fast Creator preview">
+          <ContextMenuArea
+            label="Actions for all-direction preview"
+            actions={[{ id: 'view-details', label: 'View details', onSelect: () => showPreviewDetails('direction') }]}
+          >
+            <DirectionPreviewGrid character={animationSourceCharacter} animation={currentAnimation} frameIndex={currentFrameIndex} directions={mainDirections} />
+          </ContextMenuArea>
+          {recipe ? (
+            <ContextMenuArea
+              label="Actions for composite preview"
+              actions={[{ id: 'view-details', label: 'View details', onSelect: () => showPreviewDetails('composite') }]}
+            >
+              <section className="composite-preview-panel">
+                <div>
+                  <strong>Composite preview</strong>
+                  <span>{slugLabel(currentAnimation)} / {currentDirection} / frame {currentFrameIndex + 1}</span>
                 </div>
-                <label className="field">
-                  <span>{slugLabel(label)} source</span>
-                  <select
-                    value={selectedParts[label] ?? selectedCharacter.character_id}
-                    onChange={(event) => setSelectedParts((current) => ({ ...current, [label]: event.target.value }))}
-                    disabled={isLocked}
-                    title={isLocked ? 'Unlock this layer before changing its source.' : undefined}
-                  >
-                    {characters.map((character) => (
-                      <option key={character.character_id} value={character.character_id}>
-                        {character.display_name}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <label className="field">
-                  <span>Approved part ({approvedOptions.length}/{totalApprovedOptions})</span>
-                  <select
-                    value={selectedPartIds[label] ?? ''}
-                    onChange={(event) => setLayerSelectedPart(label, event.target.value)}
-                    disabled={isLocked || approvedOptions.length === 0}
-                    title={isLocked ? 'Unlock this layer before changing its approved part.' : undefined}
-                  >
-                    <option value="">{approvedOptions.length === 0 ? 'no reviewed parts' : 'use source character'}</option>
-                    {approvedOptions.map((part) => (
-                      <option key={part.part_id} value={part.part_id}>
-                        {slugLabel(part.extraction_method)} / {part.character_id} / {part.part_id}
-                        {part.part_id === selectedPartIds[label] && !partMatchesActiveFilter(part, label, partSearch, partMethodFilter) ? ' / selected outside filter' : ''}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <div className="layer-controls">
-                  <label>
-                    <input
-                      type="checkbox"
-                      checked={settings.visible}
-                      onChange={(event) => updateLayerSetting(label, { visible: event.target.checked })}
-                      disabled={isLocked}
-                      title={isLocked ? 'Unlock this layer before changing visibility.' : undefined}
-                    />
-                    <span>Visible</span>
-                  </label>
-                  <label>
-                    <input
-                      type="checkbox"
-                      checked={settings.locked}
-                      onChange={(event) => updateLayerSetting(label, { locked: event.target.checked })}
-                    />
-                    <span>Locked</span>
-                  </label>
-                  <label>
-                    <span>X</span>
-                    <input
-                      aria-label={`${slugLabel(label)} x offset`}
-                      type="text"
-                      inputMode="numeric"
-                      value={settings.offset[0]}
-                      onChange={(event) => updateLayerSetting(label, { offset: [clampOffsetInput(event.target.value), settings.offset[1]] })}
-                      disabled={isLocked}
-                      title={isLocked ? 'Unlock this layer before editing offsets.' : undefined}
-                    />
-                  </label>
-                  <label>
-                    <span>Y</span>
-                    <input
-                      aria-label={`${slugLabel(label)} y offset`}
-                      type="text"
-                      inputMode="numeric"
-                      value={settings.offset[1]}
-                      onChange={(event) => updateLayerSetting(label, { offset: [settings.offset[0], clampOffsetInput(event.target.value)] })}
-                      disabled={isLocked}
-                      title={isLocked ? 'Unlock this layer before editing offsets.' : undefined}
-                    />
-                  </label>
-                </div>
-                {isLocked ? <p className="field-help">Unlock this layer before changing its source, approved part, visibility, or offsets.</p> : null}
-              </article>
+                <CompositeCanvas
+                  recipe={recipe}
+                  characters={characters}
+                  partLibrary={partLibrary}
+                  animation={currentAnimation}
+                  direction={currentDirection}
+                  frameIndex={currentFrameIndex}
+                  lpcCatalog={lpcCatalog}
+                  exportTargetProfile={exportTargetProfile}
+                  scale={3}
+                  label={`composite ${currentAnimation} ${currentDirection} frame ${currentFrameIndex + 1}`}
+                />
+              </section>
             </ContextMenuArea>
-          )
-        })}
-      </div>
-      <div className="status-strip">
-        <label className="field compact">
-          <span>Team color</span>
-          <select value={palette} onChange={(event) => setPalette(event.target.value)}>
-            {palettePresets.map((name) => (
-              <option key={name} value={name}>
-                {slugLabel(name)}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label className="field compact slider-field">
-          <span>Hue: {paletteRules.hue_shift}</span>
-          <input
-            type="text"
-            inputMode="numeric"
-            value={paletteRules.hue_shift}
-            onChange={(event) => updatePaletteRules({ hue_shift: clampSignedInput(event.target.value, -180, 180) })}
-          />
-        </label>
-        <label className="field compact slider-field">
-          <span>Saturation: {paletteRules.saturation}%</span>
-          <input
-            type="text"
-            inputMode="numeric"
-            value={paletteRules.saturation}
-            onChange={(event) => updatePaletteRules({ saturation: clampUnsignedInput(event.target.value, 0, 200) })}
-          />
-        </label>
-        <label className="field compact slider-field">
-          <span>Brightness: {paletteRules.brightness}%</span>
-          <input
-            type="text"
-            inputMode="numeric"
-            value={paletteRules.brightness}
-            onChange={(event) => updatePaletteRules({ brightness: clampUnsignedInput(event.target.value, 0, 200) })}
-          />
-        </label>
-        <span>Core limbs default to APES masks</span>
-        <span>{reviewedParts.length} reviewed library parts available</span>
-        <span>{selectedReviewedParts.length} approved parts selected in recipe</span>
-        <span>{savedRecipes.length} saved recipe(s)</span>
-      </div>
+          ) : null}
+        </section>
+      ) : null}
+      {creatorTab === 'layers' ? (
+        <section className="creator-tab-panel" aria-label="Layer Stack">
+          <div className="part-grid">
+            {layerOrder.map((label) => {
+              const approvedOptions = filterReviewedPartsForLayer({
+                reviewedParts,
+                label,
+                query: partSearch,
+                method: partMethodFilter,
+                selectedPartId: selectedPartIds[label],
+              })
+              const totalApprovedOptions = reviewedParts.filter((part) => part.label === label).length
+              const settings = layerSettings[label] ?? { offset: [0, 0], visible: true, locked: false }
+              const isLocked = settings.locked
+              const layerActions = buildLayerActions(label, settings)
+              return (
+                <ContextMenuArea key={label} label={`Actions for ${slugLabel(label)} recipe layer`} actions={layerActions}>
+                  <article className="composer-layer" data-testid={`fast-layer-card-${label}`}>
+                    <div className="part-meta">
+                      <span>{slugLabel(label)}</span>
+                      <span>{selectedPartIds[label] ? 'approved part selected' : 'source character'}</span>
+                      <ContextMenuButton label={`More actions for ${slugLabel(label)} recipe layer`} actions={layerActions} />
+                    </div>
+                    <label className="field">
+                      <span>{slugLabel(label)} source</span>
+                      <select
+                        value={selectedParts[label] ?? selectedCharacter.character_id}
+                        onChange={(event) => setSelectedParts((current) => ({ ...current, [label]: event.target.value }))}
+                        disabled={isLocked}
+                        title={isLocked ? 'Unlock this layer before changing its source.' : undefined}
+                      >
+                        {characters.map((character) => (
+                          <option key={character.character_id} value={character.character_id}>
+                            {character.display_name}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <label className="field">
+                      <span>Approved part ({approvedOptions.length}/{totalApprovedOptions})</span>
+                      <select
+                        value={selectedPartIds[label] ?? ''}
+                        onChange={(event) => setLayerSelectedPart(label, event.target.value)}
+                        disabled={isLocked || approvedOptions.length === 0}
+                        title={isLocked ? 'Unlock this layer before changing its approved part.' : undefined}
+                      >
+                        <option value="">{approvedOptions.length === 0 ? 'no reviewed parts' : 'use source character'}</option>
+                        {approvedOptions.map((part) => (
+                          <option key={part.part_id} value={part.part_id}>
+                            {slugLabel(part.extraction_method)} / {part.character_id} / {part.part_id}
+                            {part.part_id === selectedPartIds[label] && !partMatchesActiveFilter(part, label, partSearch, partMethodFilter) ? ' / selected outside filter' : ''}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <div className="layer-controls">
+                      <label>
+                        <input
+                          type="checkbox"
+                          checked={settings.visible}
+                          onChange={(event) => updateLayerSetting(label, { visible: event.target.checked })}
+                          disabled={isLocked}
+                          title={isLocked ? 'Unlock this layer before changing visibility.' : undefined}
+                        />
+                        <span>Visible</span>
+                      </label>
+                      <label>
+                        <input
+                          type="checkbox"
+                          checked={settings.locked}
+                          onChange={(event) => updateLayerSetting(label, { locked: event.target.checked })}
+                        />
+                        <span>Locked</span>
+                      </label>
+                      <label>
+                        <span>X</span>
+                        <input
+                          aria-label={`${slugLabel(label)} x offset`}
+                          type="text"
+                          inputMode="numeric"
+                          value={settings.offset[0]}
+                          onChange={(event) => updateLayerSetting(label, { offset: [clampOffsetInput(event.target.value), settings.offset[1]] })}
+                          disabled={isLocked}
+                          title={isLocked ? 'Unlock this layer before editing offsets.' : undefined}
+                        />
+                      </label>
+                      <label>
+                        <span>Y</span>
+                        <input
+                          aria-label={`${slugLabel(label)} y offset`}
+                          type="text"
+                          inputMode="numeric"
+                          value={settings.offset[1]}
+                          onChange={(event) => updateLayerSetting(label, { offset: [settings.offset[0], clampOffsetInput(event.target.value)] })}
+                          disabled={isLocked}
+                          title={isLocked ? 'Unlock this layer before editing offsets.' : undefined}
+                        />
+                      </label>
+                    </div>
+                    {isLocked ? <p className="field-help">Unlock this layer before changing its source, approved part, visibility, or offsets.</p> : null}
+                  </article>
+                </ContextMenuArea>
+              )
+            })}
+          </div>
+        </section>
+      ) : null}
+      {creatorTab === 'style' ? (
+        <section className="creator-tab-panel status-strip" aria-label="Palette and recipe statistics">
+          <label className="field compact">
+            <span>Team color</span>
+            <select value={palette} onChange={(event) => setPalette(event.target.value)}>
+              {palettePresets.map((name) => (
+                <option key={name} value={name}>
+                  {slugLabel(name)}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="field compact slider-field">
+            <span>Hue: {paletteRules.hue_shift}</span>
+            <input
+              type="text"
+              inputMode="numeric"
+              value={paletteRules.hue_shift}
+              onChange={(event) => updatePaletteRules({ hue_shift: clampSignedInput(event.target.value, -180, 180) })}
+            />
+          </label>
+          <label className="field compact slider-field">
+            <span>Saturation: {paletteRules.saturation}%</span>
+            <input
+              type="text"
+              inputMode="numeric"
+              value={paletteRules.saturation}
+              onChange={(event) => updatePaletteRules({ saturation: clampUnsignedInput(event.target.value, 0, 200) })}
+            />
+          </label>
+          <label className="field compact slider-field">
+            <span>Brightness: {paletteRules.brightness}%</span>
+            <input
+              type="text"
+              inputMode="numeric"
+              value={paletteRules.brightness}
+              onChange={(event) => updatePaletteRules({ brightness: clampUnsignedInput(event.target.value, 0, 200) })}
+            />
+          </label>
+          <span>Core limbs default to APES masks</span>
+          <span>{reviewedParts.length} reviewed library parts available</span>
+          <span>{selectedReviewedParts.length} approved parts selected in recipe</span>
+          <span>{savedRecipes.length} saved recipe(s)</span>
+        </section>
+      ) : null}
       <DetailsDrawer record={detailsRecord} onClose={() => setDetailsRecord(null)} />
     </section>
   )
