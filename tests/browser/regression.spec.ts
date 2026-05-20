@@ -223,6 +223,7 @@ test('creator cockpit filters parts and persists export target profile', async (
   await expect(page.getByTestId('preview-live-part')).toBeVisible()
   await expect(page.getByTestId('fast-part-search')).toBeVisible()
   await page.getByTestId('fast-part-method-filter').selectOption('preset_region')
+  await page.getByRole('tab', { name: 'Layer Stack' }).click()
   await page.getByTestId('fast-part-search').fill('manual-only-no-match')
   await expect(page.getByText(/Approved part \(0\/1\)/).first()).toBeVisible()
   await page.getByTestId('fast-part-search').fill('preset')
@@ -630,6 +631,7 @@ test('imported APES parts include image and mask files in full package exports',
     await page.getByTestId('mark-visible-reviewed').click()
 
     await page.getByTestId('nav-fast').click()
+    await page.getByRole('tab', { name: 'Layer Stack' }).click()
     const headLayer = page.locator('.composer-layer').filter({ hasText: 'head source' })
     await headLayer.locator('select').nth(1).selectOption({ index: 1 })
 
